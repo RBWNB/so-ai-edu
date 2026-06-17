@@ -1,5 +1,13 @@
 <template>
   <el-container class="edu-layout">
+    <!-- 动态波浪背景（复用 B端同款全局样式） -->
+    <div class="ambient-background">
+      <div class="ambient-glow glow-blue"></div>
+      <div class="ambient-glow glow-seafoam"></div>
+      <div class="caustics-layer"></div>
+      <div class="topography-bg"></div>
+    </div>
+
     <!-- 顶部导航 —— 始终可点击，鉴权由路由守卫处理 -->
     <el-header class="edu-header" height="64px">
       <div class="header-inner">
@@ -135,8 +143,59 @@ const handleUserCommand = (command) => {
 
 <style scoped>
 .edu-layout {
+  --theme-klein-blue: #0052d9;
+  --theme-klein-blue-light: #6aa1ff;
+  --theme-text-primary: #303133;
+  --theme-text-muted: #909399;
+  --theme-success: #67c23a;
+  --theme-coral: #f56c6c;
+  /* -------------------------- */
+
   min-height: 100vh;
-  background: linear-gradient(180deg, #f5f9fc 0%, #eaf2f9 100%);
+  background: transparent;
+}
+
+/* ── Header ── */
+.edu-header {
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  padding: 0 24px;
+}
+.header-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  height: 64px;
+  gap: 28px;
+}
+
+.edu-main {
+  width: 100%;
+  box-sizing: border-box;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px;
+  min-height: calc(100vh - 64px - 48px);
+  background: transparent;
+}
+
+.edu-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8892a4;
+  font-size: 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  background: transparent;
+}
+.edu-layout {
+  min-height: 100vh;
+  background: transparent;
 }
 
 /* ── Header ── */

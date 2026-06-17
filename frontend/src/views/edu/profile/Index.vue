@@ -297,7 +297,10 @@ onMounted(fetchProfile);
 </script>
 
 <style scoped>
-.profile-container { padding: 0; }
+.profile-container {
+  padding: 0;
+  overflow-x: hidden;
+}
 
 /* ═══ 左侧名片样式 ═══ */
 .user-card {
