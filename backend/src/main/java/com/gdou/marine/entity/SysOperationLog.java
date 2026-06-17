@@ -7,6 +7,13 @@ import lombok.Setter;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
+/**
+ * @author FlnyXx
+ * @version 1.0
+ * @date 2026/6/16
+ * @Description 系统日志表实体类
+ */
+
 @Getter
 @Setter
 @TableName("operation_log")

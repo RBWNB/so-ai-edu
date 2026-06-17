@@ -7,6 +7,12 @@ import lombok.Setter;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
+/**
+ * @author FlnyXx
+ * @version 1.0
+ * @date 2026/6/16
+ * @Description 海洋物种百科表实体类
+ */
 @Getter
 @Setter
 @TableName("marine_species")

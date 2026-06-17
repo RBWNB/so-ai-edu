@@ -5,9 +5,11 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.io.Serializable;
-
 /**
- * 角色表 — 固定 ADMIN / MANAGER / VISITOR
+ * @author FlnyXx
+ * @version 1.0
+ * @date 2026/6/16
+ * @Description 角色表实体类
  */
 @Getter
 @Setter
