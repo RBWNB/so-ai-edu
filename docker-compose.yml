@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  # 1. 数据库容器
+  mysql:
+    image: mysql:8.0
+    container_name: marine-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456 # 你的数据库密码
+      MYSQL_DATABASE: marine_db
+      TZ: Asia/Shanghai
+    ports:
+      - "3350:3306"
+    volumes:
+      # 将数据库数据挂载到宿主机，防止容器重启数据丢失
+      - mysql-data:/var/lib/mysql
+      # 挂载初始化脚本，第一次启动时会自动建表
+      - ./marine_db.sql:/docker-entrypoint-marinedb.d/marine_db.sql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci
+
+  # 2. Redis 缓存容器
+  redis:
+    image: redis/redis-stack-server:latest
+    container_name: marine-redis
+    restart: always
+    ports:
+      - "16379:6379"
+    environment:
+      - REDIS_ARGS=--protected-mode no --appendonly yes
+    volumes:
+      - redis-data:/data
+
+  # 3. 后端容器
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: marine-backend
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - TZ=Asia/Shanghai
+      # 数据库连接保持不变
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/marine_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+      # 覆盖 Redis 主机名
+      - SPRING_DATA_REDIS_HOST=redis
+      # 覆盖 Redis 端口,Docker 容器内互访必须用真实的 6379 端口
+      - SPRING_DATA_REDIS_PORT=6379
+      # 显式指定 Spring AI 向量数据库连接的 Redis 内网完整地址
+      - SPRING_AI_VECTORSTORE_REDIS_URI=redis://redis:6379
+    volumes:
+      - shared-uploads:/app/uploads
+    depends_on:
+      - mysql
+      - redis
+
+  # 4. 前端与 Nginx 容器
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: marine-frontend
+    restart: always
+    ports:
+      - "80:80" # 对外暴露的最终入口
+    volumes:
+      # 将后端的上传目录挂载到 Nginx 容器内，实现静态资源直接代理
+      - shared-uploads:/app/uploads
+    depends_on:
+      - backend
+
+# 定义持久化数据卷
+volumes:
+  mysql-data:
+  redis-data:
+  shared-uploads:
