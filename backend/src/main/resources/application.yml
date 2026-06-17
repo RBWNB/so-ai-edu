@@ -11,7 +11,7 @@ spring:
     active: dev
   # database config
   datasource:
-    url: jdbc:mysql://localhost:3307/marine_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://localhost:3350/marine_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
     username: root
     password: 123456
     driver-class-name: com.mysql.cj.jdbc.Driver

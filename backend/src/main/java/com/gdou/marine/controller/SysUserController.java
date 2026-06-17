@@ -4,10 +4,9 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.gdou.marine.annotation.Log;
 import com.gdou.marine.dto.*;
 import com.gdou.marine.service.SysUserService;
-import com.gdou.marine.utils.UploadPathUtils;
+import com.gdou.marine.utils.QiniuUtils;
 import com.gdou.marine.vo.UserPageItemVO;
 import com.gdou.marine.vo.UserProfileVO;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -18,8 +17,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -30,12 +27,6 @@ import java.util.UUID;
 public class SysUserController {
 
     private final SysUserService sysUserService;
-
-    @Value("${app.upload.avatar-dir:uploads/avatars}")
-    private String avatarUploadDir;
-
-    @Value("${app.upload.base-dir:uploads}")
-    private String uploadBaseDir;
 
     public SysUserController(SysUserService sysUserService) {
         this.sysUserService = sysUserService;
@@ -131,7 +122,7 @@ public class SysUserController {
 
     @PostMapping("/upload/avatar")
     @PreAuthorize("isAuthenticated()")
-    @Log(module = "用户管理", description = "上传头像")
+    @Log(module = "用户管理", description = "上传头像 ")
     public ResponseEntity<?> uploadAvatar(@RequestParam("file") MultipartFile file) {
         try {
             if (file == null || file.isEmpty()) {
@@ -145,7 +136,7 @@ public class SysUserController {
             }
 
             Long userId = getCurrentUserId();
-            String avatarUrl = saveAvatar(file);
+            String avatarUrl = uploadAvatarToQiniu(file);
             sysUserService.updateUserAvatarUrl(userId, avatarUrl);
 
             Map<String, Object> response = new HashMap<>();
@@ -155,9 +146,11 @@ public class SysUserController {
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body(ex.getMessage());
         } catch (IOException ex) {
-            return ResponseEntity.internalServerError().body("Failed to save avatar file");
+            return ResponseEntity.internalServerError().body("Failed to read avatar file");
         } catch (IllegalStateException ex) {
             return ResponseEntity.internalServerError().body(ex.getMessage());
+        } catch (RuntimeException ex) {
+            return ResponseEntity.internalServerError().body("Failed to upload avatar to cloud storage");
         }
     }
 
@@ -195,26 +188,24 @@ public class SysUserController {
         }
     }
 
-    private String saveAvatar(MultipartFile file) throws IOException {
-        Path uploadBasePath = UploadPathUtils.resolvePathFromProjectRoot(uploadBaseDir);
-        Path avatarDirPath = UploadPathUtils.resolvePathFromProjectRoot(avatarUploadDir);
-        Files.createDirectories(avatarDirPath);
-
+    /**
+     * 生成唯一文件名
+     */
+    private String generateFileName(MultipartFile file) {
         String extension = StringUtils.getFilenameExtension(file.getOriginalFilename());
-        String fileName = UUID.randomUUID().toString().replace("-", "");
+        String fileName = "avatars/" + UUID.randomUUID().toString().replace("-", "");
         if (StringUtils.hasText(extension)) {
             fileName = fileName + "." + extension;
         }
+        return fileName;
+    }
 
-        Path targetPath = avatarDirPath.resolve(fileName).normalize();
-        file.transferTo(targetPath.toFile());
-
-        try {
-            String relativePath = uploadBasePath.relativize(targetPath).toString().replace("\\", "/");
-            return "/uploads/" + relativePath;
-        } catch (Exception ignored) {
-            return "/uploads/avatars/" + fileName;
-        }
+    /**
+     * 上传头像到七牛云
+     */
+    private String uploadAvatarToQiniu(MultipartFile file) throws IOException {
+        String fileName = generateFileName(file);
+        return QiniuUtils.upload2Qiniu(file.getBytes(), fileName);
     }
 
     private Long getCurrentUserId() {
