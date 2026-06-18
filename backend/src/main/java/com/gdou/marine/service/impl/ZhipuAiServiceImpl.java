@@ -477,7 +477,7 @@ public class ZhipuAiServiceImpl {
         return requestBody;
     }
 
-    private String callAI(String userInput, String systemPrompt) {
+    public String callAI(String userInput, String systemPrompt) {
         if (!StringUtils.hasText(userInput)) {
             throw new IllegalArgumentException("输入不能为空");
         }

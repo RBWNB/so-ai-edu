@@ -4,7 +4,7 @@ import { getStoredToken } from "@/store/auth";
 
 const http = axios.create({
   baseURL: "/api",
-  timeout: 20000,
+  timeout: 120000,
 });
 
 http.interceptors.request.use(

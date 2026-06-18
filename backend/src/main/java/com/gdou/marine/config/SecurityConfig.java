@@ -58,6 +58,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/ecosystem/**").hasAnyRole("ADMIN", "MANAGER")
                         .requestMatchers(HttpMethod.DELETE, "/ecosystem/**").hasAnyRole("ADMIN", "MANAGER")
 
+                        // Quiz question management (admin/manage)
+                        .requestMatchers("/quiz/**").hasAnyRole("ADMIN", "MANAGER")
+
+                        // Knowledge base browsing (admin/manage)
+                        .requestMatchers("/kb/**").hasAnyRole("ADMIN", "MANAGER")
+
                         // AI endpoints → any authenticated user (C-end)
                         .requestMatchers("/ai/**").authenticated()
 
