@@ -11,6 +11,7 @@ services:
       MYSQL_DATABASE: marine_db
       TZ: Asia/Shanghai
     ports:
+      -
       - "3350:3306"
     volumes:
       # 将数据库数据挂载到宿主机，防止容器重启数据丢失

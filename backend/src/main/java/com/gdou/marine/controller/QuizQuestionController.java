@@ -103,7 +103,9 @@ public class QuizQuestionController {
         question.setAnswerJson(dto.getAnswerJson());
         question.setExplanation(dto.getExplanation());
         question.setDifficulty(dto.getDifficulty() != null ? dto.getDifficulty() : "normal");
-        question.setKnowledgePoints(dto.getKnowledgePoints());
+        // 空字符串转为 null，避免 MySQL JSON 列报错
+        String kp = dto.getKnowledgePoints();
+        question.setKnowledgePoints((kp == null || kp.isEmpty() || kp.isBlank()) ? null : kp);
         question.setSpeciesId(dto.getSpeciesId());
         question.setCreatedByAi((byte) 0);
         question.setStatus(dto.getStatus() != null ? dto.getStatus() : (byte) 1);
@@ -132,7 +134,8 @@ public class QuizQuestionController {
         question.setAnswerJson(dto.getAnswerJson());
         question.setExplanation(dto.getExplanation());
         question.setDifficulty(dto.getDifficulty());
-        question.setKnowledgePoints(dto.getKnowledgePoints());
+        String kp = dto.getKnowledgePoints();
+        question.setKnowledgePoints((kp == null || kp.isEmpty() || kp.isBlank()) ? null : kp);
         question.setSpeciesId(dto.getSpeciesId());
         if (dto.getStatus() != null) {
             question.setStatus(dto.getStatus());
