@@ -2,10 +2,12 @@ package com.gdou.marine.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gdou.marine.annotation.Log;
 import com.gdou.marine.dto.AiGenerateDTO;
 import com.gdou.marine.dto.QuizQuestionDTO;
 import com.gdou.marine.entity.QuizQuestion;
+import com.gdou.marine.service.TtsService;
 import com.gdou.marine.service.impl.QuizQuestionServiceImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +32,12 @@ public class QuizQuestionController {
 
     @Autowired
     private QuizQuestionServiceImpl quizQuestionService;
+
+    @Autowired
+    private TtsService ttsService;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     /**
      * 分页查询题目列表
@@ -204,5 +212,54 @@ public class QuizQuestionController {
         }
         quizQuestionService.saveBatch(questions);
         return Map.of("success", true, "message", "成功保存" + questions.size() + "道题目", "count", questions.size());
+    }
+
+    /**
+     * TTS 语音合成：念出题目及选项
+     *
+     * @param body { questionId, stem, optionsJson, voiceType }
+     * @return { success, url, message }
+     */
+    @Log(module = "题库管理", description = "TTS语音合成")
+    @PostMapping("/question/tts")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public Map<String, Object> synthesizeSpeech(@RequestBody Map<String, Object> body) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            // 拼接文本
+            StringBuilder textBuilder = new StringBuilder();
+            String stem = (String) body.getOrDefault("stem", "");
+            if (!stem.isEmpty()) {
+                textBuilder.append(stem).append("。");
+            }
+
+            Object optionsJson = body.get("optionsJson");
+            if (optionsJson instanceof String json && !json.isEmpty()) {
+                try {
+                    List<Map<String, String>> options = objectMapper.readValue(json, List.class);
+                    for (int i = 0; i < options.size(); i++) {
+                        Map<String, String> opt = options.get(i);
+                        String label = opt.getOrDefault("label", "");
+                        String text = opt.getOrDefault("text", "");
+                        textBuilder.append(label).append("：").append(text).append("。");
+                    }
+                } catch (Exception e) {
+                    log.warn("解析选项JSON失败，跳过选项", e);
+                }
+            }
+
+            String text = textBuilder.toString();
+            String voiceType = (String) body.get("voiceType");
+
+            String url = ttsService.synthesize(text, voiceType);
+            result.put("success", true);
+            result.put("url", url);
+            result.put("message", "语音合成成功");
+        } catch (Exception e) {
+            log.error("TTS语音合成失败", e);
+            result.put("success", false);
+            result.put("message", "语音合成失败：" + e.getMessage());
+        }
+        return result;
     }
 }

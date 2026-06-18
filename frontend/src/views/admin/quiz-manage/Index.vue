@@ -111,10 +111,18 @@
             {{ row.createdAt ? formatTime(row.createdAt) : '-' }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="270" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="previewQuestion(row)">预览</el-button>
             <el-button link type="primary" @click="openEditDialog(row)">编辑</el-button>
+            <el-button
+              link
+              type="success"
+              :loading="row._ttsLoading"
+              @click="handleTts(row)"
+            >
+              {{ row._ttsPlaying ? '🔊播放中' : '🔊朗读' }}
+            </el-button>
             <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -554,6 +562,7 @@ import {
   toggleQuestionStatus,
   aiGenerateQuestions,
   batchSaveQuestions,
+  synthesizeSpeech,
   getKbDocumentPage,
   getKbCategoryList,
 } from '@/api/quiz'
@@ -590,7 +599,11 @@ const fetchList = async () => {
     if (queryForm.status !== null && queryForm.status !== '') params.status = queryForm.status
 
     const res = await getQuestionPage(params)
-    tableData.value = res.data.records || []
+    tableData.value = (res.data.records || []).map(r => ({
+      ...r,
+      _ttsLoading: false,
+      _ttsPlaying: false,
+    }))
     total.value = res.data.total || 0
   } catch (err) {
     console.error('获取题库列表失败', err)
@@ -840,6 +853,58 @@ const handleDelete = (row) => {
       console.error('删除失败', err)
     }
   }).catch(() => {})
+}
+
+// ==================== TTS 语音合成 ====================
+let currentAudio = null
+
+const handleTts = async (row) => {
+  // 如果正在播放同一个题目，则停止
+  if (row._ttsPlaying && currentAudio) {
+    currentAudio.pause()
+    currentAudio.currentTime = 0
+    currentAudio = null
+    row._ttsPlaying = false
+    return
+  }
+
+  row._ttsLoading = true
+  try {
+    const res = await synthesizeSpeech({
+      stem: row.stem || '',
+      optionsJson: row.optionsJson || '',
+    })
+
+    if (res.data.success) {
+      const audioUrl = res.data.url
+      row._ttsPlaying = true
+
+      // 播放音频
+      const audio = new Audio(audioUrl)
+      currentAudio = audio
+      audio.onended = () => {
+        row._ttsPlaying = false
+        currentAudio = null
+      }
+      audio.onerror = () => {
+        row._ttsPlaying = false
+        currentAudio = null
+        ElMessage.error('语音播放失败')
+      }
+      audio.play().catch(() => {
+        row._ttsPlaying = false
+        currentAudio = null
+        ElMessage.error('语音播放失败')
+      })
+    } else {
+      ElMessage.error(res.data.message || '语音合成失败')
+    }
+  } catch (err) {
+    ElMessage.error('语音合成失败：' + (err.response?.data?.message || err.message || '未知错误'))
+    row._ttsLoading = false
+  } finally {
+    row._ttsLoading = false
+  }
 }
 
 // ==================== 状态切换 ====================
