@@ -37,10 +37,6 @@
             </svg>
             <h1 class="brand-title">海洋生物多样性<br>信息管理系统</h1>
             <p class="brand-slogan">守护蓝色家园，科学管理海洋</p>
-            <el-button class="knowledge-preview-btn" @click="knowledgeVisible = true">
-              <el-icon><Reading /></el-icon>
-              海洋知识预览
-            </el-button>
           </div>
         </div>
         <!-- 右侧：操作区 -->
@@ -161,18 +157,6 @@
         </div>
       </div>
     </div>
-
-    <!-- 海洋知识预览弹窗 -->
-    <el-dialog
-      v-model="knowledgeVisible"
-      title=""
-      width="90%"
-      top="3vh"
-      destroy-on-close
-      class="knowledge-dialog"
-    >
-      <KnowledgeBase />
-    </el-dialog>
   </div>
 </template>
 
@@ -874,19 +858,6 @@ const handleEnterLogin = () => {
   cursor: default;
 }
 
-/* ═══ 海洋知识预览按钮 ═══ */
-.knowledge-preview-btn {
-  margin-top: 28px;
-  padding: 10px 28px;
-  border-radius: 8px;
-  border: 1px solid var(--theme-primary);
-  background: transparent;
-  color: var(--theme-primary);
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: 1px;
-  transition: all 0.3s ease;
-}
 
 .knowledge-preview-btn:hover {
   background: var(--theme-primary);

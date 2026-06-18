@@ -78,6 +78,9 @@ public class RagQaServiceImpl implements RagQaService {
             List<EmbeddingMatch<TextSegment>> matches = retrieve(question, DEFAULT_TOP_K);
             List<ChatMessage> messages = buildMessages(question, sessionId, matches);
             ChatResponse response = chatLanguageModel.chat(messages);
+            if (response == null || response.aiMessage() == null) {
+                throw new RuntimeException("AI model returned empty response");
+            }
             String answer = response.aiMessage().text();
 
             saveMessage(userId, sessionId, "assistant", answer);
@@ -140,7 +143,7 @@ public class RagQaServiceImpl implements RagQaService {
                     // 保存 assistant 消息
                     saveMessage(userId, sessionId, "assistant", answer.toString());
                     // 保存调用日志（优先用 Response 里的 TokenUsage，否则估算）
-                    TokenUsage usage = chatResponse.tokenUsage();
+                    TokenUsage usage = chatResponse != null ? chatResponse.tokenUsage() : null;
                     saveCallLog(userId, "SUCCESS", null, start, usage);
 
                     try {
@@ -206,18 +209,52 @@ public class RagQaServiceImpl implements RagQaService {
                 """.formatted(StringUtils.hasText(context) ? context : "No retrieved context.")));
 
         List<ConversationMessage> history = conversationMessageMapper.selectRecentBySessionId(sessionId, HISTORY_LIMIT);
+        boolean skipNextAsToolResult = false;
         for (ConversationMessage item : history) {
-            if (!StringUtils.hasText(item.getContent()) || question.equals(item.getContent())) {
+            if (question.equals(item.getContent())) {
                 continue;
             }
+            String content = item.getContent();
+            boolean hasContent = StringUtils.hasText(content);
+
             if ("assistant".equalsIgnoreCase(item.getRole())) {
-                messages.add(AiMessage.from(item.getContent()));
+                // 工具调用响应：text 为空 或 内容为 JSON 工具调用描述 → 下一条 user 是工具返回值
+                if (looksLikeToolCall(content)) {
+                    skipNextAsToolResult = true;
+                    continue;
+                }
+                if (hasContent) {
+                    messages.add(AiMessage.from(content));
+                }
             } else if ("user".equalsIgnoreCase(item.getRole())) {
-                messages.add(UserMessage.from(item.getContent()));
+                if (skipNextAsToolResult) {
+                    skipNextAsToolResult = false;
+                    continue;
+                }
+                if (hasContent) {
+                    messages.add(UserMessage.from(content));
+                }
             }
         }
         messages.add(UserMessage.from(question));
         return messages;
+    }
+
+    /**
+     * 判断消息内容是否像工具调用而非正常对话文本。
+     * 工具调用通常以 JSON 形式出现，包含 tool_calls / function 等字段。
+     */
+    private boolean looksLikeToolCall(String content) {
+        if (content == null || content.isBlank()) {
+            return true;
+        }
+        String trimmed = content.trim();
+        // 以 JSON 开头且包含工具调用特征字段
+        if ((trimmed.startsWith("{") || trimmed.startsWith("["))
+                && (trimmed.contains("\"tool_calls\"") || trimmed.contains("\"function\""))) {
+            return true;
+        }
+        return false;
     }
 
     private void validateQuestion(String question, String sessionId) {

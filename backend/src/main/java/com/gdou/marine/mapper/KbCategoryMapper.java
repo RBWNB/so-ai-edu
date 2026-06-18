@@ -5,7 +5,10 @@ import com.gdou.marine.entity.KbCategory;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * 知识分类 Mapper 接口
+ * @author FlnyXx
+ * @version 1.0
+ * @date 2026/6/17
+ * @Description
  */
 @Mapper
 public interface KbCategoryMapper extends BaseMapper<KbCategory> {

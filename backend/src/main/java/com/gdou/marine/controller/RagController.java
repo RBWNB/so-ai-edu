@@ -54,18 +54,21 @@ public class RagController {
         }
     }
 
-    @Log(module = "RAG智能问答", description = "流式问答")
+    @Log(module = "RAG智能问答", description = "流式问答（POST，前端 fetch）")
     @PostMapping(value = "/rag/ask/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter askStream(@RequestBody Map<String, Object> body) {
+    public SseEmitter askStreamPost(@RequestBody Map<String, Object> body) {
         String question = stringValue(body.get("question"));
         String sessionId = stringValue(body.get("sessionId"));
         if (!StringUtils.hasText(sessionId)) {
             sessionId = stringValue(body.get("session_id"));
         }
-        Long userId = getCurrentUserId();
+        return ragQaService.askStream(question, sessionId, getCurrentUserId());
+    }
 
-        // 直接委托给 Service，Service 内部已完成 SSE 事件推送 + 对话保存 + 调用日志
-        return ragQaService.askStream(question, sessionId, userId);
+    @Log(module = "RAG智能问答", description = "流式问答（GET，SSE 标准方式）")
+    @GetMapping(value = "/rag/ask/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter askStreamGet(@RequestParam String question, @RequestParam String sessionId) {
+        return ragQaService.askStream(question, sessionId, getCurrentUserId());
     }
 
     @GetMapping("/rag/history/{sessionId}")

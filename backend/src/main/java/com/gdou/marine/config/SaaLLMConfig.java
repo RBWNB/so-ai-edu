@@ -1,8 +1,6 @@
 package com.gdou.marine.config;
 
 import dev.langchain4j.community.model.dashscope.QwenChatModel;
-import dev.langchain4j.community.model.dashscope.QwenEmbeddingModel;
-import dev.langchain4j.community.model.dashscope.QwenModelName;
 import dev.langchain4j.community.model.dashscope.QwenStreamingChatModel;
 import dev.langchain4j.community.model.dashscope.QwenTokenizer;
 import dev.langchain4j.data.segment.TextSegment;
@@ -14,6 +12,7 @@ import dev.langchain4j.store.embedding.EmbeddingStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import redis.clients.jedis.JedisPooled;
 
 /**
@@ -55,21 +54,22 @@ public class SaaLLMConfig {
 
     // ==================== Embedding ====================
 
+    @Primary
     @Bean
     public EmbeddingModel embeddingModel() {
-        return QwenEmbeddingModel.builder()
-                .apiKey(apiKey)
-                .modelName(embeddingModel)
-                .build();
+        System.err.println(">>> Creating DashScopeOpenAiEmbeddingModel bean, model=" + embeddingModel);
+        return new DashScopeOpenAiEmbeddingModel(apiKey, embeddingModel, null);
     }
 
     // ==================== Tokenizer ====================
 
     @Bean
     public Tokenizer tokenizer() {
+        // Tokenization API 不支持带日期的快照模型名，使用 qwen-plus 基名
+        String tokenizerModel = chatModel.contains("-20") ? "qwen-plus" : chatModel;
         return QwenTokenizer.builder()
                 .apiKey(apiKey)
-                .modelName(chatModel)
+                .modelName(tokenizerModel)
                 .build();
     }
 
