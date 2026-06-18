@@ -80,9 +80,7 @@ const router = createRouter({
         },
       ],
     },
-
-       // C端 — 教育互动平台
-
+    // C端 — 教育互动平台
     {
       path: "/",
       component: () => import("@/layout/EduLayout.vue"),
@@ -126,10 +124,7 @@ const router = createRouter({
         },
       ],
     },
-
-
-       // 公共路由 — 无布局
-
+    // 公共路由 — 无布局
     {
       path: "/login",
       name: "Login",
@@ -151,11 +146,14 @@ const router = createRouter({
   ],
 });
 
-
-   // 全局导航守卫
-
-router.beforeEach((to, from, next) => {
+// 全局导航守卫
+router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
+
+  // 已登录但头像为空 → 自动拉取用户信息（解决刷新/首次登录头像不显示）
+  if (authStore.isLoggedIn && !authStore.avatarUrl) {
+    await authStore.fetchUserInfo();
+  }
 
   // 1. 路由需要登录但未登录 → 带 redirect 参数跳到登录页
   const needAuth = to.matched.some((r) => r.meta?.requiresAuth);

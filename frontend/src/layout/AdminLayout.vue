@@ -6,15 +6,14 @@
       <div class="caustics-layer"></div>
       <div class="topography-bg"></div>
     </div>
-
     <el-aside width="248px" class="sidebar">
       <div class="brand">
         <div class="brand-icon">
           <el-icon><Ship /></el-icon>
         </div>
         <div class="brand-copy">
-          <strong>海洋生物管理系统</strong>
-          <span>守护蓝色家园</span>
+          <strong>海洋学堂管理后台</strong>
+          <span>海洋教育运营管理中心</span>
         </div>
       </div>
       <div class="menu-wrapper">
@@ -30,16 +29,14 @@
         </el-menu>
       </div>
     </el-aside>
-
     <el-container>
       <el-header class="header">
         <div class="header-left">
           <div class="page-heading">
             <h1>{{ currentTitle }}</h1>
-            <p>科学管理海洋生物多样性数据</p>
+            <p>一站式海洋教育内容与数据管理平台</p>
           </div>
         </div>
-
         <div class="header-right">
           <el-dropdown @command="handleCommand">
             <div class="user-info-dropdown">
@@ -49,7 +46,6 @@
               <span class="username-text">{{ authStore.username }}</span>
               <el-icon class="el-icon--right"><arrow-down /></el-icon>
             </div>
-
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="profile">
@@ -63,7 +59,6 @@
           </el-dropdown>
         </div>
       </el-header>
-
       <el-main class="main">
         <router-view />
       </el-main>
@@ -83,7 +78,6 @@ import { getUserProfile } from "@/api/sysUser";
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
-
 const activeMenu = computed(() => route.path);
 const currentTitle = computed(() => route.meta?.title || "首页");
 
@@ -127,7 +121,6 @@ const handleLogout = () => {
   min-height: 100vh;
   background: transparent;
 }
-
 .sidebar {
   background: var(--theme-card-bg) !important;
   border-right: 1px solid var(--theme-border);
@@ -139,13 +132,11 @@ const handleLogout = () => {
   position: sticky;
   top: 0;
 }
-
 .menu-wrapper {
   flex: 1;
   overflow-y: auto;
   padding: 0 8px;
 }
-
 .menu-wrapper::-webkit-scrollbar {
   width: 6px;
 }
@@ -159,7 +150,6 @@ const handleLogout = () => {
 .menu-wrapper::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 47, 167, 0.28);
 }
-
 .brand {
   height: 76px;
   padding: 0 18px;
@@ -170,7 +160,6 @@ const handleLogout = () => {
   background: #ffffff;
   flex-shrink: 0;
 }
-
 .brand-icon {
   width: 42px;
   height: 42px;
@@ -182,31 +171,26 @@ const handleLogout = () => {
   background: var(--theme-primary);
   box-shadow: 0 8px 18px rgba(22, 93, 255, 0.22);
 }
-
 .brand-copy {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
-
 .brand-copy strong {
   color: var(--theme-primary-dark);
   font-size: 17px;
   line-height: 1.3;
 }
-
 .brand-copy span {
   margin-top: 3px;
   color: var(--theme-text-muted);
   font-size: 12px;
 }
-
 .menu {
   border-right: none;
   background: transparent;
   height: 100%;
 }
-
 .header {
   height: 76px;
   background: #ffffff !important;
@@ -219,7 +203,6 @@ const handleLogout = () => {
   top: 0;
   z-index: 100;
 }
-
 .header-left {
   flex: 1;
   padding-left: 20px;
@@ -227,7 +210,6 @@ const handleLogout = () => {
   flex-direction: column;
   gap: 6px;
 }
-
 .page-heading h1 {
   margin: 0;
   color: var(--theme-text-primary);
@@ -235,19 +217,16 @@ const handleLogout = () => {
   font-weight: 700;
   line-height: 1.1;
 }
-
 .page-heading p {
   margin: 4px 0 0;
   color: var(--theme-text-muted);
   font-size: 12px;
 }
-
 .header-right {
   display: flex;
   align-items: center;
   padding-right: 20px;
 }
-
 .user-info-dropdown {
   display: flex;
   align-items: center;
@@ -257,58 +236,46 @@ const handleLogout = () => {
   border-radius: 6px;
   transition: all 0.2s ease;
 }
-
 .user-info-dropdown:hover {
   background-color: var(--theme-primary-soft);
 }
-
 .username-text {
   margin: 0 8px;
   font-weight: 500;
   color: var(--theme-text-primary);
 }
-
 .header-right :deep(.el-dropdown) {
   line-height: 1;
 }
-
 .main {
   background: transparent;
   padding: 24px;
   overflow-y: auto;
   height: calc(100vh - 76px);
 }
-
 .main::-webkit-scrollbar {
   width: 8px;
 }
-
 .main::-webkit-scrollbar-track {
   background: transparent;
 }
-
 .main::-webkit-scrollbar-thumb {
   background: rgba(0, 47, 167, 0.12);
   border-radius: 4px;
 }
-
 .main::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 47, 167, 0.22);
 }
-
 @media (max-width: 768px) {
   .sidebar {
     width: 180px !important;
   }
-
   .username-text {
     display: none;
   }
-
   .main {
     padding: 12px;
   }
-
   .page-heading p,
   .header-left :deep(.el-breadcrumb) {
     display: none;

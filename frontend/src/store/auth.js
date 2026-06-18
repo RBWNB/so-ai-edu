@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { logoutApi } from "@/api/auth";
+import { getUserProfile } from '@/api/sysUser'
 
 const TOKEN_KEY = "marine_token";
 const USERNAME_KEY = "marine_username";
@@ -70,11 +71,44 @@ export const useAuthStore = defineStore("auth", {
     },
   },
   actions: {
+    /** 统一格式化头像URL（全局复用，避免路径不一致） */
+    formatAvatarUrl(url) {
+      if (!url) return "";
+      if (url.startsWith("http") || url.startsWith("/api")) return url;
+      return `/api${url}`;
+    },
+
+    /** 自动拉取用户信息（含头像、角色），解决刷新/首次登录数据缺失 */
+    async fetchUserInfo() {
+      if (!this.token) return;
+      try {
+        const res = await getUserProfile();
+        const data = res.data;
+
+        // 同步基础信息
+        this.username = data.username || this.username;
+        this.roles = data.roles || this.roles;
+        // 格式化头像后同步
+        this.avatarUrl = this.formatAvatarUrl(data.avatarUrl);
+
+        // 持久化到本地存储，刷新不丢失
+        localStorage.setItem(USERNAME_KEY, this.username);
+        localStorage.setItem(ROLES_KEY, JSON.stringify(this.roles));
+        localStorage.setItem(AVATAR_KEY, this.avatarUrl);
+      } catch (err) {
+        console.error("拉取用户信息失败:", err);
+        // token 失效时自动清理登录状态
+        if (err.response?.status === 401) {
+          this.clearAuth();
+        }
+      }
+    },
+
     setAuth(token, username, roles = [], avatarUrl = "") {
       this.token = token || "";
       this.username = username || "";
       this.roles = roles;
-      this.avatarUrl = avatarUrl;
+      this.avatarUrl = this.formatAvatarUrl(avatarUrl);
 
       if (this.token) {
         localStorage.setItem(TOKEN_KEY, this.token);
@@ -104,7 +138,7 @@ export const useAuthStore = defineStore("auth", {
         localStorage.setItem(USERNAME_KEY, this.username);
       }
       if (avatarUrl !== undefined) {
-        this.avatarUrl = avatarUrl;
+        this.avatarUrl = this.formatAvatarUrl(avatarUrl);
         localStorage.setItem(AVATAR_KEY, this.avatarUrl);
       }
     },
@@ -120,7 +154,15 @@ export const useAuthStore = defineStore("auth", {
     },
 
     clearAuth() {
-      this.setAuth("", "", [], "");
+      this.token = "";
+      this.username = "";
+      this.roles = [];
+      this.avatarUrl = "";
+
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USERNAME_KEY);
+      localStorage.removeItem(ROLES_KEY);
+      localStorage.removeItem(AVATAR_KEY);
     },
 
     hasRole(role) {

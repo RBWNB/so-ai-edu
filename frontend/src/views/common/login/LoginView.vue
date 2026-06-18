@@ -35,8 +35,8 @@
               <!-- 流线 — 腹白线 -->
               <path d="M16 36 Q38 34 64 32" fill="none" stroke="#FAF9F6" stroke-width="0.8" opacity="0.4" />
             </svg>
-            <h1 class="brand-title">海洋生物多样性<br>信息管理系统</h1>
-            <p class="brand-slogan">守护蓝色家园，科学管理海洋</p>
+            <h1 class="brand-title">海洋学堂<br>智能教育平台</h1>
+            <p class="brand-slogan">探索蔚蓝世界，学习海洋知识</p>
           </div>
         </div>
         <!-- 右侧：操作区 -->
@@ -64,10 +64,10 @@
                       <div class="slider-bg" :style="{ width: (sliderLeft + 46) + 'px' }"></div>
                       <div class="slider-text">{{ isVerified ? '验证通过' : '请按住滑块，拖动到最右边' }}</div>
                       <div
-                        class="slider-thumb"
-                        :style="{ left: sliderLeft + 'px' }"
-                        @mousedown="startDrag"
-                        @touchstart.passive="startDrag"
+                          class="slider-thumb"
+                          :style="{ left: sliderLeft + 'px' }"
+                          @mousedown="startDrag"
+                          @touchstart.passive="startDrag"
                       >
                         <el-icon v-if="!isVerified"><Right /></el-icon>
                         <el-icon v-else><Select /></el-icon>
@@ -172,7 +172,6 @@ import { loginApi, registerApi } from "@/api/auth";
 const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
-
 const activeTab = ref("login");
 const loading = ref(false);
 const knowledgeVisible = ref(false);
@@ -188,24 +187,19 @@ const startDrag = (e) => {
   if (isVerified.value) return;
   isDragging.value = true;
   startX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
-
   document.addEventListener('mousemove', onDrag);
   document.addEventListener('mouseup', stopDrag);
   document.addEventListener('touchmove', onDrag, { passive: false });
   document.addEventListener('touchend', stopDrag);
 };
-
 const onDrag = (e) => {
   if (!isDragging.value) return;
   if (e.type.includes('touch')) e.preventDefault();
-
   const currentX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
   let moveX = currentX - startX;
-
   const trackWidth = sliderTrackRef.value.offsetWidth;
   const thumbWidth = 46;
   const maxMove = trackWidth - thumbWidth;
-
   if (moveX < 0) moveX = 0;
   if (moveX >= maxMove) {
     moveX = maxMove;
@@ -214,14 +208,12 @@ const onDrag = (e) => {
   }
   sliderLeft.value = moveX;
 };
-
 const stopDrag = () => {
   isDragging.value = false;
   document.removeEventListener('mousemove', onDrag);
   document.removeEventListener('mouseup', stopDrag);
   document.removeEventListener('touchmove', onDrag);
   document.removeEventListener('touchend', stopDrag);
-
   if (!isVerified.value) {
     sliderLeft.value = 0;
   }
@@ -244,7 +236,6 @@ const handleLogin = async () => {
       const res = await loginApi(loginForm);
       authStore.setAuth(res.data.token, res.data.username, res.data.roles || [], res.data.avatarUrl || "");
       ElMessage.success("登录成功");
-
       // 优先回跳 redirect 参数，否则按角色跳转
       const redirect = route.query?.redirect;
       if (redirect && typeof redirect === "string" && redirect !== "/login") {
@@ -273,7 +264,6 @@ const registerForm = reactive({
 const validateConfirmPassword = (rule, value, callback) => {
   callback(value !== registerForm.password ? new Error("两次输入的密码不一致") : undefined);
 };
-
 // 基础验证规则
 const registerRules = {
   username: [{ required: true, message: "请输入账号", trigger: "blur" }],
@@ -298,20 +288,17 @@ const registerRules = {
 
 // 当前步骤（默认值1，解决"一进来就是完成注册"的关键）
 const currentStep = ref(1);
-
 // 步骤配置
 const registerSteps = [
   { label: "账号信息" },
   { label: "个人信息" }
 ];
-
 // 分步验证规则
 const registerStep1Rules = {
   username: registerRules.username,
   email: registerRules.email,
   password: registerRules.password,
 };
-
 const registerStep2Rules = {
   realName: registerRules.realName,
   phone: registerRules.phone,
@@ -322,33 +309,23 @@ const registerStep2Rules = {
 // 下一步方法
 const nextStep = async () => {
   if (!registerFormRef.value) return;
-
   try {
-    // 方式1：使用 Promise 风格验证指定字段（推荐，Element Plus 2.3+ 支持）
-    // validateField 返回 Promise，resolve 结果为 { 字段名: 错误信息 }
     const errorFields = await registerFormRef.value.validateField(['username', 'email', 'password']);
-
-    // 判断是否有验证错误：检查返回的错误对象是否为空
     const hasError = Object.keys(errorFields).some(key => errorFields[key]);
     if (!hasError) {
       currentStep.value = 2;
-      // 清除第二步可能存在的验证错误
       registerFormRef.value.clearValidate(['realName', 'phone', 'applyRole', 'confirmPassword']);
     }
   } catch (error) {
-    // 捕获验证异常（极少出现，兜底）
     console.error('第一步验证失败:', error);
     ElMessage.warning('表单验证失败，请检查输入内容');
   }
 };
-
 // 上一步方法
 const prevStep = () => {
   currentStep.value = 1;
-  // 清除第一步的验证错误
   registerFormRef.value.clearValidate(['username', 'email', 'password']);
 };
-
 // 注册方法（修复步骤重置）
 const handleRegister = async () => {
   if (!registerFormRef.value) return;
@@ -362,13 +339,10 @@ const handleRegister = async () => {
         applyRole: registerForm.applyRole,
       });
       ElMessage.success("注册成功，请等待审核");
-
-      // 先重置步骤，再延迟重置表单（避免闪烁）
       currentStep.value = 1;
       setTimeout(() => {
         registerFormRef.value.resetFields();
       }, 300);
-
       activeTab.value = "login";
     } catch (error) {
       ElMessage.error(error.response?.data || "注册失败，请稍后重试");
@@ -385,21 +359,17 @@ const handleTabChange = (tabName) => {
   sliderLeft.value = 0;
   if (tabName === "register") {
     currentStep.value = 1;
-    // 清除所有验证错误
     if (registerFormRef.value) {
       registerFormRef.value.clearValidate();
     }
   }
 };
-
 // 处理回车登录（增加滑块验证判断）
 const handleEnterLogin = () => {
-  // 检查滑块验证状态
   if (!isVerified.value) {
     ElMessage.warning('请先完成滑块验证');
     return;
   }
-  // 验证通过，执行登录
   handleLogin();
 };
 </script>
@@ -416,7 +386,6 @@ const handleEnterLogin = () => {
       url("https://picsum.photos/id/1002/1600/1000") center/cover;
   overflow: hidden;
 }
-
 /* ═══ 动态环境背景 ═══ */
 .ambient-background {
   position: absolute;
@@ -424,14 +393,12 @@ const handleEnterLogin = () => {
   z-index: 0;
   overflow: hidden;
 }
-
 .ambient-glow {
   position: absolute;
   border-radius: 50%;
   filter: blur(120px);
   animation: breathe 15s infinite ease-in-out alternate;
 }
-
 /* 左下角：克莱因蓝 */
 .glow-blue {
   width: 700px;
@@ -440,7 +407,6 @@ const handleEnterLogin = () => {
   bottom: -20%;
   left: -10%;
 }
-
 /* 右上角：海沫薄荷绿 */
 .glow-seafoam {
   width: 600px;
@@ -450,13 +416,11 @@ const handleEnterLogin = () => {
   right: -5%;
   animation-delay: -7s;
 }
-
 @keyframes breathe {
   0%   { transform: translate(0, 0) scale(1); opacity: 0.6; }
   50%  { transform: translate(40px, -40px) scale(1.1); opacity: 1; }
   100% { transform: translate(-20px, 20px) scale(0.95); opacity: 0.8; }
 }
-
 .login-container {
   position: relative;
   z-index: 1;
@@ -464,7 +428,6 @@ const handleEnterLogin = () => {
   max-width: 920px;
   padding: 0 20px;
 }
-
 .glass-panel {
   position: relative;
   z-index: 10;
@@ -476,7 +439,6 @@ const handleEnterLogin = () => {
   overflow: hidden;
   min-height: 580px;
 }
-
 .brand-section {
   flex: 5;
   background:
@@ -489,25 +451,21 @@ const handleEnterLogin = () => {
   padding: 48px 36px;
   position: relative;
 }
-
 .brand-content {
   position: relative;
   z-index: 1;
   text-align: center;
 }
-
 .brand-logo {
   display: block;
   margin: 0 auto 28px auto;
   filter: drop-shadow(0 8px 16px rgba(22, 93, 255, 0.16));
   animation: logo-subtle 5s ease-in-out infinite;
 }
-
 @keyframes logo-subtle {
   0%, 100% { transform: translateY(0); }
   50%      { transform: translateY(-3px); }
 }
-
 .brand-title {
   font-size: 30px;
   font-weight: 700;
@@ -516,13 +474,11 @@ const handleEnterLogin = () => {
   margin: 0 0 18px 0;
   letter-spacing: 2px;
 }
-
 .brand-slogan {
   font-size: 15px;
   color: var(--theme-text-secondary);
   letter-spacing: 1px;
 }
-
 /* ═══ 右侧操作区 ═══ */
 .auth-section {
   flex: 4;
@@ -532,68 +488,55 @@ const handleEnterLogin = () => {
   display: flex;
   flex-direction: column;
 }
-
 .auth-tabs {
   --el-tabs-header-margin: 0 0 30px 0;
   flex: 1;
   display: flex;
   flex-direction: column;
 }
-
 :deep(.el-tabs__content) {
   flex: 1;
   padding: 0 !important;
 }
-
 :deep(.el-tabs__nav-wrap::after) {
   background-color: rgba(0, 0, 0, 0.06);
 }
-
 :deep(.el-tabs__item) {
   color: var(--theme-text-muted);
   font-size: 16px;
   transition: color 0.25s;
 }
-
 :deep(.el-tabs__item.is-active) {
   color: var(--theme-primary);
   font-weight: 600;
 }
-
 :deep(.el-tabs__active-bar) {
   background-color: var(--theme-primary);
 }
-
 :deep(.el-form-item__label) {
   color: var(--theme-text-secondary) !important;
   font-size: 13px;
   font-weight: 500;
 }
-
 :deep(.el-input__wrapper) {
   height: 40px;
 }
-
 :deep(.el-input__inner) {
   color: var(--theme-text-primary) !important;
   caret-color: var(--theme-primary);
 }
-
 :deep(.el-input__inner::placeholder) {
   color: var(--theme-text-muted);
 }
-
 .auth-form {
   min-height: 330px;
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
-
 .login-form {
   justify-content: center;
 }
-
 .auth-btn {
   width: 100%;
   margin-top: auto;
@@ -612,7 +555,6 @@ const handleEnterLogin = () => {
   background: var(--theme-primary) !important;
   box-shadow: 0 4px 14px rgba(22, 93, 255, 0.28) !important;
 }
-
 /* 禁用态：暗色静默，暗示不可操作 */
 .auth-btn.is-disabled,
 .auth-btn:disabled {
@@ -621,32 +563,27 @@ const handleEnterLogin = () => {
   color: rgba(255, 255, 255, 0.7) !important;
   cursor: not-allowed;
 }
-
 .auth-btn.is-disabled:hover,
 .auth-btn:disabled:hover {
   background: #c8cdd5 !important;
   box-shadow: none !important;
   transform: none;
 }
-
 .auth-btn:not(.is-disabled):not(:disabled):hover {
   background: var(--theme-primary-light) !important;
   box-shadow: 0 6px 22px rgba(22, 93, 255, 0.35) !important;
   transform: translateY(-1px);
 }
-
 .auth-btn:not(.is-disabled):not(:disabled):active {
   transform: translateY(0);
   box-shadow: 0 2px 8px rgba(0, 47, 167, 0.2) !important;
 }
-
 /* ========== 分步注册样式 ========== */
 .register-container {
   min-height: 380px;
   display: flex;
   flex-direction: column;
 }
-
 .step-indicator {
   position: relative;
   display: flex;
@@ -654,14 +591,12 @@ const handleEnterLogin = () => {
   margin-bottom: 24px;
   padding: 0 10px;
 }
-
 .step-item {
   display: flex;
   flex-direction: column;
   align-items: center;
   z-index: 1;
 }
-
 .step-number {
   width: 28px;
   height: 28px;
@@ -676,29 +611,24 @@ const handleEnterLogin = () => {
   margin-bottom: 6px;
   transition: all 0.3s ease;
 }
-
 .step-item.active .step-number {
   background: var(--theme-primary);
   color: #fff;
   box-shadow: 0 4px 12px rgba(22, 93, 255, 0.3);
 }
-
 .step-item.completed .step-number {
   background: var(--theme-success, #67c23a);
   color: #fff;
 }
-
 .step-label {
   font-size: 12px;
   color: #909399;
   transition: color 0.3s ease;
 }
-
 .step-item.active .step-label {
   color: var(--theme-primary);
   font-weight: 500;
 }
-
 .step-line {
   position: absolute;
   top: 14px;
@@ -709,18 +639,15 @@ const handleEnterLogin = () => {
   z-index: 0;
   transition: width 0.3s ease;
 }
-
 .step-content {
   flex: 1;
   padding-bottom: 24px;
 }
-
 .step-buttons {
   display: flex;
   gap: 12px;
   margin-top: auto;
 }
-
 .back-btn {
   flex: 1;
   height: 46px;
@@ -731,21 +658,17 @@ const handleEnterLogin = () => {
   font-weight: 500;
   transition: all 0.25s ease;
 }
-
 .back-btn:hover {
   border-color: var(--theme-primary);
   color: var(--theme-primary);
 }
-
 .step-btn {
   flex: 2;
   margin-top: 0 !important;
 }
-
 .confirm-password-item {
   margin-bottom: 8px !important;
 }
-
 /* 过渡动画 */
 .auth-fade-enter-from {
   opacity: 0;
@@ -761,7 +684,6 @@ const handleEnterLogin = () => {
 .auth-fade-leave-active {
   transition: all 0.2s ease;
 }
-
 .step-slide-enter-from {
   opacity: 0;
   transform: translateX(20px);
@@ -776,7 +698,6 @@ const handleEnterLogin = () => {
 .step-slide-leave-active {
   transition: all 0.2s ease;
 }
-
 /* ═══ 滑块验证模块 ═══ */
 .slider-captcha {
   margin-top: 8px;
@@ -791,13 +712,11 @@ const handleEnterLogin = () => {
   transform: translateZ(0);
   user-select: none;
 }
-
 .slider-track {
   width: 100%;
   height: 100%;
   position: relative;
 }
-
 .slider-bg {
   position: absolute;
   left: 0;
@@ -807,7 +726,6 @@ const handleEnterLogin = () => {
   transition: background 0.3s ease;
   border-radius: inherit;
 }
-
 .slider-text {
   position: absolute;
   inset: 0;
@@ -820,7 +738,6 @@ const handleEnterLogin = () => {
   pointer-events: none;
   transition: color 0.3s ease;
 }
-
 .slider-thumb {
   position: absolute;
   left: 0;
@@ -838,41 +755,33 @@ const handleEnterLogin = () => {
   color: var(--theme-text-secondary);
   transition: color 0.3s ease, transform 0.1s ease;
 }
-
 .slider-thumb:active {
   cursor: grabbing;
 }
-
 /* 验证成功状态 */
 .slider-captcha.is-verified .slider-bg {
   background: var(--theme-seafoam-light);
 }
-
 .slider-captcha.is-verified .slider-text {
   color: var(--theme-seafoam-hover);
   font-weight: 500;
 }
-
 .slider-captcha.is-verified .slider-thumb {
   color: var(--theme-seafoam-hover);
   cursor: default;
 }
-
-
 .knowledge-preview-btn:hover {
   background: var(--theme-primary);
   color: #fff;
   box-shadow: 0 4px 16px rgba(22, 93, 255, 0.3);
   transform: translateY(-1px);
 }
-
 /* ═══ 知识预览弹窗 ═══ */
 .knowledge-dialog :deep(.el-dialog__body) {
   padding: 0 20px 20px;
   max-height: 82vh;
   overflow-y: auto;
 }
-
 /* ═══ 响应式 ═══ */
 @media (max-width: 768px) {
   .glass-panel {

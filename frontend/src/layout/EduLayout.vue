@@ -94,7 +94,7 @@
 
     <!-- 底部 -->
     <el-footer class="edu-footer" height="48px">
-      <span>© 2025 海洋学堂 · 探索蔚蓝世界</span>
+      <span>© 2026 海洋学堂 · 探索蔚蓝世界</span>
     </el-footer>
 
     <!-- RAG 智能问答浮窗 -->
