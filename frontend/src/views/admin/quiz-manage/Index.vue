@@ -194,29 +194,39 @@
         <!-- 单选题/多选题选项 -->
         <template v-if="formModel.questionType === 'single' || formModel.questionType === 'multiple'">
           <el-divider content-position="left">选项设置</el-divider>
-          <div v-for="(opt, idx) in formModel._options" :key="idx" class="option-row">
+          <div
+            v-for="(opt, idx) in formModel._options"
+            :key="idx"
+            class="option-row"
+            :class="{ 'option-selected': isOptionSelected(opt.label) }"
+            @click="handleOptionClick(opt)"
+          >
             <el-row :gutter="8" align="middle">
               <el-col :span="2">
                 <el-tag :type="isOptionSelected(opt.label) ? 'primary' : 'info'" size="small">
                   {{ opt.label }}
                 </el-tag>
               </el-col>
-              <el-col :span="18">
-                <el-input v-model="opt.text" :placeholder="`选项${opt.label}`" size="default" />
+              <el-col :span="16">
+                <el-input v-model="opt.text" :placeholder="`选项${opt.label}`" size="default" @click.stop />
               </el-col>
-              <el-col :span="4">
-                <el-checkbox
+              <el-col :span="6" class="option-action-col">
+                <span
+                  v-if="formModel.questionType === 'single'"
+                  class="option-indicator"
+                  :class="{ checked: formModel._singleAnswer === opt.label }"
+                  @click.stop="formModel._singleAnswer = opt.label"
+                >
+                  <span class="indicator-inner" v-if="formModel._singleAnswer === opt.label" />
+                </span>
+                <span
                   v-if="formModel.questionType === 'multiple'"
-                  v-model="opt._checked"
-                  :label="`选${opt.label}`"
-                  size="small"
-                />
-                <el-radio
-                  v-else
-                  v-model="formModel._singleAnswer"
-                  :label="opt.label"
-                  size="small"
-                >选中</el-radio>
+                  class="option-indicator checkbox"
+                  :class="{ checked: opt._checked }"
+                  @click.stop="opt._checked = !opt._checked"
+                >
+                  <span v-if="opt._checked" class="indicator-check">✓</span>
+                </span>
               </el-col>
             </el-row>
           </div>
@@ -238,12 +248,12 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="正确答案" prop="answerJson">
-              <el-input
-                v-if="formModel.questionType === 'single' || formModel.questionType === 'multiple'"
-                :model-value="formattedAnswer"
-                disabled
-                placeholder="请在上方选项中选择"
-              />
+              <div v-if="formModel.questionType === 'single' || formModel.questionType === 'multiple'" class="answer-display">
+                <el-tag v-if="formattedAnswer && formattedAnswer !== '请选择'" type="success" size="large" effect="plain">
+                  {{ formattedAnswer }}
+                </el-tag>
+                <span v-else class="answer-placeholder">请在上方选项中选择</span>
+              </div>
               <el-tag v-else type="success" size="large">
                 {{ formModel._judgeAnswer === '正确' ? '正确' : '错误' }}
               </el-tag>
@@ -692,6 +702,14 @@ const isOptionSelected = (label) => {
     return formModel._singleAnswer === label
   }
   return formModel._options.find(o => o.label === label)?._checked || false
+}
+
+const handleOptionClick = (opt) => {
+  if (formModel.questionType === 'single') {
+    formModel._singleAnswer = opt.label
+  } else if (formModel.questionType === 'multiple') {
+    opt._checked = !opt._checked
+  }
 }
 
 const addOption = () => {
@@ -1286,6 +1304,69 @@ onMounted(() => {
   background: #fafafa;
   border-radius: 4px;
   border: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.option-row:hover {
+  border-color: #409eff;
+  background: #f5f9ff;
+}
+
+.option-row.option-selected {
+  border-color: #409eff;
+  background: #ecf5ff;
+}
+
+.option-action-col {
+  text-align: center;
+}
+
+.option-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #c0c4cc;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #fff;
+}
+
+.option-indicator.checkbox {
+  border-radius: 3px;
+}
+
+.option-indicator.checked {
+  border-color: #409eff;
+  background: #409eff;
+}
+
+.indicator-inner {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.indicator-check {
+  color: #fff;
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.answer-display {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+
+.answer-placeholder {
+  color: #c0c4cc;
+  font-size: 14px;
 }
 
 .dialog-footer {

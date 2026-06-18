@@ -61,6 +61,9 @@ public class SecurityConfig {
                         // Quiz question management (admin/manage)
                         .requestMatchers("/quiz/**").hasAnyRole("ADMIN", "MANAGER")
 
+                        // C-end exam (any authenticated user)
+                        .requestMatchers("/exam/**").authenticated()
+
                         // Knowledge base browsing (admin/manage)
                         .requestMatchers("/kb/**").hasAnyRole("ADMIN", "MANAGER")
 
