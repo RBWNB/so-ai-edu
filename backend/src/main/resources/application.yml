@@ -88,7 +88,7 @@ app:
       model: qwen-plus-2025-12-01
     embedding:
       model: text-embedding-v3
-      dimension: 1536
+      dimension: 1024
     vectorstore:
       redis:
         index-name: rag-index
