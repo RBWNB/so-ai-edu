@@ -38,6 +38,16 @@
 
         <!-- 右侧用户区 -->
         <div class="user-area">
+          <!-- RAG 智能问答按钮 -->
+          <el-button
+            v-if="authStore.isLoggedIn"
+            class="rag-btn"
+            :icon="ChatDotRound"
+            @click="openRagChat"
+          >
+            智能问答
+          </el-button>
+
           <!-- 已登录：头像 + 下拉菜单 -->
           <template v-if="authStore.isLoggedIn">
             <el-dropdown @command="handleUserCommand">
@@ -86,19 +96,29 @@
     <el-footer class="edu-footer" height="48px">
       <span>© 2025 海洋学堂 · 探索蔚蓝世界</span>
     </el-footer>
+
+    <!-- RAG 智能问答浮窗 -->
+    <RagChatWindow ref="ragChatRef" />
   </el-container>
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/store/auth";
 import { ElMessageBox, ElMessage } from "element-plus";
-import { ArrowDown, Setting, Ship, SwitchButton, User } from "@element-plus/icons-vue";
+import { ArrowDown, ChatDotRound, Setting, Ship, SwitchButton, User } from "@element-plus/icons-vue";
+import RagChatWindow from "@/components/RagChatWindow.vue";
 
 const route = useRoute();
 const $router = useRouter();
 const authStore = useAuthStore();
+const ragChatRef = ref(null);
+
+/* 打开 RAG 问答窗口 */
+const openRagChat = () => {
+  ragChatRef.value?.open();
+};
 
 /* 当前用户是否为管理员 */
 const isAdmin = computed(() => {
@@ -277,9 +297,28 @@ const handleUserCommand = (command) => {
   border-color: transparent;
 }
 
+/* ── RAG 按钮 ── */
+.rag-btn {
+  margin-right: 8px;
+  border-radius: 8px;
+  font-weight: 500;
+  background: linear-gradient(135deg, rgba(0, 210, 255, 0.08), rgba(58, 123, 213, 0.06));
+  border: 1px solid rgba(0, 130, 200, 0.2);
+  color: var(--theme-primary, #0052d9);
+  transition: all 0.25s ease;
+}
+.rag-btn:hover {
+  background: linear-gradient(135deg, var(--theme-primary, #0052d9), #3a7bd5);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(0, 82, 217, 0.3);
+}
+
 /* ── User ── */
 .user-area {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
 }
 .user-trigger {
   display: flex;

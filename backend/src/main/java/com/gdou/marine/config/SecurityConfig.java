@@ -61,6 +61,15 @@ public class SecurityConfig {
                         // AI endpoints → any authenticated user (C-end)
                         .requestMatchers("/ai/**").authenticated()
 
+                        // RAG intelligent Q&A endpoints → any authenticated user (C-end)
+                        .requestMatchers("/rag/**").authenticated()
+
+                        // Knowledge base management → ADMIN / MANAGER
+                        .requestMatchers(HttpMethod.GET, "/kb/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/kb/**").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers(HttpMethod.PUT, "/kb/**").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers(HttpMethod.DELETE, "/kb/**").hasAnyRole("ADMIN", "MANAGER")
+
                         // Public static resources (uploads, images, etc.)
                         .requestMatchers("/uploads/**").permitAll()
 
