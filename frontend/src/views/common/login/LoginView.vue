@@ -9,31 +9,54 @@
     <div class="login-container">
       <div class="glass-panel">
         <!-- 左侧：品牌展示 -->
-        <div class="panel-left brand-section">
+        <div class="panel-left brand-section" ref="brandSectionRef">
+          <canvas ref="waveCanvas" class="wave-canvas"></canvas>
           <div class="brand-content">
-            <!-- 🐋 极简蓝鲸流线 Logo -->
-            <svg class="brand-logo" viewBox="0 0 96 64" width="96" height="64" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <!-- 鲸身 -->
-              <path d="M8 34
-                       Q18 18 40 16
-                       Q60 10 74 20
-                       Q82 22 84 28
-                       Q86 24 88 28
-                       Q86 32 84 28
-                       Q82 34 74 34
-                       Q60 40 40 36
-                       Q22 34 14 38
-                       Z"
-                    fill="var(--theme-klein-blue)" opacity="0.88" />
-              <!-- 背鳍 -->
-              <path d="M54 18 Q56 8 60 17" fill="var(--theme-klein-blue)" opacity="0.7" />
-              <!-- 胸鳍 -->
-              <path d="M36 30 Q32 42 38 44 Q40 38 40 32" fill="var(--theme-klein-blue)" opacity="0.55" />
-              <!-- 眼睛 -->
-              <circle cx="68" cy="22" r="1.8" fill="#FAF9F6" opacity="0.9" />
-              <circle cx="68.5" cy="21.7" r="0.7" fill="var(--theme-klein-blue)" opacity="0.5" />
-              <!-- 流线 — 腹白线 -->
-              <path d="M16 36 Q38 34 64 32" fill="none" stroke="#FAF9F6" stroke-width="0.8" opacity="0.4" />
+            <!-- 🐋 Q 版简笔平涂蓝鲸 Logo -->
+            <svg class="whale-logo" viewBox="0 0 96 64" width="96" height="64" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- 尾鳍（两叶圆润片状） -->
+              <path d="M22 34 C14 28, 6 30, 4 34 C10 34, 16 34, 22 34"
+                    fill="#165dff" stroke="#1a2b5c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M22 34 C14 40, 6 38, 4 34 C10 34, 16 34, 22 34"
+                    fill="#165dff" stroke="#1a2b5c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <!-- 身体（圆滚滚短胖纺锤形） -->
+              <path d="M22 34
+                       C22 20, 36 12, 56 14
+                       C72 16, 82 20, 86 30
+                       C88 38, 84 42, 80 40
+                       C74 38, 68 44, 56 46
+                       C42 49, 26 46, 22 38 Z"
+                    fill="#165dff" stroke="#1a2b5c" stroke-width="2" stroke-linejoin="round"/>
+              <!-- 腹部平涂（浅蓝，无描边，贴合身体下缘） -->
+              <path d="M24 36
+                       C32 45, 46 48, 58 45
+                       C68 43, 76 38, 80 38
+                       C76 42, 68 45, 56 46
+                       C42 48, 30 45, 24 36 Z"
+                    fill="#e0edff"/>
+              <!-- 胸鳍（圆润片状，从腹部伸出） -->
+              <path d="M44 42 C38 48, 30 54, 28 54 C32 50, 38 44, 44 42"
+                    fill="#165dff" stroke="#1a2b5c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <!-- 背鳍（小圆钝三角形，身体后1/3处） -->
+              <path d="M48 17 C48 8, 56 8, 56 19"
+                    fill="#165dff" stroke="#1a2b5c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <!-- 左眼 -->
+              <circle cx="65" cy="26" r="5.5" fill="#fafcff" stroke="#1a2b5c" stroke-width="1.8"/>
+              <circle class="pupil-left" cx="65" cy="26" r="2.5" fill="#1a2b5c"/>
+              <circle cx="63" cy="24" r="1.4" fill="#fff"/>
+              <path class="blink-line blink-left" d="M 61 26 Q 65 21.5, 69 26"
+                    fill="none" stroke="#1a2b5c" stroke-width="2.2" stroke-linecap="round" opacity="0"/>
+              <!-- 右眼 -->
+              <circle cx="75" cy="26" r="5.5" fill="#fafcff" stroke="#1a2b5c" stroke-width="1.8"/>
+              <circle class="pupil-right" cx="75" cy="26" r="2.5" fill="#1a2b5c"/>
+              <circle cx="73" cy="24" r="1.4" fill="#fff"/>
+              <path class="blink-line blink-right" d="M 71 26 Q 75 21.5, 79 26"
+                    fill="none" stroke="#1a2b5c" stroke-width="2.2" stroke-linecap="round" opacity="0"/>
+              <!-- 腮红 -->
+              <circle cx="59" cy="32" r="3.2" fill="#ffd6e0" opacity="0.6"/>
+              <circle cx="81" cy="32" r="3.2" fill="#ffd6e0" opacity="0.6"/>
+              <!-- 微笑 -->
+              <path d="M68 34 Q71 37, 74 34" fill="none" stroke="#1a2b5c" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
             <h1 class="brand-title">海洋学堂<br>智能教育平台</h1>
             <p class="brand-slogan">探索蔚蓝世界，学习海洋知识</p>
@@ -161,10 +184,11 @@
 </template>
 
 <script setup>
-import { reactive, ref } from "vue";
+import { reactive, ref, onMounted, onUnmounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { ElMessage } from "element-plus";
 import { Right, Select, Reading } from "@element-plus/icons-vue";
+import * as THREE from "three";
 import KnowledgeBase from "@/views/admin/knowledge/Index.vue";
 import { useAuthStore } from "@/store/auth";
 import { loginApi, registerApi } from "@/api/auth";
@@ -175,6 +199,361 @@ const authStore = useAuthStore();
 const activeTab = ref("login");
 const loading = ref(false);
 const knowledgeVisible = ref(false);
+const waveCanvas = ref(null);
+const brandSectionRef = ref(null);
+
+// ── Three.js 波浪背景 ─────────────────────────────────────────────
+let waveRenderer = null;
+let waveScene = null;
+let waveCamera = null;
+let wavePlane = null;
+let waveAnimationId = null;
+let waveBasePositions = null;   // 顶点初始位置快照（用于动画计算）
+let waveHoverIntensity = 0;     // 当前 hover 强度
+let waveTargetHover = 0;        // 目标 hover 强度
+
+const WAVE_BREAKPOINT = 768;    // 小于此宽度关闭 Three.js
+const WAVE_PERIOD = 8;          // 完整波浪周期（秒）
+const WAVE_HOVER_BOOST = 0.5;   // hover 时振幅增强比例
+
+/** WebGL 可用性检测 */
+const checkWebGL = () => {
+  try {
+    const c = document.createElement("canvas");
+    const gl = c.getContext("webgl") || c.getContext("experimental-webgl");
+    return !!gl;
+  } catch {
+    return false;
+  }
+};
+
+/** 帧率自适应：无交互 3s 后降至 30fps */
+let waveLastInteraction = performance.now();
+const WAVE_IDLE_TIMEOUT = 3000;
+let waveIdleMode = false;
+let waveFrameSkip = 0;
+
+const waveMarkInteraction = () => {
+  waveLastInteraction = performance.now();
+  waveIdleMode = false;
+  waveFrameSkip = 0;
+};
+
+/** 初始化波浪画布 */
+const initWave = () => {
+  if (!checkWebGL()) {
+    console.warn("[波浪背景] WebGL 不可用，降级为 CSS 背景");
+    return;
+  }
+  const brand = brandSectionRef.value;
+  const canvas = waveCanvas.value;
+  if (!brand || !canvas) return;
+  if (window.innerWidth < WAVE_BREAKPOINT) return;
+
+  const rect = brand.getBoundingClientRect();
+  const w = rect.width;
+  const h = rect.height;
+  if (w <= 0 || h <= 0) return;
+
+  // ── 场景 / 相机 ──
+  waveScene = new THREE.Scene();
+
+  // 透视相机：轻微俯角，让 Z 轴波浪可见
+  waveCamera = new THREE.PerspectiveCamera(40, w / h, 0.1, 20);
+  waveCamera.position.set(0, 0, 5.5);
+  waveCamera.lookAt(0, 0, 0);
+
+  // ── 渲染器 ──
+  waveRenderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  waveRenderer.setSize(w, h);
+  waveRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  waveRenderer.setClearColor(0x000000, 0);
+
+  // ── 平面几何体（分段数按设备性能分级） ──
+  // 可见半高 = tan(fov/2) * distance = tan(20°) * 5.5 ≈ 2.0
+  const planeH = Math.tan((40 / 2) * (Math.PI / 180)) * 5.5 * 2; // ≈ 4.0
+  const planeW = planeH * (w / h);
+  // 响应式分段：移动端少 → 降低顶点数，桌面多 → 波浪更平滑
+  const sw = window.innerWidth;
+  const segDiv = sw < 768 ? 20 : sw < 1024 ? 16 : 12;
+  const segW = Math.max(Math.floor(w / segDiv), 24);
+  const segH = Math.max(Math.floor(h / segDiv), 24);
+
+  const geometry = new THREE.PlaneGeometry(planeW, planeH, segW, segH);
+
+  // 保存初始位置（Z 始终为 0，只存 X/Y 用于动画计算）
+  const posArr = geometry.attributes.position.array;
+  waveBasePositions = new Float32Array(posArr.length);
+  waveBasePositions.set(posArr);
+
+  // ── 着色器材质：渐变 + 顶点动画 ──
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      uColor1: { value: new THREE.Color("#165dff") },
+      uColor2: { value: new THREE.Color("#36cfc9") },
+      uOpacity: { value: 0.15 },
+    },
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      varying vec2 vUv;
+      uniform vec3 uColor1;
+      uniform vec3 uColor2;
+      uniform float uOpacity;
+      void main() {
+        vec3 color = mix(uColor1, uColor2, vUv.y);
+        gl_FragColor = vec4(color, uOpacity);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+  });
+
+  wavePlane = new THREE.Mesh(geometry, material);
+  waveScene.add(wavePlane);
+
+  // 绑定 hover 事件
+  brand.addEventListener("mouseenter", onBrandEnter);
+  brand.addEventListener("mouseleave", onBrandLeave);
+
+  animateWave();
+};
+
+/** 波浪动画循环 */
+const animateWave = () => {
+  waveAnimationId = requestAnimationFrame(animateWave);
+
+  // ── 帧率自适应：3s 无交互 → 降至 30fps ──
+  const nowMs = performance.now();
+  if (nowMs - waveLastInteraction > WAVE_IDLE_TIMEOUT) {
+    waveIdleMode = true;
+  }
+  if (waveIdleMode) {
+    waveFrameSkip++;
+    if (waveFrameSkip % 2 !== 0) return; // 跳帧
+  }
+
+  if (!wavePlane || !waveRenderer || !waveCamera) return;
+
+  // 缓动 hover 强度
+  waveHoverIntensity += (waveTargetHover - waveHoverIntensity) * 0.04;
+
+  const posArr = wavePlane.geometry.attributes.position.array;
+  const time = performance.now() * 0.001;
+  const omega = (2 * Math.PI) / WAVE_PERIOD; // 8s 周期
+  const t = time * omega;
+  const amp = 1 + waveHoverIntensity * WAVE_HOVER_BOOST; // hover 增强
+
+  for (let i = 0; i < posArr.length; i += 3) {
+    const bx = waveBasePositions[i];
+    const by = waveBasePositions[i + 1];
+
+    // 多层正弦叠加，模拟自然海面
+    posArr[i + 2] = (
+      Math.sin(bx * 2.2 + t) * 0.1 +
+      Math.sin(by * 1.6 + t * 0.65) * 0.08 +
+      Math.sin((bx + by) * 1.1 + t * 0.8) * 0.055 +
+      Math.cos(bx * 0.7 - by * 0.9 + t * 0.45) * 0.04
+    ) * amp;
+  }
+
+  wavePlane.geometry.attributes.position.needsUpdate = true;
+  waveRenderer.render(waveScene, waveCamera);
+};
+
+/** 鼠标进入品牌区 → 增强波浪 */
+const onBrandEnter = () => {
+  waveMarkInteraction();
+  waveTargetHover = 1;
+};
+const onBrandLeave = () => {
+  waveMarkInteraction();
+  waveTargetHover = 0;
+};
+
+/** 更新波浪画布尺寸 */
+const resizeWave = () => {
+  waveMarkInteraction();
+  const brand = brandSectionRef.value;
+  if (!brand || !waveRenderer || !waveCamera) return;
+
+  // 跨过断点 → 销毁
+  if (window.innerWidth < WAVE_BREAKPOINT) {
+    destroyWave();
+    return;
+  }
+
+  const w = brand.getBoundingClientRect().width;
+  const h = brand.getBoundingClientRect().height;
+  if (w <= 0 || h <= 0) return;
+
+  waveCamera.aspect = w / h;
+  waveCamera.updateProjectionMatrix();
+  waveRenderer.setSize(w, h);
+  waveRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  // 重建几何体以匹配新尺寸（使用响应式分段数）
+  if (wavePlane) {
+    const planeH = Math.tan((40 / 2) * (Math.PI / 180)) * 5.5 * 2;
+    const planeW = planeH * (w / h);
+    const sw = window.innerWidth;
+    const segDiv = sw < 768 ? 20 : sw < 1024 ? 16 : 12;
+    const segW = Math.max(Math.floor(w / segDiv), 24);
+    const segH = Math.max(Math.floor(h / segDiv), 24);
+
+    const newGeo = new THREE.PlaneGeometry(planeW, planeH, segW, segH);
+    waveBasePositions = new Float32Array(newGeo.attributes.position.array.length);
+    waveBasePositions.set(newGeo.attributes.position.array);
+
+    wavePlane.geometry.dispose();
+    wavePlane.geometry = newGeo;
+  }
+};
+
+/** 完整清理 */
+const destroyWave = () => {
+  if (waveAnimationId) {
+    cancelAnimationFrame(waveAnimationId);
+    waveAnimationId = null;
+  }
+  if (wavePlane) {
+    if (wavePlane.geometry) wavePlane.geometry.dispose();
+    if (wavePlane.material) wavePlane.material.dispose();
+    wavePlane = null;
+  }
+  if (waveRenderer) {
+    waveRenderer.dispose();
+    try { waveRenderer.forceContextLoss(); } catch { /* ignore */ }
+    waveRenderer = null;
+  }
+  if (waveScene) {
+    waveScene.clear();
+    waveScene = null;
+  }
+  waveCamera = null;
+  waveBasePositions = null;
+
+  // 解绑 hover
+  const brand = brandSectionRef.value;
+  if (brand) {
+    brand.removeEventListener("mouseenter", onBrandEnter);
+    brand.removeEventListener("mouseleave", onBrandLeave);
+  }
+};
+
+onMounted(() => {
+  initWave();
+  window.addEventListener("resize", resizeWave);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("resize", resizeWave);
+  destroyWave();
+});
+// ── Three.js 波浪背景 END ─────────────────────────────────────────
+
+// ── Q 版蓝鲸瞳孔追踪 ───────────────────────────────────────────
+let eyeTrackTargetX = 0;
+let eyeTrackTargetY = 0;
+let eyeTrackCurrentX = 0;
+let eyeTrackCurrentY = 0;
+let eyeAnimId = null;
+let blinkTimer = null;          // 闭眼恢复定时器
+const EYE_MAX_OFFSET = 1.8;
+const EYE_LERP = 0.08;
+
+/** 获取 login-page 容器并绑定页面级事件 */
+const getLoginPage = () => document.querySelector(".login-page");
+
+/** 全页面鼠标移动 → 瞳孔跟随（坐标系基于 .login-page） */
+const onPageEyeMove = (e) => {
+  const page = getLoginPage();
+  if (!page) return;
+  const rect = page.getBoundingClientRect();
+  const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  const ny = ((e.clientY - rect.top) / rect.height) * 2 - 1;
+  eyeTrackTargetX = nx * EYE_MAX_OFFSET;
+  eyeTrackTargetY = ny * EYE_MAX_OFFSET;
+};
+
+/** 鼠标离开页面 → 瞳孔平滑复位 */
+const onPageLeave = () => {
+  eyeTrackTargetX = 0;
+  eyeTrackTargetY = 0;
+};
+
+/** 点击页面任意位置 → 月牙形 ^ ^ 软萌眨眼 */
+const blinkWhale = () => {
+  const leftLine = document.querySelector(".blink-left");
+  const rightLine = document.querySelector(".blink-right");
+  const leftPupil = document.querySelector(".pupil-left");
+  const rightPupil = document.querySelector(".pupil-right");
+  if (!leftLine || !rightLine) return;
+
+  // 清除上一次未完的恢复定时器
+  if (blinkTimer) { clearTimeout(blinkTimer); blinkTimer = null; }
+
+  // 闭合：月牙线条快速淡入(60ms) + 瞳孔/高光同步隐藏
+  leftLine.setAttribute("opacity", "1");
+  rightLine.setAttribute("opacity", "1");
+  if (leftPupil) leftPupil.setAttribute("opacity", "0");
+  if (rightPupil) rightPupil.setAttribute("opacity", "0");
+
+  // 保持 100ms → 缓慢张开 150ms（共 250ms）
+  blinkTimer = setTimeout(() => {
+    if (leftLine) leftLine.setAttribute("opacity", "0");
+    if (rightLine) rightLine.setAttribute("opacity", "0");
+    if (leftPupil) leftPupil.setAttribute("opacity", "1");
+    if (rightPupil) rightPupil.setAttribute("opacity", "1");
+    blinkTimer = null;
+  }, 250);
+};
+
+/** 瞳孔缓动动画循环 */
+const animateEyes = () => {
+  eyeAnimId = requestAnimationFrame(animateEyes);
+  eyeTrackCurrentX += (eyeTrackTargetX - eyeTrackCurrentX) * EYE_LERP;
+  eyeTrackCurrentY += (eyeTrackTargetY - eyeTrackCurrentY) * EYE_LERP;
+
+  const leftPupil = document.querySelector(".pupil-left");
+  const rightPupil = document.querySelector(".pupil-right");
+  if (leftPupil) {
+    leftPupil.setAttribute("cx", String(65 + eyeTrackCurrentX));
+    leftPupil.setAttribute("cy", String(26 + eyeTrackCurrentY));
+  }
+  if (rightPupil) {
+    rightPupil.setAttribute("cx", String(75 + eyeTrackCurrentX));
+    rightPupil.setAttribute("cy", String(26 + eyeTrackCurrentY));
+  }
+};
+
+onMounted(() => {
+  const page = getLoginPage();
+  if (page) {
+    page.addEventListener("mousemove", onPageEyeMove);
+    page.addEventListener("mouseleave", onPageLeave);
+    page.addEventListener("click", blinkWhale);
+  }
+  animateEyes();
+});
+
+onUnmounted(() => {
+  if (eyeAnimId) cancelAnimationFrame(eyeAnimId);
+  if (blinkTimer) clearTimeout(blinkTimer);
+  const page = getLoginPage();
+  if (page) {
+    page.removeEventListener("mousemove", onPageEyeMove);
+    page.removeEventListener("mouseleave", onPageLeave);
+    page.removeEventListener("click", blinkWhale);
+  }
+});
+// ── Q 版蓝鲸瞳孔追踪 END ───────────────────────────────────────
 
 // ═══ 滑块验证逻辑 ═══
 const isVerified = ref(false);
@@ -450,19 +829,44 @@ const handleEnterLogin = () => {
   justify-content: center;
   padding: 48px 36px;
   position: relative;
+  overflow: hidden; /* 裁剪波浪画布圆角 */
+}
+/* Three.js 波浪画布：铺满品牌区，位于内容之下 */
+.wave-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none; /* 不拦截 hover 事件穿透到父容器 */
 }
 .brand-content {
   position: relative;
   z-index: 1;
   text-align: center;
 }
-.brand-logo {
+/* Q 版蓝鲸 Logo */
+.whale-logo {
   display: block;
-  margin: 0 auto 28px auto;
-  filter: drop-shadow(0 8px 16px rgba(22, 93, 255, 0.16));
-  animation: logo-subtle 5s ease-in-out infinite;
+  width: 112px;
+  height: 74px;
+  margin: 0 auto 24px auto;
+  cursor: default;
+  filter: drop-shadow(0 6px 14px rgba(22, 93, 255, 0.12));
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  animation: whale-float 6s ease-in-out infinite;
 }
-@keyframes logo-subtle {
+.whale-logo:hover {
+  transform: scale(1.03);
+  opacity: 0.9;
+}
+/* 眨眼线条 + 瞳孔/高光：闭合60ms + 张开150ms */
+.blink-line {
+  transition: opacity 0.06s ease-in;
+}
+.pupil-left,
+.pupil-right {
+  transition: opacity 0.15s ease-out;
+}
+@keyframes whale-float {
   0%, 100% { transform: translateY(0); }
   50%      { transform: translateY(-3px); }
 }
@@ -800,10 +1204,10 @@ const handleEnterLogin = () => {
     padding: 28px 24px;
     min-height: auto;
   }
-  .brand-logo {
-    width: 64px;
-    height: 42px;
-    margin-bottom: 18px;
+  .whale-logo {
+    width: 74px;
+    height: 49px;
+    margin-bottom: 16px;
   }
   .auth-form {
     min-height: 320px;
