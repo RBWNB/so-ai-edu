@@ -148,6 +148,7 @@ const router = createRouter({
 
 // 全局导航守卫
 router.beforeEach(async (to, from, next) => {
+  document.title = `${to.meta?.title || '首页'} - 海洋学堂`;
   const authStore = useAuthStore();
 
   // 已登录但头像为空 → 自动拉取用户信息（解决刷新/首次登录头像不显示）

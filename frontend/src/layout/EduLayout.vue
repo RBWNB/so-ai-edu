@@ -39,14 +39,10 @@
         <!-- 右侧用户区 -->
         <div class="user-area">
           <!-- RAG 智能问答按钮 -->
-          <el-button
-            v-if="authStore.isLoggedIn"
-            class="rag-btn"
-            :icon="ChatDotRound"
-            @click="openRagChat"
-          >
-            智能问答
-          </el-button>
+          <AgentFloatWidget
+              v-if="authStore.isLoggedIn"
+              @click="openRagChat"
+          />
 
           <!-- 已登录：头像 + 下拉菜单 -->
           <template v-if="authStore.isLoggedIn">
@@ -109,6 +105,7 @@ import { useAuthStore } from "@/store/auth";
 import { ElMessageBox, ElMessage } from "element-plus";
 import { ArrowDown, ChatDotRound, Setting, Ship, SwitchButton, User } from "@element-plus/icons-vue";
 import RagChatWindow from "@/components/RagChatWindow.vue";
+import AgentFloatWidget from "@/components/AgentFloatWidget.vue";
 
 const route = useRoute();
 const $router = useRouter();
