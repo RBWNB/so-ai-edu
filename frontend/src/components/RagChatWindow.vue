@@ -181,9 +181,13 @@ const startDrag = (e) => {
   dragging = true;
   const panel = e.currentTarget.closest(".rag-panel");
   if (!panel) return;
+
+  panel.style.transition = "none";
+
   const rect = panel.getBoundingClientRect();
   dragOffsetX = e.clientX - Math.max(16, rect.left);
   dragOffsetY = e.clientY - Math.max(16, rect.top);
+
   const onMove = (ev) => {
     if (!dragging) return;
     const x = Math.max(0, Math.min(window.innerWidth - 60, ev.clientX - dragOffsetX));
@@ -193,11 +197,15 @@ const startDrag = (e) => {
     panel.style.right = "auto";
     panel.style.bottom = "auto";
   };
+
   const onUp = () => {
     dragging = false;
+
+    panel.style.transition = "";
     document.removeEventListener("mousemove", onMove);
     document.removeEventListener("mouseup", onUp);
   };
+
   document.addEventListener("mousemove", onMove);
   document.addEventListener("mouseup", onUp);
 };
@@ -318,48 +326,57 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* ── 遮罩 ── */
+/* ── 遮罩层 (柔和的浅色遮罩) ── */
 .rag-panel-overlay {
   position: fixed;
   inset: 0;
   z-index: 9998;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(240, 248, 255, 0.3);
+  backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-/* ── 面板 ── */
+/* ── 面板本体 (高透白毛玻璃) ── */
 .rag-panel {
   position: absolute;
   bottom: 24px;
   right: 24px;
   width: 440px;
-  height: 600px;
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  height: 640px;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(28px) saturate(120%);
+  -webkit-backdrop-filter: blur(28px) saturate(120%);
+  border: 1px solid rgba(255, 255, 255, 1);
+  border-radius: 24px;
+  /* 清新的弥散蓝阴影 */
+  box-shadow:
+      0 24px 48px rgba(0, 50, 150, 0.08),
+      0 4px 16px rgba(0, 100, 255, 0.04);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: width 0.25s ease, height 0.25s ease;
+  transition: all 0.35s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 .rag-panel.maximized {
-  width: 720px;
+  width: 800px;
   height: 85vh;
   bottom: 5vh;
-  right: calc((100vw - 720px) / 2);
+  right: calc((100vw - 800px) / 2);
+  border-radius: 32px;
 }
 
-/* ── Header ── */
+/* ── 顶部栏 (干净、无边框感) ── */
 .panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  background: linear-gradient(135deg, var(--theme-primary, #0052d9), #3a7bd5);
-  color: #fff;
+  padding: 18px 24px;
+  background: transparent;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+  color: #0b1a30; /* 深藏青色 */
   cursor: move;
   user-select: none;
   flex-shrink: 0;
@@ -367,8 +384,19 @@ onMounted(() => {
 .panel-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 15px;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.panel-title :deep(.el-icon) {
+  color: #165dff;
+}
+.panel-title :deep(.el-tag) {
+  background: rgba(22, 93, 255, 0.1);
+  border: none;
+  color: #165dff;
+  border-radius: 6px;
   font-weight: 600;
 }
 .panel-actions {
@@ -376,21 +404,32 @@ onMounted(() => {
   gap: 4px;
 }
 .panel-actions :deep(.el-button) {
-  color: rgba(255, 255, 255, 0.85);
+  color: #86909c;
+  font-size: 17px;
 }
 .panel-actions :deep(.el-button:hover) {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.15);
+  color: #165dff;
+  background: rgba(22, 93, 255, 0.08);
 }
 
-/* ── Messages ── */
+/* ── 消息列表区 ── */
 .panel-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
-  background: #f7f8fa;
+  padding: 24px;
+  background: transparent;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,0.1) transparent;
+}
+.panel-messages::-webkit-scrollbar {
+  width: 6px;
+}
+.panel-messages::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.1);
+  border-radius: 10px;
 }
 
+/* ── 欢迎页 (清爽质感) ── */
 .welcome-area {
   display: flex;
   flex-direction: column;
@@ -398,181 +437,250 @@ onMounted(() => {
   justify-content: center;
   height: 100%;
   text-align: center;
-  color: var(--theme-text-muted);
+  color: #4e5969;
+  animation: fadeIn 0.6s ease;
 }
 .welcome-icon {
-  color: var(--theme-primary, #0052d9);
-  opacity: 0.4;
-  margin-bottom: 12px;
+  color: #165dff;
+  opacity: 0.8;
+  margin-bottom: 16px;
+  animation: floatUp 3s ease-in-out infinite;
 }
 .welcome-area h3 {
-  margin: 0 0 4px;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--theme-text-primary);
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1d2129;
 }
 .welcome-area p {
-  margin: 0 0 16px;
+  margin: 0 0 24px;
   font-size: 13px;
+  color: #86909c;
 }
 .suggest-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   width: 100%;
+  max-width: 320px;
 }
 .suggest-tag {
   cursor: pointer;
-  padding: 6px 14px;
+  padding: 10px 16px;
   font-size: 13px;
-  border-radius: 8px;
+  border-radius: 12px;
   background: #fff !important;
-  border: 1px solid var(--theme-border-light) !important;
-  transition: all 0.2s;
+  border: 1px solid rgba(0,0,0,0.06) !important;
+  color: #4e5969 !important;
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
   justify-content: center;
+  white-space: normal;
+  height: auto;
+  line-height: 1.4;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.02);
 }
 .suggest-tag:hover {
-  border-color: var(--theme-primary, #0052d9) !important;
-  color: var(--theme-primary, #0052d9) !important;
-  background: rgba(0, 82, 217, 0.04) !important;
+  border-color: #165dff !important;
+  color: #165dff !important;
+  background: rgba(22, 93, 255, 0.04) !important;
+  box-shadow: 0 6px 16px rgba(22, 93, 255, 0.1);
+  transform: translateY(-2px);
 }
 
-/* ── 消息行 ── */
+/* ── 消息气泡基础 ── */
 .msg-row {
   display: flex;
-  gap: 8px;
-  margin-bottom: 14px;
+  gap: 12px;
+  margin-bottom: 24px;
+  animation: slideUp 0.4s ease forwards;
 }
 .msg-row.user {
   flex-direction: row-reverse;
 }
+.msg-avatar :deep(.el-avatar) {
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.05);
+  color: #165dff;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+}
 .msg-bubble {
-  max-width: 80%;
-  border-radius: 12px;
-  padding: 10px 14px;
+  max-width: 82%;
+  border-radius: 16px;
+  padding: 12px 16px;
   font-size: 14px;
   line-height: 1.6;
 }
+
+/* 用户气泡 (清爽海蓝渐变) */
 .msg-row.user .msg-bubble {
-  background: var(--theme-primary, #0052d9);
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
   color: #fff;
+  border-top-right-radius: 4px;
+  box-shadow: 0 6px 16px rgba(79, 172, 254, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
+
+/* AI 气泡 (纯白实体+弥散阴影) */
 .msg-row.assistant .msg-bubble {
   background: #fff;
-  border: 1px solid #e8ecf1;
-  color: var(--theme-text-primary);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  color: #1d2129;
+  border-top-left-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
 }
+
 .msg-role-label {
   font-size: 11px;
-  opacity: 0.7;
-  margin-bottom: 4px;
+  color: #86909c;
+  margin-bottom: 6px;
+  font-weight: 500;
 }
+.msg-row.user .msg-role-label {
+  text-align: right;
+  color: #86909c;
+}
+
+/* Markdown 优化 (适应亮色主题) */
 .msg-content {
   white-space: pre-wrap;
   word-break: break-word;
 }
-.msg-content.markdown-body :deep(p) {
-  margin: 4px 0;
-}
+.msg-content.markdown-body :deep(p) { margin: 4px 0; }
+.msg-content.markdown-body :deep(a) { color: #165dff; text-decoration: none; }
 .msg-content.markdown-body :deep(ul),
-.msg-content.markdown-body :deep(ol) {
-  padding-left: 18px;
-  margin: 4px 0;
-}
+.msg-content.markdown-body :deep(ol) { padding-left: 20px; margin: 6px 0; }
 .msg-content.markdown-body :deep(code) {
-  background: rgba(0, 0, 0, 0.06);
-  padding: 1px 5px;
-  border-radius: 4px;
-  font-size: 0.92em;
+  background: rgba(0, 0, 0, 0.04);
+  color: #165dff;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-family: monospace;
 }
 .msg-content.markdown-body :deep(pre) {
-  background: #f0f2f5;
-  border-radius: 6px;
-  padding: 10px;
+  background: #f7f8fa;
+  border: 1px solid #e5e6eb;
+  border-radius: 10px;
+  padding: 12px;
   overflow-x: auto;
-  margin: 6px 0;
-}
-.msg-content.markdown-body :deep(strong) {
-  font-weight: 600;
+  margin: 10px 0;
 }
 
-/* ── 打字动画 ── */
-.typing-dots {
-  display: flex;
-  gap: 4px;
-  padding: 4px 0;
-}
+/* ── 打字动画 (清新蓝) ── */
+.typing-dots { display: flex; gap: 5px; padding: 6px 4px; }
 .typing-dots span {
-  width: 7px;
-  height: 7px;
+  width: 6px; height: 6px;
   border-radius: 50%;
-  background: #aaa;
+  background: #4facfe;
   animation: dotBounce 1.4s ease-in-out infinite both;
 }
-.typing-dots span:nth-child(1) {
-  animation-delay: 0s;
-}
-.typing-dots span:nth-child(2) {
-  animation-delay: 0.2s;
-}
-.typing-dots span:nth-child(3) {
-  animation-delay: 0.4s;
-}
-@keyframes dotBounce {
-  0%, 80%, 100% {
-    transform: scale(0.6);
-    opacity: 0.4;
-  }
-  40% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
+.typing-dots span:nth-child(1) { animation-delay: 0s; }
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
 
-/* ── Input ── */
+/* ── 底部输入区── */
 .panel-input {
-  padding: 12px 16px;
-  border-top: 1px solid #eee;
-  background: #fff;
+  padding: 16px 24px;
+  background: rgba(255, 255, 255, 0.6);
+  border-top: 1px solid rgba(0, 0, 0, 0.04);
   flex-shrink: 0;
 }
-.input-hint {
-  margin-top: 6px;
-  font-size: 11px;
-  color: var(--theme-text-muted);
-  text-align: center;
+
+.panel-input :deep(.el-input-group) {
+  background: #fff;
+  border-radius: 30px;
+  border: 1px solid #e5e6eb;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+}
+.panel-input :deep(.el-input-group:focus-within) {
+  border-color: #4facfe;
+  box-shadow: 0 4px 12px rgba(79, 172, 254, 0.15);
 }
 
-/* ── Transition ── */
-.panel-enter-active,
-.panel-leave-active {
-  transition: opacity 0.25s ease;
+
+.panel-input :deep(.el-input__wrapper) {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none;
+  padding-left: 16px;
 }
-.panel-enter-active .rag-panel,
-.panel-leave-active .rag-panel {
-  transition: transform 0.25s ease, opacity 0.25s ease;
+.panel-input :deep(.el-input__inner) {
+  color: #1d2129;
+  height: 38px;
 }
-.panel-enter-from,
-.panel-leave-to {
-  opacity: 0;
+.panel-input :deep(.el-input__inner::placeholder) {
+  color: #c9cdd4;
 }
-.panel-enter-from .rag-panel,
-.panel-leave-to .rag-panel {
-  transform: translateY(20px) scale(0.96);
+
+.panel-input :deep(.el-input-group__append) {
+  background: transparent;
+  border: none;
+  box-shadow: none !important;
+  padding: 0 4px; /* 控制按钮和右边缘的距离 */
 }
+
+
+.panel-input :deep(.el-input-group__append .el-button) {
+  border-radius: 50% !important;
+  width: 38px !important;
+  height: 38px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  border: none;
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(79, 172, 254, 0.3);
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.panel-input :deep(.el-input-group__append .el-button:hover) {
+  box-shadow: 0 6px 16px rgba(79, 172, 254, 0.5);
+  transform: scale(1.06);
+}
+
+.input-hint {
+  margin-top: 10px;
+  font-size: 11px;
+  color: #86909c;
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+
+/* ── 动画 Keyframes ── */
+@keyframes floatUp {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(15px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes dotBounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1.1); opacity: 1; }
+}
+
+/* ── Transition 组件动画增强 ── */
+.panel-enter-active { transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.panel-leave-active { transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1); }
+.panel-enter-from, .panel-leave-to { opacity: 0; }
+.panel-enter-from .rag-panel { transform: translateY(40px) scale(0.95); opacity: 0; }
+.panel-leave-to .rag-panel { transform: translateY(20px) scale(0.98); opacity: 0; }
 
 @media (max-width: 768px) {
   .rag-panel {
-    width: 100vw;
-    height: 100vh;
-    bottom: 0;
-    right: 0;
-    border-radius: 0;
-  }
-  .rag-panel.maximized {
-    width: 100vw;
-    height: 100vh;
-    right: 0;
+    width: 100vw; height: 100vh; bottom: 0; right: 0; border-radius: 0;
+    background: rgba(255, 255, 255, 0.95);
   }
 }
 </style>
