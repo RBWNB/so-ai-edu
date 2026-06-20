@@ -1,6 +1,7 @@
 <template>
   <div class="profile-container">
     <el-row :gutter="24">
+      <!-- ═══ 左侧：用户名片卡 ═══ -->
       <el-col :xs="24" :md="8">
         <el-card class="user-card" shadow="never" v-loading="loading">
           <div class="card-bg"></div>
@@ -37,9 +38,11 @@
 
           <el-divider border-style="dashed" />
 
+          <!-- 账号状态 & 当前角色 -->
           <div class="user-stats">
             <div class="stat-item">
               <div class="stat-label">账号状态</div>
+              <!-- app_user.status: 1=正常 0=禁用 -->
               <div class="stat-value" :class="userStatus === 1 ? 'text-seafoam' : 'text-danger'">
                 {{ userStatus === 1 ? '正常' : '已禁用' }}
               </div>
@@ -49,15 +52,48 @@
               <div class="stat-value">{{ primaryRole }}</div>
             </div>
           </div>
+
+          <el-divider border-style="dashed" />
+
+          <!-- 核心数据概览 -->
+          <div class="user-stats core-stats">
+            <div class="stat-item">
+              <div class="stat-label">可用积分</div>
+              <!-- DB: user_point_account.available_points -->
+              <!-- API: TODO GET /points/account -->
+              <div class="stat-value text-primary">{{ coreOverview.availablePoints }}</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">学习等级</div>
+              <!-- DB: user_learning_profile.level -->
+              <!-- API: TODO GET /learning/profile -->
+              <div class="stat-value text-primary">Lv.{{ coreOverview.level }}</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">已获勋章</div>
+              <!-- DB: user_badge COUNT WHERE user_id = ? -->
+              <!-- API: TODO GET /badge/list -->
+              <div class="stat-value text-primary">{{ coreOverview.badgeCount }} 枚</div>
+            </div>
+          </div>
         </el-card>
       </el-col>
 
+      <!-- ═══ 右侧：多 Tab 内容区 ═══ -->
       <el-col :xs="24" :md="16">
         <el-card class="settings-card" shadow="never">
           <el-tabs v-model="activeTab" class="profile-tabs">
 
+            <!-- ========== Tab 1：基本资料（保留原有） ========== -->
             <el-tab-pane label="基本资料" name="basic">
               <div class="tab-content">
+                <!--
+                  API 已完成：
+                  GET  /sys-user/profile     → 获取个人资料
+                  PUT  /sys-user/profile     → 更新个人资料
+                  POST /sys-user/upload/avatar → 上传头像
+                  DB: app_user (username, real_name, email, phone, avatar_url, status)
+                -->
                 <el-form ref="formRef" :model="profileForm" :rules="rules" label-width="80px" label-position="top">
                   <el-row :gutter="20">
                     <el-col :span="12">
@@ -90,8 +126,12 @@
               </div>
             </el-tab-pane>
 
+            <!-- ========== Tab 2：安全设置（保留原有） ========== -->
             <el-tab-pane label="安全设置" name="security">
               <div class="tab-content">
+                <!--
+                  API 已完成：PUT /sys-user/password
+                -->
                 <el-form ref="passwordFormRef" :model="passwordForm" :rules="passwordRules" label-width="80px" label-position="top">
                   <el-form-item label="原密码" prop="oldPassword">
                     <el-input v-model="passwordForm.oldPassword" type="password" placeholder="请输入当前密码" show-password style="max-width: 320px;" />
@@ -109,6 +149,371 @@
               </div>
             </el-tab-pane>
 
+            <!-- ========== Tab 3：我的学习（P0 核心模块） ========== -->
+            <el-tab-pane label="我的学习" name="learning">
+              <div class="tab-content">
+                <!--
+                  DB 依赖：
+                  - user_learning_profile (user_id, level, total_questions, correct_count, correct_rate, weak_points)
+                  - quiz_wrong_bookmark  (user_id, question_id, wrong_count, mastered)
+                  - quiz_attempt          (user_id, question_id, user_answer_json, is_correct, time_spent_seconds, attempted_at)
+                  - quiz_question         (stem, question_type)
+                  - conversation_message  (user_id, session_id)
+                  API 状态：
+                  ✅ GET  /learning/profile         → 学习画像统计 + 错题数
+                  ✅ GET  /learning/answer-history?pageNum=&pageSize= → 答题记录分页
+                  ✅ GET  /learning/ai-session-count → AI 会话数
+                  ✅ GET  /learning/wrong-book?pageNum=&pageSize= → 错题本详情
+                -->
+                <!-- 数据统计卡片 -->
+                <el-row :gutter="16" class="learning-stats-row" v-loading="learningLoading">
+                  <el-col :xs="12" :md="6" v-for="stat in learningStats" :key="stat.label">
+                    <div class="stat-card">
+                      <div class="stat-card-num">{{ stat.value }}</div>
+                      <div class="stat-card-label">{{ stat.label }}</div>
+                    </div>
+                  </el-col>
+                </el-row>
+
+                <!-- 快捷入口 -->
+                <el-row :gutter="16" class="quick-entry-row">
+                  <el-col :span="12">
+                    <div class="quick-entry-card">
+                      <div class="quick-entry-info">
+                        <el-icon :size="22" color="var(--theme-coral)"><Reading /></el-icon>
+                        <span class="quick-entry-title">错题本</span>
+                        <!-- DB: quiz_wrong_bookmark COUNT WHERE user_id=? AND mastered=0 -->
+                        <span class="quick-entry-desc">共 {{ wrongBookCount }} 道错题待复习</span>
+                      </div>
+                      <el-button type="primary" size="small" round @click="goToWrongBook">去复习</el-button>
+                    </div>
+                  </el-col>
+                </el-row>
+
+                <!-- 最近答题记录：quiz_attempt JOIN quiz_question -->
+                <div class="section-title">最近答题记录</div>
+                <el-table :data="recentAnswerList" stripe style="width: 100%" v-loading="answerLoading" size="default">
+                  <el-table-column prop="stem" label="题目摘要" min-width="160" show-overflow-tooltip />
+                  <el-table-column prop="questionType" label="题型" width="80" align="center">
+                    <template #default="{ row }">
+                      <el-tag size="small" type="info" effect="plain">{{ row.questionType }}</el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="isCorrect" label="是否正确" width="100" align="center">
+                    <template #default="{ row }">
+                      <!-- DB: quiz_attempt.is_correct TINYINT 1=正确 0=错误 -->
+                      <el-tag size="small" :class="row.isCorrect ? 'tag-success' : 'tag-danger'">
+                        {{ row.isCorrect ? '正确' : '错误' }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="timeSpent" label="用时" width="80" align="center" />
+                  <el-table-column prop="attemptedAt" label="答题时间" width="160" />
+                </el-table>
+                <div class="pagination-wrapper">
+                  <el-pagination
+                    v-model:current-page="answerPage.pageNum"
+                    :page-size="answerPage.pageSize"
+                    :total="answerPage.total"
+                    layout="prev, pager, next"
+                    background
+                    size="small"
+                    @current-change="onAnswerPageChange"
+                  />
+                </div>
+              </div>
+            </el-tab-pane>
+
+            <!-- ========== Tab 4：我的积分（P0 核心模块） ========== -->
+            <el-tab-pane label="我的积分" name="points">
+              <div class="tab-content">
+                <!--
+                  DB 依赖：
+                  - user_point_account   (user_id, available_points, total_earned_points, total_spent_points)
+                  - point_transaction    (user_id, points, biz_type, biz_id, description, created_at)
+                  - point_exchange_order (user_id, item_id, points_cost, order_status, created_at)
+                  - point_shop_item      (id, name, item_type, points_price, stock)
+                  待建 API：
+                  - GET  /points/account          → 积分余额
+                  - GET  /points/transactions?page= → 积分流水
+                  - GET  /points/exchange-orders?page= → 兑换记录
+                -->
+                <!-- 积分余额卡片 -->
+                <div class="points-balance-card">
+                  <div class="balance-main">
+                    <!-- DB: user_point_account.available_points -->
+                    <div class="balance-label">可用积分</div>
+                    <div class="balance-num">{{ pointsAccount.availablePoints }}</div>
+                    <div class="balance-sub">
+                      <!-- DB: user_point_account.total_earned_points / total_spent_points -->
+                      <span>累计获得 <b>{{ pointsAccount.totalEarned }}</b></span>
+                      <el-divider direction="vertical" />
+                      <span>累计消耗 <b>{{ pointsAccount.totalSpent }}</b></span>
+                    </div>
+                  </div>
+                  <div class="balance-actions">
+                    <el-button type="primary" size="default" @click="goToPointsDetail">积分明细</el-button>
+                    <el-button size="default" @click="goToPointsShop">去积分商店</el-button>
+                  </div>
+                </div>
+
+                <!-- 积分子 Tab -->
+                <el-tabs v-model="pointsSubTab" class="points-sub-tabs">
+                  <!-- 积分流水：point_transaction -->
+                  <el-tab-pane label="积分流水" name="flow">
+                    <el-table :data="pointsFlowList" stripe style="width: 100%" size="default">
+                      <el-table-column prop="createdAt" label="时间" width="170" />
+                      <el-table-column prop="bizType" label="业务类型" min-width="120">
+                        <template #default="{ row }">
+                          <!-- DB: point_transaction.biz_type: quiz/task/shop/admin -->
+                          <el-tag size="small" effect="plain" type="info">{{ row.bizTypeLabel }}</el-tag>
+                        </template>
+                      </el-table-column>
+                      <el-table-column prop="points" label="积分变动" width="110" align="center">
+                        <template #default="{ row }">
+                          <!-- DB: point_transaction.points >0收入/<0支出 -->
+                          <span :class="row.points > 0 ? 'text-income' : 'text-expense'">
+                            {{ row.points > 0 ? '+' : '' }}{{ row.points }}
+                          </span>
+                        </template>
+                      </el-table-column>
+                      <el-table-column prop="description" label="备注说明" min-width="150" show-overflow-tooltip />
+                    </el-table>
+                    <div class="pagination-wrapper">
+                      <el-pagination
+                        v-model:current-page="pointsFlowPage.pageNum"
+                        :page-size="pointsFlowPage.pageSize"
+                        :total="pointsFlowPage.total"
+                        layout="prev, pager, next"
+                        background
+                        size="small"
+                      />
+                    </div>
+                  </el-tab-pane>
+
+                  <!-- 兑换记录：point_exchange_order JOIN point_shop_item -->
+                  <el-tab-pane label="兑换记录" name="exchange">
+                    <el-table :data="exchangeList" stripe style="width: 100%" size="default">
+                      <el-table-column prop="goodsName" label="商品名称" min-width="140" show-overflow-tooltip />
+                      <el-table-column prop="pointsCost" label="消耗积分" width="100" align="center" />
+                      <el-table-column prop="createdAt" label="兑换时间" width="170" />
+                      <el-table-column prop="orderStatus" label="订单状态" width="100" align="center">
+                        <template #default="{ row }">
+                          <!-- DB: point_exchange_order.order_status: SUCCESS/PROCESSING/FAILED -->
+                          <el-tag size="small" :class="statusTagClass(row.orderStatus)">
+                            {{ row.orderStatusLabel }}
+                          </el-tag>
+                        </template>
+                      </el-table-column>
+                    </el-table>
+                    <div class="pagination-wrapper">
+                      <el-pagination
+                        v-model:current-page="exchangePage.pageNum"
+                        :page-size="exchangePage.pageSize"
+                        :total="exchangePage.total"
+                        layout="prev, pager, next"
+                        background
+                        size="small"
+                      />
+                    </div>
+                  </el-tab-pane>
+                </el-tabs>
+              </div>
+            </el-tab-pane>
+
+            <!-- ========== Tab 5：我的成就（P0 核心模块） ========== -->
+            <el-tab-pane label="我的成就" name="achievement">
+              <div class="tab-content">
+                <!--
+                  DB 依赖：
+                  - user_badge     (user_id, badge_code, badge_name, description, earned_at)
+                  - learning_task  (id, title, description, task_type, target_value, reward_points)
+                  - user_task_record (user_id, task_id, progress_value, completed, completed_at, reward_claimed)
+                  待建 API：
+                  - GET  /badge/list           → 用户已获得勋章
+                  - GET  /badge/all-defined     → 全量勋章定义（含未获得，可从 point_shop_item item_type='badge' 或前端硬编码）
+                  - GET  /task/daily            → 今日任务列表 + 完成进度
+                  - POST /task/{id}/claim       → 领取任务奖励
+                -->
+                <!-- 勋章墙 -->
+                <div class="section-title">勋章墙</div>
+                <el-row :gutter="16" class="badge-grid">
+                  <el-col :xs="12" :md="6" v-for="badge in badgeList" :key="badge.badgeCode">
+                    <!-- DB: user_badge.earned_at 不为空 → 已获得；未获得来自 badge 定义表差值 -->
+                    <div class="badge-card" :class="{ 'badge-locked': !badge.earned }">
+                      <div class="badge-icon">
+                        <el-icon :size="36">
+                          <component :is="badge.icon" />
+                        </el-icon>
+                      </div>
+                      <div class="badge-name">{{ badge.badgeName }}</div>
+                      <div class="badge-desc">
+                        {{ badge.earned ? badge.earnedAt : badge.unlockCondition }}
+                      </div>
+                    </div>
+                  </el-col>
+                </el-row>
+
+                <el-divider border-style="dashed" />
+
+                <!-- 每日任务 -->
+                <div class="section-title">每日任务</div>
+                <div class="task-list">
+                  <!-- DB: learning_task JOIN user_task_record -->
+                  <div class="task-item" v-for="task in dailyTaskList" :key="task.taskId">
+                    <div class="task-info">
+                      <div class="task-name">{{ task.title }}</div>
+                      <!-- DB: learning_task.reward_points -->
+                      <div class="task-reward">+{{ task.rewardPoints }} 积分</div>
+                    </div>
+                    <div class="task-progress">
+                      <el-progress
+                        :percentage="task.progressPercent"
+                        :status="task.completed ? 'success' : undefined"
+                        :stroke-width="8"
+                        :show-text="false"
+                      />
+                      <span class="task-progress-text">{{ task.progressValue }}/{{ task.targetValue }}</span>
+                    </div>
+                    <div class="task-action">
+                      <!-- DB: user_task_record.reward_claimed: 0=可领取 1=已领取 -->
+                      <el-tag v-if="task.rewardClaimed" size="small" class="tag-success">已领取</el-tag>
+                      <el-tag v-else-if="task.completed && !task.rewardClaimed" size="small" type="warning" style="cursor: pointer;" @click="claimReward(task)">待领取</el-tag>
+                      <el-button v-else size="small" type="primary" round @click="goDoTask(task)">去完成</el-button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </el-tab-pane>
+
+            <!-- ========== Tab 6：我的收藏（P2 可选模块） ========== -->
+            <el-tab-pane label="我的收藏" name="favorites">
+              <div class="tab-content">
+                <!--
+                  DB 依赖：
+                  - user_bookmark (user_id, target_type, target_id, created_at)
+                    target_type ∈ ('species', 'ecosystem', 'kb_document', 'quiz_question')
+                    JOIN marine_species / marine_ecosystem / kb_document / quiz_question 获取详情
+                  待建 API：
+                  - GET    /bookmark/list?type=&page=  → 收藏分页
+                  - POST   /bookmark                   → 添加收藏
+                  - DELETE /bookmark/{targetType}/{targetId} → 取消收藏
+                -->
+                <el-tabs v-model="favSubTab" class="fav-sub-tabs">
+                  <!-- target_type 对应 DB user_bookmark.target_type 枚举值 -->
+                  <el-tab-pane label="物种" name="species" />
+                  <el-tab-pane label="生态系统" name="ecosystem" />
+                  <el-tab-pane label="知识库" name="kb_document" />
+                  <el-tab-pane label="题目" name="quiz_question" />
+                </el-tabs>
+
+                <template v-if="currentFavList.length">
+                  <el-row :gutter="16" class="fav-grid">
+                    <el-col :xs="24" :sm="12" :md="8" v-for="item in currentFavList" :key="item.bookmarkId">
+                      <div class="fav-card">
+                        <div class="fav-thumb">
+                          <img :src="item.thumbnail" :alt="item.title" />
+                        </div>
+                        <div class="fav-info">
+                          <div class="fav-title">{{ item.title }}</div>
+                          <!-- DB: user_bookmark.created_at -->
+                          <div class="fav-time">{{ item.createdAt }}</div>
+                        </div>
+                        <el-button
+                          class="fav-remove-btn"
+                          size="small"
+                          type="danger"
+                          text
+                          @click="removeBookmark(item)"
+                        >
+                          取消收藏
+                        </el-button>
+                      </div>
+                    </el-col>
+                  </el-row>
+                  <div class="pagination-wrapper">
+                    <el-pagination
+                      v-model:current-page="favPage.pageNum"
+                      :page-size="favPage.pageSize"
+                      :total="favPage.total"
+                      layout="prev, pager, next"
+                      background
+                      size="small"
+                    />
+                  </div>
+                </template>
+                <el-empty v-else description="暂无收藏内容" :image-size="120" />
+              </div>
+            </el-tab-pane>
+
+            <!-- ========== Tab 7：我的观察（P2 可选模块） ========== -->
+            <el-tab-pane label="我的观察" name="observation">
+              <div class="tab-content">
+                <!--
+                  DB 依赖：
+                  - user_observation (id, user_id, species_id, title, description,
+                                       latitude, longitude, location_name, observed_at,
+                                       photo_media_id, ai_identified, ai_confidence, status)
+                    JOIN marine_species ON species_id → chinese_name
+                    关联 media_asset    ON photo_media_id → url
+                  待建 API：
+                  - GET  /observation/my?page=  → 我的观察分页
+                  - POST /observation            → 发布观察
+                  - GET  /observation/{id}       → 观察详情
+                -->
+                <div class="obs-header">
+                  <el-button type="primary" @click="publishObservation">
+                    <el-icon><Plus /></el-icon> 发布观察
+                  </el-button>
+                </div>
+
+                <template v-if="observationList.length">
+                  <div class="obs-list">
+                    <div class="obs-item" v-for="obs in observationList" :key="obs.id">
+                      <div class="obs-image">
+                        <!-- DB: media_asset.url (via photo_media_id) -->
+                        <img :src="obs.photoUrl" :alt="obs.title" />
+                      </div>
+                      <div class="obs-content">
+                        <div class="obs-title">{{ obs.title }}</div>
+                        <div class="obs-meta">
+                          <el-icon :size="14"><Location /></el-icon>
+                          <!-- DB: user_observation.location_name -->
+                          <span>{{ obs.locationName }}</span>
+                          <el-divider direction="vertical" />
+                          <el-icon :size="14"><Clock /></el-icon>
+                          <!-- DB: user_observation.observed_at -->
+                          <span>{{ obs.observedAt }}</span>
+                        </div>
+                        <div class="obs-tags">
+                          <!-- DB: user_observation.ai_identified / ai_confidence
+                               关联 marine_species.chinese_name -->
+                          <el-tag size="small" effect="plain" class="custom-tag">
+                            AI识别：{{ obs.aiSpeciesName }} ({{ obs.aiConfidence }}%)
+                          </el-tag>
+                          <!-- DB: user_observation.status: 0=隐藏 1=公开 2=审核中 -->
+                          <el-tag size="small" :class="obsStatusClass(obs.status)">
+                            {{ obsStatusLabel(obs.status) }}
+                          </el-tag>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="pagination-wrapper">
+                    <el-pagination
+                      v-model:current-page="obsPage.pageNum"
+                      :page-size="obsPage.pageSize"
+                      :total="obsPage.total"
+                      layout="prev, pager, next"
+                      background
+                      size="small"
+                    />
+                  </div>
+                </template>
+                <el-empty v-else description="暂无观察记录" :image-size="120" />
+              </div>
+            </el-tab-pane>
+
           </el-tabs>
         </el-card>
       </el-col>
@@ -117,15 +522,23 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Camera } from "@element-plus/icons-vue";
+import {
+  Camera, Reading, ChatDotRound,
+  Medal, TrophyBase, StarFilled, Present,
+  Location, Clock, Plus
+} from "@element-plus/icons-vue";
 import { getUserProfile, updatePasswordApi, updateUserProfile, uploadAvatarApi } from "@/api/sysUser";
+import { getLearningProfile, getAnswerHistory, getAiSessionCount } from "@/api/learning";
 import { useAuthStore } from "@/store/auth";
 
 const authStore = useAuthStore();
+const router = useRouter();
 const activeTab = ref("basic");
 
+// ═══ 角色映射（app_role.role_code → 中文名） ═══
 const ROLE_MAP = { ADMIN: "系统管理员", MANAGER: "管理人员", VISITOR: "普通用户" };
 const displayRoles = computed(() => {
   return authStore.roles.map(code => ROLE_MAP[code] || code);
@@ -135,18 +548,21 @@ const primaryRole = computed(() => {
   return ROLE_MAP[authStore.roles[0]] || authStore.roles[0];
 });
 
+// ═══ 通用状态 ═══
 const loading = ref(false);
 const uploading = ref(false);
 const submitting = ref(false);
 const formRef = ref(null);
+// DB: app_user.status TINYINT 1=enabled 0=disabled
 const userStatus = ref(1);
 
+// ═══ Tab1 基本资料：app_user 表 ═══
 const profileForm = reactive({
-  username: "",
-  realName: "",
-  email: "",
-  phone: "",
-  avatarUrl: ""
+  username: "",   // app_user.username
+  realName: "",   // app_user.real_name
+  email: "",      // app_user.email
+  phone: "",      // app_user.phone
+  avatarUrl: ""   // app_user.avatar_url
 });
 
 const rules = {
@@ -160,30 +576,21 @@ const rules = {
   ]
 };
 
-// 格式化头像 URL 的辅助函数，利用 /api 走本地 Vite 代理
 const formatAvatarUrl = (url) => {
   if (!url) return "";
-  // 如果已经是完整 http 链接，或者已经包含了 /api 前缀，则直接返回
-  if (url.startsWith("http") || url.startsWith("/api")) {
-    return url;
-  }
-  // 否则加上 /api 前缀，让 vite 代理到后端去请求图片
+  if (url.startsWith("http") || url.startsWith("/api")) return url;
   return `/api${url}`;
 };
 
-// 初始化获取数据
+// GET /sys-user/profile ✅ 已对接
 const fetchProfile = async () => {
   loading.value = true;
   try {
     const res = await getUserProfile();
     Object.assign(profileForm, res.data);
     userStatus.value = res.data.status ?? 1;
-    // 1. 处理后端返回的相对路径
     profileForm.avatarUrl = formatAvatarUrl(profileForm.avatarUrl);
-
-    // 2. 同步到全局 store，这样刷新页面时顶栏头像也能加载出来
     authStore.avatarUrl = profileForm.avatarUrl;
-
   } catch (err) {
     ElMessage.error("获取个人资料失败");
   } finally {
@@ -191,21 +598,17 @@ const fetchProfile = async () => {
   }
 };
 
-// 头像上传逻辑
+// POST /sys-user/upload/avatar ✅ 已对接
 const handleAvatarChange = async (uploadFile) => {
   const file = uploadFile.raw;
   if (file.size / 1024 / 1024 > 2) {
     ElMessage.error("头像图片大小不能超过 2MB!");
     return;
   }
-
   uploading.value = true;
   try {
     const res = await uploadAvatarApi(file);
-    // 1. 处理上传成功后返回的路径
     profileForm.avatarUrl = formatAvatarUrl(res.data.avatarUrl);
-
-    // 2. 同步到全局 store，让顶栏立刻响应变化
     authStore.avatarUrl = profileForm.avatarUrl;
     ElMessage.success("头像上传成功");
   } catch (err) {
@@ -215,7 +618,7 @@ const handleAvatarChange = async (uploadFile) => {
   }
 };
 
-// 资料提交逻辑
+// PUT /sys-user/profile ✅ 已对接
 const submitProfile = async () => {
   if (!formRef.value) return;
   await formRef.value.validate(async (valid) => {
@@ -237,6 +640,7 @@ const submitProfile = async () => {
   });
 };
 
+// ═══ Tab2 安全设置 ═══
 const passwordFormRef = ref(null);
 const changingPassword = ref(false);
 const passwordForm = reactive({
@@ -265,22 +669,20 @@ const passwordRules = {
   ],
 };
 
+// PUT /sys-user/password ✅ 已对接
 const submitPassword = async () => {
   if (!passwordFormRef.value) return;
   await passwordFormRef.value.validate(async (valid) => {
     if (!valid) return;
-
     changingPassword.value = true;
     try {
       await updatePasswordApi({
         oldPassword: passwordForm.oldPassword,
         newPassword: passwordForm.newPassword,
       });
-
       passwordForm.oldPassword = "";
       passwordForm.newPassword = "";
       passwordForm.confirmPassword = "";
-
       ElMessage.success("密码修改成功，即将返回登录页");
       setTimeout(async () => {
         await authStore.logoutAction();
@@ -293,7 +695,348 @@ const submitPassword = async () => {
   });
 };
 
-onMounted(fetchProfile);
+// ══════════════════════════════════════════════════════════════
+// 以下为新增 C 端模块 —— 全部使用 Mock 数据，字段对齐 marine_db.sql
+// 每个模块注释标注了对应 DB 表与待建 API
+// ══════════════════════════════════════════════════════════════
+
+// ═══ 左侧名片：核心数据概览 ═══
+// DB: user_point_account + user_learning_profile + user_badge
+const coreOverview = reactive({
+  // user_point_account.available_points ← TODO: GET /points/account 待建
+  availablePoints: 2580,
+  // user_learning_profile.level ← GET /learning/profile ✅
+  level: 1,
+  // COUNT(user_badge) ← TODO: GET /badge/list 待建
+  badgeCount: 8,
+});
+
+// ═══ Tab 3：我的学习 ═══
+const learningLoading = ref(false);
+const answerLoading = ref(false);
+
+// 学习画像统计 ← GET /learning/profile ✅
+const learningStats = reactive([
+  { label: "累计答题数", value: 0 },
+  { label: "答题正确率", value: "0%" },
+  { label: "当前等级", value: "Lv.1" },
+  { label: "错题总数", value: 0 },
+]);
+
+// 错题本数量 ← GET /learning/profile.wrongQuestionCount ✅
+const wrongBookCount = ref(0);
+
+// 答题记录 ← GET /learning/answer-history ✅
+const answerPage = reactive({ pageNum: 1, pageSize: 6, total: 0 });
+const recentAnswerList = ref([]);
+
+/** 获取学习画像 + 错题统计 */
+const fetchLearningProfile = async () => {
+  learningLoading.value = true;
+  try {
+    const res = await getLearningProfile();
+    const d = res.data.data;
+    // 更新统计卡片
+    learningStats[0].value = d.totalQuestions ?? 0;
+    learningStats[1].value = (d.correctRate ?? 0) + "%";
+    learningStats[2].value = "Lv." + (d.level ?? 1);
+    learningStats[3].value = d.wrongQuestionCount ?? 0;
+    // 更新快捷入口
+    wrongBookCount.value = d.wrongQuestionCount ?? 0;
+    // 更新左侧名片等级
+    coreOverview.level = d.level ?? 1;
+  } catch (err) {
+    // 接口失败时保持上一次数据，不覆盖
+    console.error("获取学习画像失败", err);
+  } finally {
+    learningLoading.value = false;
+  }
+};
+
+/** 获取 AI 会话数 */
+const fetchAiSessionCount = async () => {
+  try {
+    const res = await getAiSessionCount();
+    aiSessionCount.value = res.data.data?.sessionCount ?? 0;
+  } catch (err) {
+    console.error("获取AI会话统计失败", err);
+  }
+};
+
+/** 获取最近答题记录（分页） */
+const fetchAnswerHistory = async () => {
+  answerLoading.value = true;
+  try {
+    const res = await getAnswerHistory(answerPage.pageNum, answerPage.pageSize);
+    const page = res.data.data;
+    recentAnswerList.value = page.records ?? [];
+    answerPage.total = page.total ?? 0;
+  } catch (err) {
+    console.error("获取答题记录失败", err);
+    recentAnswerList.value = [];
+  } finally {
+    answerLoading.value = false;
+  }
+};
+
+/** 答题记录分页切换 */
+const onAnswerPageChange = (pageNum) => {
+  answerPage.pageNum = pageNum;
+  fetchAnswerHistory();
+};
+
+const goToWrongBook = () => {
+  router.push("/learning/wrong-book");
+};
+
+const goToAiHistory = () => {
+  router.push("/ai-assistant");
+};
+
+// ═══ Tab 4：我的积分 ═══
+const pointsSubTab = ref("flow");
+
+// DB: user_point_account (available_points, total_earned_points, total_spent_points)
+// Seed Data: user_id=2, available_points=100
+const pointsAccount = reactive({
+  availablePoints: 2580,   // user_point_account.available_points
+  totalEarned: 4200,       // user_point_account.total_earned_points
+  totalSpent: 1620,        // user_point_account.total_spent_points
+});
+
+const goToPointsDetail = () => {
+  // TODO: 路由 → /points/detail 或锚点到积分流水
+  pointsSubTab.value = "flow";
+};
+
+const goToPointsShop = () => {
+  // TODO: 路由 → /points/shop (商品来自 point_shop_item 表)
+  ElMessage.info("跳转至积分商店（待对接路由）");
+};
+
+// DB: point_transaction (points, biz_type, description, created_at)
+// biz_type ∈ ('quiz', 'task', 'shop', 'admin')
+const pointsFlowPage = reactive({ pageNum: 1, pageSize: 6, total: 28 });
+const pointsFlowList = ref([
+  { id: 1, createdAt: "2026-06-20 14:30:22", bizType: "quiz", bizTypeLabel: "答题奖励", points: 20, description: "完成每日答题任务" },
+  { id: 2, createdAt: "2026-06-20 09:15:08", bizType: "task", bizTypeLabel: "签到奖励", points: 10, description: "连续签到第7天额外奖励" },
+  { id: 3, createdAt: "2026-06-19 18:42:55", bizType: "shop", bizTypeLabel: "兑换消耗", points: -100, description: "兑换物种图鉴实体卡片" },
+  { id: 4, createdAt: "2026-06-19 11:20:33", bizType: "quiz", bizTypeLabel: "答题奖励", points: 30, description: "连续答对5题额外加分" },
+  { id: 5, createdAt: "2026-06-18 16:05:17", bizType: "task", bizTypeLabel: "观察发布", points: 15, description: "发布生态观察记录" },
+  { id: 6, createdAt: "2026-06-18 08:00:01", bizType: "task", bizTypeLabel: "签到奖励", points: 5, description: "每日签到" },
+]);
+
+// DB: point_exchange_order (points_cost, order_status, created_at)
+//     JOIN point_shop_item ON item_id → name
+// order_status: SUCCESS / PROCESSING / FAILED
+const exchangePage = reactive({ pageNum: 1, pageSize: 6, total: 12 });
+const exchangeList = ref([
+  { id: 1, goodsName: "物种图鉴实体卡片", pointsCost: 100, createdAt: "2026-06-19 18:42:55", orderStatus: "SUCCESS" },
+  { id: 2, goodsName: "AI 问答次数包（10次）", pointsCost: 200, createdAt: "2026-06-15 12:30:00", orderStatus: "SUCCESS" },
+  { id: 3, goodsName: "专属头像框·海洋之蓝", pointsCost: 500, createdAt: "2026-06-10 09:15:00", orderStatus: "SUCCESS" },
+  { id: 4, goodsName: "生态系统3D模型解锁", pointsCost: 300, createdAt: "2026-06-20 10:00:00", orderStatus: "PROCESSING" },
+]);
+
+const statusTagClass = (status) => {
+  if (status === "SUCCESS") return "tag-success";
+  if (status === "PROCESSING") return "tag-warning";
+  return "tag-danger";
+};
+
+// ═══ Tab 5：我的成就 ═══
+// DB: user_badge (badge_code, badge_name, description, earned_at)
+//     未获得勋章来源：point_shop_item WHERE item_type='badge' 或前端静态定义
+const badgeList = ref([
+  // ---- 已获得 ----
+  { badgeCode: "first_quiz", badgeName: "初识海洋", icon: Medal, earned: true, earnedAt: "2026-05-01", unlockCondition: "" },
+  { badgeCode: "quiz_master", badgeName: "答题达人", icon: StarFilled, earned: true, earnedAt: "2026-05-15", unlockCondition: "" },
+  { badgeCode: "eco_guardian", badgeName: "生态卫士", icon: Present, earned: true, earnedAt: "2026-06-01", unlockCondition: "" },
+  { badgeCode: "perfect_streak", badgeName: "十连答对", icon: TrophyBase, earned: true, earnedAt: "2026-06-10", unlockCondition: "" },
+  { badgeCode: "persistence", badgeName: "持之以恒", icon: Medal, earned: true, earnedAt: "2026-06-15", unlockCondition: "" },
+  { badgeCode: "ai_explorer", badgeName: "AI探索者", icon: StarFilled, earned: true, earnedAt: "2026-06-18", unlockCondition: "" },
+  { badgeCode: "collector", badgeName: "收藏达人", icon: Present, earned: true, earnedAt: "2026-06-19", unlockCondition: "" },
+  { badgeCode: "knowledge_star", badgeName: "知识之星", icon: TrophyBase, earned: true, earnedAt: "2026-06-20", unlockCondition: "" },
+  // ---- 未获得（解锁条件来自 point_shop_item 或前端定义）----
+  { badgeCode: "encyclopedia", badgeName: "百科全书", icon: Medal, earned: false, earnedAt: "", unlockCondition: "累计答对500题" },
+  { badgeCode: "eco_expert", badgeName: "生态专家", icon: TrophyBase, earned: false, earnedAt: "", unlockCondition: "识别100种物种" },
+  { badgeCode: "social_star", badgeName: "社交达人", icon: StarFilled, earned: false, earnedAt: "", unlockCondition: "发布50条观察记录" },
+  { badgeCode: "supreme_king", badgeName: "至尊王者", icon: Present, earned: false, earnedAt: "", unlockCondition: "达到Lv.30等级" },
+]);
+
+// DB: learning_task JOIN user_task_record
+// task_type ∈ ('daily_quiz', 'read_species', 'ask_ai', 'upload_observation')
+const dailyTaskList = ref([
+  { taskId: 1, title: "每日签到", taskType: "daily_checkin", rewardPoints: 5, targetValue: 1, progressValue: 1, progressPercent: 100, completed: true, rewardClaimed: true },
+  { taskId: 2, title: "答对3道题目", taskType: "daily_quiz", rewardPoints: 15, targetValue: 3, progressValue: 3, progressPercent: 100, completed: true, rewardClaimed: true },
+  { taskId: 3, title: "完成一次AI问答", taskType: "ask_ai", rewardPoints: 10, targetValue: 1, progressValue: 1, progressPercent: 100, completed: true, rewardClaimed: true },
+  { taskId: 4, title: "浏览5个物种详情", taskType: "read_species", rewardPoints: 20, targetValue: 5, progressValue: 3, progressPercent: 60, completed: false, rewardClaimed: false },
+  { taskId: 5, title: "发布1条观察记录", taskType: "upload_observation", rewardPoints: 15, targetValue: 1, progressValue: 0, progressPercent: 0, completed: false, rewardClaimed: false },
+  { taskId: 6, title: "收藏3个物种或知识点", taskType: "bookmark", rewardPoints: 10, targetValue: 3, progressValue: 1, progressPercent: 33, completed: false, rewardClaimed: false },
+]);
+
+const claimReward = (task) => {
+  // TODO: POST /task/{taskId}/claim → 写入 point_transaction + 更新 user_task_record.reward_claimed=1
+  ElMessage.success(`已领取「${task.title}」奖励 +${task.rewardPoints} 积分`);
+};
+
+const goDoTask = (task) => {
+  // TODO: 根据 task_type 跳转对应页面
+  ElMessage.info(`去完成「${task.title}」（待对接路由）`);
+};
+
+// ═══ Tab 6：我的收藏 ═══
+// DB: user_bookmark (target_type, target_id) JOIN 对应业务表
+const favSubTab = ref("species");
+const favPage = reactive({ pageNum: 1, pageSize: 9, total: 15 });
+
+const favDataMap = {
+  // target_type = 'species' → JOIN marine_species (chinese_name, image_url)
+  species: [
+    { bookmarkId: 1, title: "中华白海豚", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-20", targetType: "species", targetId: 1 },
+    { bookmarkId: 2, title: "蓝鲸", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-18", targetType: "species", targetId: 2 },
+    { bookmarkId: 3, title: "珊瑚", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-15", targetType: "species", targetId: 3 },
+    { bookmarkId: 4, title: "绿海龟", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-12", targetType: "species", targetId: 4 },
+    { bookmarkId: 5, title: "座头鲸", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-10", targetType: "species", targetId: 5 },
+    { bookmarkId: 6, title: "企鹅", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-08", targetType: "species", targetId: 6 },
+  ],
+  // target_type = 'ecosystem' → JOIN marine_ecosystem (name, cover_media_id)
+  ecosystem: [
+    { bookmarkId: 7, title: "珊瑚礁生态系统", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-16", targetType: "ecosystem", targetId: 1 },
+    { bookmarkId: 8, title: "红树林湿地", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-05", targetType: "ecosystem", targetId: 2 },
+  ],
+  // target_type = 'kb_document' → JOIN kb_document (title)
+  kb_document: [
+    { bookmarkId: 9, title: "海洋酸化对生物的影响", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-19", targetType: "kb_document", targetId: 1 },
+    { bookmarkId: 10, title: "食物链与能量流动", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-14", targetType: "kb_document", targetId: 2 },
+    { bookmarkId: 11, title: "生物多样性保护策略", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-11", targetType: "kb_document", targetId: 3 },
+  ],
+  // target_type = 'quiz_question' → JOIN quiz_question (stem)
+  quiz_question: [
+    { bookmarkId: 12, title: "哺乳动物分类题", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-17", targetType: "quiz_question", targetId: 1 },
+    { bookmarkId: 13, title: "生态系统综合题", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-13", targetType: "quiz_question", targetId: 2 },
+    { bookmarkId: 14, title: "物种识别挑战题", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-09", targetType: "quiz_question", targetId: 3 },
+    { bookmarkId: 15, title: "海洋生物专项练习", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-07", targetType: "quiz_question", targetId: 4 },
+  ],
+};
+
+const currentFavList = computed(() => {
+  return favDataMap[favSubTab.value] || [];
+});
+
+const removeBookmark = (item) => {
+  // TODO: DELETE /bookmark/{item.targetType}/{item.targetId}
+  ElMessageBox.confirm(`确定取消收藏「${item.title}」？`, "提示", {
+    confirmButtonText: "确定",
+    cancelButtonText: "取消",
+    type: "warning",
+  }).then(() => {
+    ElMessage.success("已取消收藏");
+  }).catch(() => {});
+};
+
+// ═══ Tab 7：我的观察 ═══
+// DB: user_observation (title, location_name, observed_at, photo_media_id,
+//     ai_identified, ai_confidence, status)
+//     JOIN marine_species ON species_id → chinese_name
+//     JOIN media_asset ON photo_media_id → url
+// Seed Data: user_id=2, species_id=1(中华白海豚), ai_identified=1, ai_confidence=98.50
+const obsPage = reactive({ pageNum: 1, pageSize: 6, total: 8 });
+
+const observationList = ref([
+  {
+    id: 1,
+    title: "深圳湾偶遇粉红小精灵！",            // user_observation.title
+    photoUrl: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", // media_asset.url
+    locationName: "深圳湾公园",                  // user_observation.location_name
+    observedAt: "2026-06-19 15:30",             // user_observation.observed_at
+    aiSpeciesName: "中华白海豚",                  // marine_species.chinese_name (via species_id=1)
+    aiConfidence: 98.50,                         // user_observation.ai_confidence
+    status: 1,                                   // user_observation.status: 1=公开
+    speciesId: 1,                                // user_observation.species_id
+  },
+  {
+    id: 2,
+    title: "红树林湿地候鸟种群记录",
+    photoUrl: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg",
+    locationName: "海南·东寨港",
+    observedAt: "2026-06-18 09:15",
+    aiSpeciesName: "黑脸琵鹭",
+    aiConfidence: 92.30,
+    status: 1,
+    speciesId: null,
+  },
+  {
+    id: 3,
+    title: "近海水母爆发记录",
+    photoUrl: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg",
+    locationName: "青岛·石老人海域",
+    observedAt: "2026-06-16 11:42",
+    aiSpeciesName: "海月水母",
+    aiConfidence: 85.10,
+    status: 2,                                   // user_observation.status: 2=审核中
+    speciesId: null,
+  },
+  {
+    id: 4,
+    title: "海龟产卵地调查",
+    photoUrl: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg",
+    locationName: "广东·惠东海龟湾",
+    observedAt: "2026-06-14 07:00",
+    aiSpeciesName: "绿海龟",
+    aiConfidence: 96.80,
+    status: 1,
+    speciesId: null,
+  },
+]);
+
+// user_observation.status 映射
+const obsStatusClass = (status) => {
+  // status: 0=隐藏 1=公开 2=审核中
+  if (status === 1) return "tag-success";
+  if (status === 2) return "tag-warning";
+  return "tag-danger";
+};
+
+const obsStatusLabel = (status) => {
+  if (status === 1) return "审核通过";
+  if (status === 2) return "审核中";
+  return "已隐藏";
+};
+
+const publishObservation = () => {
+  // TODO: 路由 → /observation/publish
+  // POST /observation body: { title, description, species_id, latitude, longitude, location_name, observed_at, photo_media_id }
+  ElMessage.info("打开发布观察（待对接路由）");
+};
+
+// ═══ 初始化 ═══
+onMounted(() => {
+  fetchProfile();
+  fetchLearningData();
+});
+
+/** 加载 Tab3 所有数据（并行请求） */
+const fetchLearningData = () => {
+  fetchLearningProfile();
+  fetchAiSessionCount();
+  fetchAnswerHistory();
+};
+
+// 切换到学习 Tab 时拉取数据（首次加载后缓存，切换回时刷新）
+let learningDataFetched = false;
+watch(activeTab, (tab) => {
+  if (tab === "learning") {
+    if (!learningDataFetched) {
+      learningDataFetched = true;
+      fetchLearningData();
+    } else {
+      // 每次切回 Tab3 刷新数据
+      fetchLearningProfile();
+      fetchAiSessionCount();
+      fetchAnswerHistory();
+    }
+  }
+});
 </script>
 
 <style scoped>
@@ -398,6 +1141,10 @@ onMounted(fetchProfile);
   justify-content: space-around;
 }
 
+.core-stats {
+  padding-top: 0;
+}
+
 .stat-item {
   text-align: center;
 }
@@ -414,8 +1161,11 @@ onMounted(fetchProfile);
   color: var(--theme-text-primary);
 }
 
-.text-seafoam { color: var(--theme-success, #67c23a); }
-.text-danger { color: var(--theme-coral, #f56c6c); }
+.text-primary   { color: var(--theme-klein-blue); }
+.text-seafoam   { color: var(--theme-success, #67c23a); }
+.text-danger    { color: var(--theme-coral, #f56c6c); }
+.text-income    { color: var(--theme-success, #67c23a); font-weight: 600; }
+.text-expense   { color: var(--theme-coral, #f56c6c); font-weight: 600; }
 
 /* ═══ 右侧设置样式 ═══ */
 .settings-card {
@@ -432,5 +1182,467 @@ onMounted(fetchProfile);
 
 :deep(.profile-tabs .el-tabs__item.is-active) {
   font-weight: 600;
+}
+
+/* ═══ 标签状态色 ═══ */
+.tag-success {
+  background: rgba(82, 196, 26, 0.1) !important;
+  border-color: rgba(82, 196, 26, 0.3) !important;
+  color: var(--theme-success, #52c41a) !important;
+}
+
+.tag-danger {
+  background: rgba(245, 108, 108, 0.1) !important;
+  border-color: rgba(245, 108, 108, 0.3) !important;
+  color: var(--theme-coral, #f56c6c) !important;
+}
+
+.tag-warning {
+  background: rgba(250, 173, 20, 0.1) !important;
+  border-color: rgba(250, 173, 20, 0.3) !important;
+  color: var(--theme-warning, #faad14) !important;
+}
+
+/* ═══ 通用分页 ═══ */
+.pagination-wrapper {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+/* ═══ 区块标题 ═══ */
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--theme-text-primary);
+  margin-bottom: 16px;
+  margin-top: 4px;
+}
+
+/* ═══ Tab 3：我的学习 ═══ */
+.learning-stats-row {
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, var(--theme-primary-soft), rgba(22, 93, 255, 0.04));
+  border: 1px solid var(--theme-border-light);
+  border-radius: 12px;
+  padding: 20px 16px;
+  text-align: center;
+  transition: box-shadow 0.3s ease;
+}
+
+.stat-card:hover {
+  box-shadow: var(--theme-shadow);
+}
+
+.stat-card-num {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--theme-klein-blue);
+  margin-bottom: 6px;
+  line-height: 1.2;
+}
+
+.stat-card-label {
+  font-size: 13px;
+  color: var(--theme-text-muted);
+}
+
+.quick-entry-row {
+  margin-bottom: 24px;
+}
+
+.quick-entry-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border: 1px solid var(--theme-border-light);
+  border-radius: 12px;
+  background: var(--theme-card-bg);
+  transition: box-shadow 0.3s ease;
+}
+
+.quick-entry-card:hover {
+  box-shadow: var(--theme-shadow);
+}
+
+.quick-entry-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.quick-entry-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--theme-text-primary);
+}
+
+.quick-entry-desc {
+  font-size: 13px;
+  color: var(--theme-text-muted);
+}
+
+/* ═══ Tab 4：我的积分 ═══ */
+.points-balance-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, var(--theme-klein-blue), var(--theme-primary-dark));
+  border-radius: 16px;
+  padding: 28px 32px;
+  margin-bottom: 24px;
+  color: #fff;
+}
+
+.balance-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.balance-label {
+  font-size: 14px;
+  opacity: 0.85;
+}
+
+.balance-num {
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.balance-sub {
+  font-size: 13px;
+  opacity: 0.8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.balance-sub b {
+  font-weight: 600;
+  opacity: 1;
+}
+
+.balance-sub :deep(.el-divider--vertical) {
+  height: 14px;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.balance-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.balance-actions .el-button {
+  min-width: 120px;
+}
+
+.points-sub-tabs {
+  margin-top: 0;
+}
+
+:deep(.points-sub-tabs .el-tabs__header) {
+  margin-bottom: 16px;
+}
+
+/* ═══ Tab 5：我的成就 ═══ */
+.badge-grid {
+  margin-bottom: 8px;
+}
+
+.badge-card {
+  text-align: center;
+  padding: 20px 12px;
+  border: 1px solid var(--theme-border-light);
+  border-radius: 12px;
+  background: var(--theme-card-bg);
+  margin-bottom: 16px;
+  transition: box-shadow 0.3s ease;
+}
+
+.badge-card:hover {
+  box-shadow: var(--theme-shadow);
+}
+
+.badge-locked {
+  opacity: 0.45;
+  filter: grayscale(1);
+}
+
+.badge-icon {
+  color: var(--theme-klein-blue);
+  margin-bottom: 8px;
+}
+
+.badge-locked .badge-icon {
+  color: var(--theme-text-muted);
+}
+
+.badge-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--theme-text-primary);
+  margin-bottom: 4px;
+}
+
+.badge-desc {
+  font-size: 12px;
+  color: var(--theme-text-muted);
+}
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--theme-border-light);
+  border-radius: 10px;
+  background: var(--theme-card-bg);
+}
+
+.task-info {
+  width: 160px;
+  flex-shrink: 0;
+}
+
+.task-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--theme-text-primary);
+  margin-bottom: 2px;
+}
+
+.task-reward {
+  font-size: 12px;
+  color: var(--theme-coral);
+}
+
+.task-progress {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.task-progress .el-progress {
+  flex: 1;
+}
+
+.task-progress-text {
+  font-size: 12px;
+  color: var(--theme-text-muted);
+  min-width: 40px;
+}
+
+.task-action {
+  flex-shrink: 0;
+  min-width: 72px;
+  text-align: right;
+}
+
+/* ═══ Tab 6：我的收藏 ═══ */
+.fav-sub-tabs {
+  margin-bottom: 8px;
+}
+
+:deep(.fav-sub-tabs .el-tabs__header) {
+  margin-bottom: 16px;
+}
+
+.fav-grid {
+  row-gap: 16px;
+}
+
+.fav-card {
+  position: relative;
+  border: 1px solid var(--theme-border-light);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--theme-card-bg);
+  transition: box-shadow 0.3s ease;
+  margin-bottom: 16px;
+}
+
+.fav-card:hover {
+  box-shadow: var(--theme-shadow);
+}
+
+.fav-thumb {
+  width: 100%;
+  height: 120px;
+  overflow: hidden;
+  background: var(--theme-primary-soft);
+}
+
+.fav-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.fav-info {
+  padding: 12px 14px 8px;
+}
+
+.fav-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--theme-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fav-time {
+  font-size: 12px;
+  color: var(--theme-text-muted);
+  margin-top: 4px;
+}
+
+.fav-remove-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+/* ═══ Tab 7：我的观察 ═══ */
+.obs-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+}
+
+.obs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.obs-item {
+  display: flex;
+  gap: 16px;
+  border: 1px solid var(--theme-border-light);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--theme-card-bg);
+  transition: box-shadow 0.3s ease;
+}
+
+.obs-item:hover {
+  box-shadow: var(--theme-shadow);
+}
+
+.obs-image {
+  width: 140px;
+  height: 100px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--theme-primary-soft);
+}
+
+.obs-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.obs-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.obs-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--theme-text-primary);
+  margin-bottom: 8px;
+}
+
+.obs-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--theme-text-muted);
+  margin-bottom: 10px;
+}
+
+.obs-meta .el-divider--vertical {
+  height: 13px;
+  margin: 0 4px;
+}
+
+.obs-tags {
+  display: flex;
+  gap: 8px;
+}
+
+/* ═══ 响应式微调 ═══ */
+@media (max-width: 768px) {
+  .points-balance-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+    padding: 20px 24px;
+  }
+
+  .balance-num {
+    font-size: 32px;
+  }
+
+  .balance-actions {
+    flex-direction: row;
+    width: 100%;
+  }
+
+  .balance-actions .el-button {
+    flex: 1;
+  }
+
+  .task-item {
+    flex-wrap: wrap;
+  }
+
+  .task-info {
+    width: 100%;
+  }
+
+  .task-progress {
+    flex: 1;
+    min-width: 140px;
+  }
+
+  .obs-item {
+    flex-direction: column;
+  }
+
+  .obs-image {
+    width: 100%;
+    height: 160px;
+  }
+
+  .fav-thumb {
+    height: 100px;
+  }
 }
 </style>

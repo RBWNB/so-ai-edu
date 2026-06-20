@@ -1,6 +1,7 @@
 package com.gdou.marine.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.gdou.marine.annotation.Log;
 import com.gdou.marine.entity.QuizAttempt;
 import com.gdou.marine.entity.QuizQuestion;
 import com.gdou.marine.mapper.QuizAttemptMapper;
@@ -89,6 +90,7 @@ public class ExamController {
     /**
      * 提交答案 & 评分
      */
+    @Log(module = "答题模块", description = "提交答案")
     @PostMapping("/submit")
     public Map<String, Object> submitExam(@RequestBody Map<String, Object> body, Authentication auth) {
         Map<String, Object> result = new HashMap<>();

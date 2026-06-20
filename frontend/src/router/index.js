@@ -122,6 +122,12 @@ const router = createRouter({
           meta: { title: "个人中心", requiresAuth: true },
           component: () => import("@/views/edu/profile/Index.vue"),
         },
+        {
+          path: "learning/wrong-book",
+          name: "EduWrongBook",
+          meta: { title: "错题本", requiresAuth: true },
+          component: () => import("@/views/edu/learning/WrongBook.vue"),
+        },
       ],
     },
     // 公共路由 — 无布局
