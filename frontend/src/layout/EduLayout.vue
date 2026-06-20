@@ -11,8 +11,8 @@
     <!-- Three.js 粒子背景层：全屏固定，不拦截交互，z-index 同 ambient-background（靠 DOM 顺序叠加在其上） -->
     <canvas ref="threeCanvas" class="particle-canvas"></canvas>
 
-    <!-- 顶部导航 —— 始终可点击，鉴权由路由守卫处理 -->
-    <el-header class="edu-header" height="64px">
+    <!-- 顶部导航：深海悬浮岛 —— 始终可点击，鉴权由路由守卫处理 -->
+    <el-header class="edu-header" height="60px">
       <div class="header-inner">
         <!-- Logo -->
         <div class="logo" @click="$router.push('/home')">
@@ -42,8 +42,16 @@
           <span class="logo-text">海洋学堂</span>
         </div>
 
-        <!-- 导航链接 -->
-        <nav class="nav-links">
+        <!-- 导航链接 + 流体滑动指示器 -->
+        <nav ref="navRef" class="nav-links">
+          <div
+            class="nav-indicator"
+            :style="{
+              transform: `translateX(${indicatorX}px)`,
+              width: `${indicatorW}px`,
+              opacity: indicatorVisible ? 1 : 0,
+            }"
+          ></div>
           <router-link to="/home"          class="nav-item" active-class="nav-active">首页</router-link>
           <router-link to="/encyclopedia"  class="nav-item" active-class="nav-active">海洋百科</router-link>
           <router-link to="/ai-assistant"  class="nav-item" active-class="nav-active">AI 导师</router-link>
@@ -124,7 +132,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onUnmounted } from "vue";
+import { computed, ref, reactive, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import * as THREE from "three";
 import { useAuthStore } from "@/store/auth";
@@ -685,6 +693,79 @@ onUnmounted(() => {
 });
 // ── Three.js 粒子背景 END ──────────────────────────────────────────
 
+// ══════════════════════════════════════════════════════════════════════
+// ── 流体滑动指示器 (Fluid Sliding Indicator) ──
+// ══════════════════════════════════════════════════════════════════════
+const navRef = ref(null);
+const indicatorX = ref(0);
+const indicatorW = ref(0);
+const indicatorVisible = ref(false);
+
+/** 将指示器定位到指定 nav-item 元素 */
+const moveIndicatorTo = (el) => {
+  if (!navRef.value || !el) return;
+  const navRect = navRef.value.getBoundingClientRect();
+  const elRect = el.getBoundingClientRect();
+  indicatorX.value = elRect.left - navRect.left;
+  indicatorW.value = elRect.width;
+  indicatorVisible.value = true;
+};
+
+/** 定位到当前路由激活的导航项 */
+const syncIndicator = () => {
+  if (!navRef.value) return;
+  const activeEl = navRef.value.querySelector(".nav-active");
+  if (activeEl) {
+    moveIndicatorTo(activeEl);
+  } else {
+    indicatorVisible.value = false;
+  }
+};
+
+/** 鼠标/指针 进入导航项 → 指示器跟随 */
+const onNavPointerEnter = (e) => {
+  const item = e.target.closest(".nav-item");
+  if (item) moveIndicatorTo(item);
+};
+
+/** 鼠标/指针 离开导航区域 → 指示器回归激活项 */
+const onNavPointerLeave = () => {
+  syncIndicator();
+};
+
+// 路由切换后 DOM 更新完毕 → 重新对齐指示器
+watch(() => route.fullPath, () => {
+  nextTick(syncIndicator);
+});
+
+// 窗口尺寸变化可能导致 nav 项位移 → 重新对齐
+let _indicatorResizeHandler = null;
+
+onMounted(() => {
+  nextTick(syncIndicator);
+
+  const nav = navRef.value;
+  if (nav) {
+    nav.addEventListener("mouseover", onNavPointerEnter, true);
+    nav.addEventListener("mouseout", onNavPointerLeave, true);
+  }
+
+  _indicatorResizeHandler = () => syncIndicator();
+  window.addEventListener("resize", _indicatorResizeHandler, { passive: true });
+});
+
+onUnmounted(() => {
+  const nav = navRef.value;
+  if (nav) {
+    nav.removeEventListener("mouseover", onNavPointerEnter, true);
+    nav.removeEventListener("mouseout", onNavPointerLeave, true);
+  }
+  if (_indicatorResizeHandler) {
+    window.removeEventListener("resize", _indicatorResizeHandler);
+  }
+});
+// ── 流体滑动指示器 END ──────────────────────────────────────────────
+
 /* 打开 RAG 问答窗口 */
 const openRagChat = () => {
   ragChatRef.value?.open();
@@ -732,170 +813,205 @@ const handleUserCommand = (command) => {
 </script>
 
 <style scoped>
-/* ── Three.js 粒子画布 ── */
+/* ══════════════════════════════════════════════════════════════════════
+   Three.js 粒子画布（保持不变）
+   ══════════════════════════════════════════════════════════════════════ */
 .particle-canvas {
   position: fixed;
   inset: 0;
-  z-index: -1;          /* 与 ambient-background 同级，DOM 在其后 → 渲染在上 */
-  pointer-events: none; /* 不拦截任何页面交互 */
+  z-index: -1;
+  pointer-events: none;
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   全局布局 & CSS 变量
+   ══════════════════════════════════════════════════════════════════════ */
 .edu-layout {
-  --theme-klein-blue: #0052d9;
-  --theme-klein-blue-light: #6aa1ff;
-  --theme-text-primary: #303133;
-  --theme-text-muted: #909399;
-  --theme-success: #67c23a;
-  --theme-coral: #f56c6c;
-  /* -------------------------- */
+  --deep-abyss: #0b1a30;
+  --cyan-biolume: #00d2ff;
+  --cyan-soft: rgba(0, 210, 255, 0.7);
+  --white-ghost: rgba(255, 255, 255, 0.9);
+  --white-wisp: rgba(255, 255, 255, 0.55);
 
-  min-height: 100vh;
-  background: transparent;
-}
-
-/* ── Header ── */
-.edu-header {
-  background: rgba(255, 255, 255, 0.94) !important;
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-  position: sticky;
-  top: 0;
-  z-index: 200;
-  padding: 0 24px;
-}
-.header-inner {
-  max-width: 1280px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  height: 64px;
-  gap: 28px;
-}
-
-.edu-main {
   width: 100%;
-  box-sizing: border-box;
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 24px;
-  min-height: calc(100vh - 64px - 48px);
-  background: transparent;
-}
-
-.edu-footer {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #8892a4;
-  font-size: 12px;
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
-  background: transparent;
-}
-.edu-layout {
   min-height: 100vh;
   background: transparent;
 }
 
-/* ── Header ── */
+/* ══════════════════════════════════════════════════════════════════════
+   Header 结构层 —— 撑满全宽，透明占位，不拦截交互
+   ══════════════════════════════════════════════════════════════════════ */
 .edu-header {
-  background: rgba(255, 255, 255, 0.94) !important;
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  width: 100%;
+  height: 56px !important;
+  padding: 0 16px;
+  background: transparent !important;
+  pointer-events: none;
   position: sticky;
-  top: 0;
+  top: 16px;
   z-index: 200;
-  padding: 0 24px;
-}
-.header-inner {
-  max-width: 1280px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  height: 64px;
-  gap: 28px;
 }
 
-/* ── Logo ── */
+/* ══════════════════════════════════════════════════════════════════════
+   Header 视觉层 —— 黑透悬浮岛本体（深海玻璃材质 + 胶囊形态）
+   ══════════════════════════════════════════════════════════════════════ */
+.header-inner {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  gap: 24px;
+  position: relative;
+  /* 视觉样式：从 .edu-header 迁移至此 */
+  max-width: 1000px;
+  margin: 0 auto;
+  background: rgba(10, 20, 42, 0.75);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 32px;
+  padding: 0 12px;
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.25),
+    0 4px 16px rgba(0, 120, 210, 0.15),
+    inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  /* 恢复内部点击交互 */
+  pointer-events: auto;
+  transition: box-shadow 0.4s ease;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Logo
+   ══════════════════════════════════════════════════════════════════════ */
 .logo {
   display: flex;
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  color: var(--theme-primary, #0052d9);
   flex-shrink: 0;
+  user-select: none;
 }
 .logo-whale {
   flex-shrink: 0;
+  filter: drop-shadow(0 0 6px rgba(0, 180, 255, 0.4));
+  transition: filter 0.3s;
+}
+.logo:hover .logo-whale {
+  filter: drop-shadow(0 0 12px rgba(0, 210, 255, 0.7));
 }
 .logo-text {
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 700;
-  background: linear-gradient(135deg, #00d2ff, #3a7bd5);
+  letter-spacing: 1px;
+  background: linear-gradient(135deg, #00d2ff 0%, #72f0ff 50%, #3a9bd5 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
-/* ── Nav ── */
+/* ══════════════════════════════════════════════════════════════════════
+   Nav 导航 + 流体滑动指示器
+   ══════════════════════════════════════════════════════════════════════ */
 .nav-links {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   flex: 1;
   justify-content: center;
   align-items: center;
+  position: relative;
+  height: 40px; /* 给指示器一个明确的定位参考 */
 }
+
+/* ── 流体滑动指示器 (Fluid Sliding Indicator) ── */
+.nav-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 11px;
+  /* 半透明发光水滴状背景 */
+  background:
+    radial-gradient(ellipse at 50% 100%, rgba(0, 210, 255, 0.18) 0%, transparent 70%),
+    rgba(0, 180, 255, 0.08);
+  /* 底部赛博感发光横线 */
+  border-bottom: 2px solid rgba(0, 210, 255, 0.5);
+  box-shadow:
+    0 0 16px rgba(0, 200, 255, 0.12),
+    0 0 4px rgba(0, 210, 255, 0.2);
+  /* 弹簧感缓动 */
+  transition:
+    transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
+    width    0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity  0.28s ease;
+  pointer-events: none;
+  z-index: 0;
+  will-change: transform, width;
+}
+
+/* ── 导航项 ── */
 .nav-item {
-  padding: 8px 16px;
-  border-radius: 8px;
+  position: relative;
+  z-index: 1;
+  padding: 7px 15px;
+  border-radius: 10px;
   text-decoration: none;
-  color: #555;
+  color: rgba(230, 245, 255, 0.85);
   font-size: 14px;
   font-weight: 500;
-  transition: all 0.2s ease;
+  letter-spacing: 0.3px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  transition: color 0.3s ease, text-shadow 0.3s ease;
   cursor: pointer;
+  white-space: nowrap;
 }
+
 .nav-item:hover {
-  background: rgba(0, 210, 255, 0.08);
-  color: var(--theme-primary, #0052d9);
+  color: #fff;
+  text-shadow: 0 0 14px rgba(0, 210, 255, 0.8), 0 1px 3px rgba(0, 0, 0, 0.6);
 }
+
 .nav-active {
-  background: rgba(0, 210, 255, 0.12) !important;
-  color: var(--theme-primary, #0052d9) !important;
+  color: #fff !important;
+  text-shadow: 0 0 16px rgba(0, 210, 255, 0.9), 0 1px 3px rgba(0, 0, 0, 0.8);
+  font-weight: 600;
 }
 
 /* 后台管理入口 */
 .admin-entry {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-  color: var(--theme-primary, #0052d9) !important;
-  background: rgba(0, 47, 167, 0.05);
-  border: 1px dashed rgba(0, 47, 167, 0.25);
+  gap: 5px;
+  margin-left: 6px;
+  /* 深蓝渐变背景 */
+  background: linear-gradient(135deg, rgba(0, 55, 130, 0.45), rgba(0, 32, 85, 0.65));
+  /* 极细高亮实线边框 */
+  border: 1px solid rgba(0, 170, 240, 0.35);
+  border-radius: 9px;
+  color: rgba(0, 210, 255, 0.85) !important;
   font-weight: 600;
+  font-size: 13px;
+  padding: 5px 13px;
+  transition:
+    background 0.3s ease,
+    border-color 0.3s ease,
+    color 0.3s ease,
+    text-shadow 0.3s ease,
+    box-shadow 0.35s ease;
 }
 .admin-entry:hover {
-  background: var(--theme-primary, #0052d9) !important;
+  background: linear-gradient(135deg, rgba(0, 80, 190, 0.55), rgba(0, 50, 120, 0.75)) !important;
+  border-color: rgba(0, 220, 255, 0.55);
   color: #fff !important;
-  border-color: transparent;
+  text-shadow: 0 0 16px rgba(0, 210, 255, 0.8);
+  /* 外发光 + 内发光 */
+  box-shadow:
+    0 0 22px rgba(0, 150, 255, 0.3),
+    0 0 8px rgba(0, 200, 255, 0.2),
+    inset 0 0 18px rgba(0, 180, 255, 0.1);
 }
 
-/* ── RAG 按钮 ── */
-.rag-btn {
-  margin-right: 8px;
-  border-radius: 8px;
-  font-weight: 500;
-  background: linear-gradient(135deg, rgba(0, 210, 255, 0.08), rgba(58, 123, 213, 0.06));
-  border: 1px solid rgba(0, 130, 200, 0.2);
-  color: var(--theme-primary, #0052d9);
-  transition: all 0.25s ease;
-}
-.rag-btn:hover {
-  background: linear-gradient(135deg, var(--theme-primary, #0052d9), #3a7bd5);
-  border-color: transparent;
-  color: #fff;
-  box-shadow: 0 4px 14px rgba(0, 82, 217, 0.3);
-}
-
-/* ── User ── */
+/* ══════════════════════════════════════════════════════════════════════
+   User 区域
+   ══════════════════════════════════════════════════════════════════════ */
 .user-area {
   flex-shrink: 0;
   display: flex;
@@ -907,39 +1023,103 @@ const handleUserCommand = (command) => {
   gap: 8px;
   cursor: pointer;
   padding: 4px 10px;
-  border-radius: 8px;
-  transition: background 0.2s;
+  border-radius: 10px;
+  transition: background 0.25s;
 }
 .user-trigger:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: rgba(255, 255, 255, 0.06);
 }
 .username {
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: rgba(235, 245, 255, 0.85);
 }
 .arrow-icon {
-  color: #999;
+  color: rgba(255, 255, 255, 0.5);
   font-size: 12px;
 }
 
-/* ── Main ── */
+/* ══════════════════════════════════════════════════════════════════════
+   Main 主内容区
+   ══════════════════════════════════════════════════════════════════════ */
 .edu-main {
+  width: 100%;
   max-width: 1280px;
   margin: 0 auto;
-  padding: 0;
-  min-height: calc(100vh - 64px - 48px);
+  padding: 24px 24px 24px;
+  min-height: calc(100vh - 56px - 32px - 48px); /* header高度 + top偏移 + footer */
   background: transparent;
 }
 
-/* ── Footer ── */
+/* ══════════════════════════════════════════════════════════════════════
+   Footer
+   ══════════════════════════════════════════════════════════════════════ */
 .edu-footer {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #8892a4;
+  color: rgba(160, 190, 215, 0.55);
   font-size: 12px;
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  letter-spacing: 0.5px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
   background: transparent;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   响应式调整
+   ══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 1024px) {
+  .edu-header {
+    padding: 0 16px;
+    top: 10px;
+  }
+  .header-inner {
+    max-width: calc(100% - 32px);
+    border-radius: 24px;
+    gap: 14px;
+  }
+  .nav-item {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .logo-text {
+    font-size: 17px;
+  }
+}
+
+@media (max-width: 768px) {
+  .edu-header {
+    padding: 0 12px;
+    top: 8px;
+    height: 48px !important;
+  }
+  .header-inner {
+    max-width: calc(100% - 16px);
+    border-radius: 20px;
+    gap: 8px;
+  }
+  .nav-links {
+    gap: 0;
+    height: 34px;
+  }
+  .nav-item {
+    padding: 4px 8px;
+    font-size: 12px;
+    border-radius: 8px;
+  }
+  .nav-indicator {
+    border-radius: 8px;
+  }
+  .logo-text {
+    font-size: 15px;
+  }
+  .admin-entry {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+  .edu-main {
+    padding: 16px 12px;
+    min-height: calc(100vh - 48px - 16px - 48px);
+  }
 }
 </style>
