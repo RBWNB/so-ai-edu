@@ -16,7 +16,29 @@
       <div class="header-inner">
         <!-- Logo -->
         <div class="logo" @click="$router.push('/home')">
-          <el-icon :size="28"><Ship /></el-icon>
+          <svg class="logo-whale" viewBox="0 0 96 64" width="36" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M22 34 C14 28, 6 30, 4 34 C10 34, 16 34, 22 34"
+                  fill="#165dff" stroke="#1a2b5c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M22 34 C14 40, 6 38, 4 34 C10 34, 16 34, 22 34"
+                  fill="#165dff" stroke="#1a2b5c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M22 34 C22 20, 36 12, 56 14 C72 16, 82 20, 86 30 C88 38, 84 42, 80 40 C74 38, 68 44, 56 46 C42 49, 26 46, 22 38 Z"
+                  fill="#165dff" stroke="#1a2b5c" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M24 36 C32 45, 46 48, 58 45 C68 43, 76 38, 80 38 C76 42, 68 45, 56 46 C42 48, 30 45, 24 36 Z"
+                  fill="#e0edff"/>
+            <path d="M44 42 C38 48, 30 54, 28 54 C32 50, 38 44, 44 42"
+                  fill="#165dff" stroke="#1a2b5c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M48 17 C48 8, 56 8, 56 19"
+                  fill="#165dff" stroke="#1a2b5c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="65" cy="26" r="5.5" fill="#fafcff" stroke="#1a2b5c" stroke-width="1.8"/>
+            <circle cx="65" cy="26" r="2.5" fill="#1a2b5c"/>
+            <circle cx="63" cy="24" r="1.4" fill="#fff"/>
+            <circle cx="75" cy="26" r="5.5" fill="#fafcff" stroke="#1a2b5c" stroke-width="1.8"/>
+            <circle cx="75" cy="26" r="2.5" fill="#1a2b5c"/>
+            <circle cx="73" cy="24" r="1.4" fill="#fff"/>
+            <circle cx="59" cy="32" r="3.2" fill="#ffd6e0" opacity="0.6"/>
+            <circle cx="81" cy="32" r="3.2" fill="#ffd6e0" opacity="0.6"/>
+            <path d="M68 34 Q71 37, 74 34" fill="none" stroke="#1a2b5c" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
           <span class="logo-text">海洋学堂</span>
         </div>
 
@@ -800,6 +822,9 @@ const handleUserCommand = (command) => {
   gap: 8px;
   cursor: pointer;
   color: var(--theme-primary, #0052d9);
+  flex-shrink: 0;
+}
+.logo-whale {
   flex-shrink: 0;
 }
 .logo-text {
