@@ -79,7 +79,7 @@
 
           <!-- 已登录：头像 + 下拉菜单 -->
           <template v-if="authStore.isLoggedIn">
-            <el-dropdown @command="handleUserCommand">
+            <el-dropdown @command="handleUserCommand" popper-class="glass-dropdown">
               <div class="user-trigger">
                 <el-avatar :size="32" :src="userAvatar">
                   <el-icon><User /></el-icon>
@@ -106,7 +106,7 @@
           <!-- 未登录：登录按钮 -->
           <el-button
             v-else
-            type="primary"
+            class="login-glass-btn"
             :icon="User"
             @click="goLogin"
           >
@@ -147,7 +147,7 @@ const authStore = useAuthStore();
 const ragChatRef = ref(null);
 const threeCanvas = ref(null);
 
-// ── Three.js 粒子背景 ──────────────────────────────────────────────
+// ── Three.js 粒子背景\
 /** 粒子数量响应式分级（按屏幕宽度） */
 const getParticleCount = () => {
   const w = window.innerWidth;
@@ -233,7 +233,6 @@ const checkWebGL = () => {
   }
 };
 
-/** 生成软光晕纹理（CanvasTexture） */
 const createGlowTexture = () => {
   const size = 64;
   const c = document.createElement("canvas");
@@ -858,9 +857,6 @@ const handleUserCommand = (command) => {
   background: transparent;
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   Header 结构层 —— 撑满全宽，透明占位，不拦截交互
-   ══════════════════════════════════════════════════════════════════════ */
 .edu-header {
   width: 100%;
   height: 56px !important;
@@ -872,9 +868,7 @@ const handleUserCommand = (command) => {
   z-index: 200;
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   Header 视觉层 —— 黑透悬浮岛本体（深海玻璃材质 + 胶囊形态）
-   ══════════════════════════════════════════════════════════════════════ */
+
 .header-inner {
   display: flex;
   align-items: center;
@@ -899,9 +893,6 @@ const handleUserCommand = (command) => {
   transition: box-shadow 0.4s ease;
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   Logo
-   ══════════════════════════════════════════════════════════════════════ */
 .logo {
   display: flex;
   align-items: center;
@@ -928,9 +919,7 @@ const handleUserCommand = (command) => {
   background-clip: text;
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   Nav 导航 + 流体滑动指示器
-   ══════════════════════════════════════════════════════════════════════ */
+
 .nav-links {
   display: flex;
   gap: 2px;
@@ -948,16 +937,16 @@ const handleUserCommand = (command) => {
   left: 0;
   height: 100%;
   border-radius: 11px;
-  /* 半透明发光水滴状背景 */
+
   background:
     radial-gradient(ellipse at 50% 100%, rgba(0, 210, 255, 0.18) 0%, transparent 70%),
     rgba(0, 180, 255, 0.08);
-  /* 底部赛博感发光横线 */
+
   border-bottom: 2px solid rgba(0, 210, 255, 0.5);
   box-shadow:
     0 0 16px rgba(0, 200, 255, 0.12),
     0 0 4px rgba(0, 210, 255, 0.2);
-  /* 弹簧感缓动 */
+
   transition:
     transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
     width    0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
@@ -967,7 +956,6 @@ const handleUserCommand = (command) => {
   will-change: transform, width;
 }
 
-/* ── 导航项 ── */
 .nav-item {
   position: relative;
   z-index: 1;
@@ -993,6 +981,26 @@ const handleUserCommand = (command) => {
   color: #fff !important;
   text-shadow: 0 0 16px rgba(0, 210, 255, 0.9), 0 1px 3px rgba(0, 0, 0, 0.8);
   font-weight: 600;
+}
+/* 登录按钮 (*/
+.login-glass-btn {
+  background: rgba(0, 210, 255, 0.08) !important;
+  border: 1px solid rgba(0, 210, 255, 0.3) !important;
+  color: #00d2ff !important;
+  border-radius: 20px;
+  padding: 8px 24px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  backdrop-filter: blur(10px);
+  transition: all 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.login-glass-btn:hover {
+  background: linear-gradient(135deg, #165dff, #00d2ff) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  box-shadow: 0 6px 18px rgba(0, 210, 255, 0.35);
+  transform: translateY(-2px);
 }
 
 /* 后台管理入口 */
@@ -1029,9 +1037,7 @@ const handleUserCommand = (command) => {
     inset 0 0 18px rgba(0, 180, 255, 0.1);
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   User 区域
-   ══════════════════════════════════════════════════════════════════════ */
+
 .user-area {
   flex-shrink: 0;
   display: flex;
@@ -1141,5 +1147,54 @@ const handleUserCommand = (command) => {
     padding: 16px 12px;
     min-height: calc(100vh - 48px - 16px - 48px);
   }
+}
+</style>
+
+<style>
+/*Element Plus 下拉菜单全局玻璃化 (配合 popper-class)*/
+.glass-dropdown {
+  background: rgba(10, 20, 42, 0.85) !important;
+  backdrop-filter: blur(24px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(150%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 16px !important;
+  box-shadow:
+      0 12px 32px rgba(0, 0, 0, 0.4),
+      inset 0 1px 1px rgba(255, 255, 255, 0.1) !important;
+  padding: 6px !important;
+}
+
+.glass-dropdown .el-dropdown-menu {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.glass-dropdown .el-dropdown-menu__item {
+  color: rgba(235, 245, 255, 0.85) !important;
+  border-radius: 10px;
+  margin: 2px 4px;
+  font-weight: 500;
+  transition: all 0.25s ease;
+}
+
+.glass-dropdown .el-dropdown-menu__item:hover {
+  background: rgba(0, 210, 255, 0.15) !important;
+  color: #00d2ff !important;
+  box-shadow: 0 2px 8px rgba(0, 210, 255, 0.15);
+  transform: translateX(2px);
+}
+
+.glass-dropdown .el-dropdown-menu__item--divided {
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+  margin-top: 4px;
+}
+.glass-dropdown .el-dropdown-menu__item--divided::before {
+  display: none !important;
+}
+
+.glass-dropdown .el-popper__arrow::before {
+  background: rgba(10, 20, 42, 0.95) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
 }
 </style>
