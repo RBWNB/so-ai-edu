@@ -228,18 +228,14 @@
             <el-tab-pane label="我的积分" name="points">
               <div class="tab-content">
                 <!--
-                  DB 依赖：
-                  - user_point_account   (user_id, available_points, total_earned_points, total_spent_points)
-                  - point_transaction    (user_id, points, biz_type, biz_id, description, created_at)
-                  - point_exchange_order (user_id, item_id, points_cost, order_status, created_at)
-                  - point_shop_item      (id, name, item_type, points_price, stock)
-                  待建 API：
-                  - GET  /points/account          → 积分余额
-                  - GET  /points/transactions?page= → 积分流水
-                  - GET  /points/exchange-orders?page= → 兑换记录
+                  DB 依赖：user_point_account / point_transaction / point_exchange_order / point_shop_item
+                  API 状态：
+                  ✅ GET  /points/account                → 积分余额
+                  ✅ GET  /points/transactions?pageNum=&pageSize= → 积分流水
+                  ✅ GET  /points/exchange-orders?pageNum=&pageSize= → 兑换记录
                 -->
                 <!-- 积分余额卡片 -->
-                <div class="points-balance-card">
+                <div class="points-balance-card" v-loading="pointsLoading">
                   <div class="balance-main">
                     <!-- DB: user_point_account.available_points -->
                     <div class="balance-label">可用积分</div>
@@ -261,17 +257,15 @@
                 <el-tabs v-model="pointsSubTab" class="points-sub-tabs">
                   <!-- 积分流水：point_transaction -->
                   <el-tab-pane label="积分流水" name="flow">
-                    <el-table :data="pointsFlowList" stripe style="width: 100%" size="default">
+                    <el-table :data="pointsFlowList" stripe style="width: 100%" size="default" v-loading="flowLoading">
                       <el-table-column prop="createdAt" label="时间" width="170" />
                       <el-table-column prop="bizType" label="业务类型" min-width="120">
                         <template #default="{ row }">
-                          <!-- DB: point_transaction.biz_type: quiz/task/shop/admin -->
                           <el-tag size="small" effect="plain" type="info">{{ row.bizTypeLabel }}</el-tag>
                         </template>
                       </el-table-column>
                       <el-table-column prop="points" label="积分变动" width="110" align="center">
                         <template #default="{ row }">
-                          <!-- DB: point_transaction.points >0收入/<0支出 -->
                           <span :class="row.points > 0 ? 'text-income' : 'text-expense'">
                             {{ row.points > 0 ? '+' : '' }}{{ row.points }}
                           </span>
@@ -287,21 +281,21 @@
                         layout="prev, pager, next"
                         background
                         size="small"
+                        @current-change="onFlowPageChange"
                       />
                     </div>
                   </el-tab-pane>
 
                   <!-- 兑换记录：point_exchange_order JOIN point_shop_item -->
                   <el-tab-pane label="兑换记录" name="exchange">
-                    <el-table :data="exchangeList" stripe style="width: 100%" size="default">
+                    <el-table :data="exchangeList" stripe style="width: 100%" size="default" v-loading="exchangeLoading">
                       <el-table-column prop="goodsName" label="商品名称" min-width="140" show-overflow-tooltip />
                       <el-table-column prop="pointsCost" label="消耗积分" width="100" align="center" />
                       <el-table-column prop="createdAt" label="兑换时间" width="170" />
                       <el-table-column prop="orderStatus" label="订单状态" width="100" align="center">
                         <template #default="{ row }">
-                          <!-- DB: point_exchange_order.order_status: SUCCESS/PROCESSING/FAILED -->
                           <el-tag size="small" :class="statusTagClass(row.orderStatus)">
-                            {{ row.orderStatusLabel }}
+                            {{ row.orderStatus === "SUCCESS" ? "已完成" : row.orderStatus === "PROCESSING" ? "处理中" : row.orderStatus }}
                           </el-tag>
                         </template>
                       </el-table-column>
@@ -314,6 +308,7 @@
                         layout="prev, pager, next"
                         background
                         size="small"
+                        @current-change="onExchangePageChange"
                       />
                     </div>
                   </el-tab-pane>
@@ -532,6 +527,7 @@ import {
 } from "@element-plus/icons-vue";
 import { getUserProfile, updatePasswordApi, updateUserProfile, uploadAvatarApi } from "@/api/sysUser";
 import { getLearningProfile, getAnswerHistory, getAiSessionCount } from "@/api/learning";
+import { getPointsAccount, getPointsTransactions, getExchangeOrders } from "@/api/points";
 import { useAuthStore } from "@/store/auth";
 
 const authStore = useAuthStore();
@@ -794,18 +790,85 @@ const goToAiHistory = () => {
 };
 
 // ═══ Tab 4：我的积分 ═══
+// API: GET /points/account ✅  /points/transactions ✅  /points/exchange-orders ✅
 const pointsSubTab = ref("flow");
+const pointsLoading = ref(false);
+const flowLoading = ref(false);
+const exchangeLoading = ref(false);
 
-// DB: user_point_account (available_points, total_earned_points, total_spent_points)
-// Seed Data: user_id=2, available_points=100
+// 积分余额 ← GET /points/account
 const pointsAccount = reactive({
-  availablePoints: 2580,   // user_point_account.available_points
-  totalEarned: 4200,       // user_point_account.total_earned_points
-  totalSpent: 1620,        // user_point_account.total_spent_points
+  availablePoints: 0,
+  totalEarned: 0,
+  totalSpent: 0,
 });
 
+// 积分流水 ← GET /points/transactions
+const pointsFlowPage = reactive({ pageNum: 1, pageSize: 6, total: 0 });
+const pointsFlowList = ref([]);
+
+// 兑换记录 ← GET /points/exchange-orders
+const exchangePage = reactive({ pageNum: 1, pageSize: 6, total: 0 });
+const exchangeList = ref([]);
+
+const fetchPointsAccount = async () => {
+  pointsLoading.value = true;
+  try {
+    const res = await getPointsAccount();
+    const d = res.data.data;
+    pointsAccount.availablePoints = d.availablePoints ?? 0;
+    pointsAccount.totalEarned = d.totalEarned ?? 0;
+    pointsAccount.totalSpent = d.totalSpent ?? 0;
+    // 同步到左侧名片
+    coreOverview.availablePoints = d.availablePoints ?? 0;
+  } catch (err) {
+    console.error("获取积分余额失败", err);
+  } finally {
+    pointsLoading.value = false;
+  }
+};
+
+const fetchPointsFlow = async () => {
+  flowLoading.value = true;
+  try {
+    const res = await getPointsTransactions(pointsFlowPage.pageNum, pointsFlowPage.pageSize);
+    const page = res.data.data;
+    pointsFlowList.value = page.records ?? [];
+    pointsFlowPage.total = page.total ?? 0;
+  } catch (err) {
+    console.error("获取积分流水失败", err);
+    pointsFlowList.value = [];
+  } finally {
+    flowLoading.value = false;
+  }
+};
+
+const fetchExchangeOrders = async () => {
+  exchangeLoading.value = true;
+  try {
+    const res = await getExchangeOrders(exchangePage.pageNum, exchangePage.pageSize);
+    const page = res.data.data;
+    exchangeList.value = page.records ?? [];
+    exchangePage.total = page.total ?? 0;
+  } catch (err) {
+    console.error("获取兑换记录失败", err);
+    exchangeList.value = [];
+  } finally {
+    exchangeLoading.value = false;
+  }
+};
+
+const onFlowPageChange = (pageNum) => {
+  pointsFlowPage.pageNum = pageNum;
+  fetchPointsFlow();
+};
+
+const onExchangePageChange = (pageNum) => {
+  exchangePage.pageNum = pageNum;
+  fetchExchangeOrders();
+};
+
 const goToPointsDetail = () => {
-  // TODO: 路由 → /points/detail 或锚点到积分流水
   pointsSubTab.value = "flow";
 };
 
@@ -813,29 +876,6 @@ const goToPointsShop = () => {
   // TODO: 路由 → /points/shop (商品来自 point_shop_item 表)
   ElMessage.info("跳转至积分商店（待对接路由）");
 };
-
-// DB: point_transaction (points, biz_type, description, created_at)
-// biz_type ∈ ('quiz', 'task', 'shop', 'admin')
-const pointsFlowPage = reactive({ pageNum: 1, pageSize: 6, total: 28 });
-const pointsFlowList = ref([
-  { id: 1, createdAt: "2026-06-20 14:30:22", bizType: "quiz", bizTypeLabel: "答题奖励", points: 20, description: "完成每日答题任务" },
-  { id: 2, createdAt: "2026-06-20 09:15:08", bizType: "task", bizTypeLabel: "签到奖励", points: 10, description: "连续签到第7天额外奖励" },
-  { id: 3, createdAt: "2026-06-19 18:42:55", bizType: "shop", bizTypeLabel: "兑换消耗", points: -100, description: "兑换物种图鉴实体卡片" },
-  { id: 4, createdAt: "2026-06-19 11:20:33", bizType: "quiz", bizTypeLabel: "答题奖励", points: 30, description: "连续答对5题额外加分" },
-  { id: 5, createdAt: "2026-06-18 16:05:17", bizType: "task", bizTypeLabel: "观察发布", points: 15, description: "发布生态观察记录" },
-  { id: 6, createdAt: "2026-06-18 08:00:01", bizType: "task", bizTypeLabel: "签到奖励", points: 5, description: "每日签到" },
-]);
-
-// DB: point_exchange_order (points_cost, order_status, created_at)
-//     JOIN point_shop_item ON item_id → name
-// order_status: SUCCESS / PROCESSING / FAILED
-const exchangePage = reactive({ pageNum: 1, pageSize: 6, total: 12 });
-const exchangeList = ref([
-  { id: 1, goodsName: "物种图鉴实体卡片", pointsCost: 100, createdAt: "2026-06-19 18:42:55", orderStatus: "SUCCESS" },
-  { id: 2, goodsName: "AI 问答次数包（10次）", pointsCost: 200, createdAt: "2026-06-15 12:30:00", orderStatus: "SUCCESS" },
-  { id: 3, goodsName: "专属头像框·海洋之蓝", pointsCost: 500, createdAt: "2026-06-10 09:15:00", orderStatus: "SUCCESS" },
-  { id: 4, goodsName: "生态系统3D模型解锁", pointsCost: 300, createdAt: "2026-06-20 10:00:00", orderStatus: "PROCESSING" },
-]);
 
 const statusTagClass = (status) => {
   if (status === "SUCCESS") return "tag-success";
@@ -1015,65 +1055,91 @@ onMounted(() => {
   fetchLearningData();
 });
 
-/** 加载 Tab3 所有数据（并行请求） */
+/** 加载 Tab3 所有数据 */
 const fetchLearningData = () => {
   fetchLearningProfile();
   fetchAiSessionCount();
   fetchAnswerHistory();
 };
 
-// 切换到学习 Tab 时拉取数据（首次加载后缓存，切换回时刷新）
+/** 加载 Tab4 所有数据 */
+const fetchPointsData = () => {
+  fetchPointsAccount();
+  fetchPointsFlow();
+  fetchExchangeOrders();
+};
+
+// 切换 Tab 拉取数据
 let learningDataFetched = false;
+let pointsDataFetched = false;
 watch(activeTab, (tab) => {
   if (tab === "learning") {
     if (!learningDataFetched) {
       learningDataFetched = true;
       fetchLearningData();
     } else {
-      // 每次切回 Tab3 刷新数据
-      fetchLearningProfile();
-      fetchAiSessionCount();
-      fetchAnswerHistory();
+      fetchLearningData();
+    }
+  }
+  if (tab === "points") {
+    if (!pointsDataFetched) {
+      pointsDataFetched = true;
+      fetchPointsData();
+    } else {
+      fetchPointsData();
     }
   }
 });
 </script>
 
 <style scoped>
+/* ════════════════════════════════════════════════════════════════════
+   全局容器与基础毛玻璃材质
+   ════════════════════════════════════════════════════════════════════ */
 .profile-container {
   padding: 0;
   overflow-x: hidden;
+  color: #1d2129;
 }
 
-/* ═══ 左侧名片样式 ═══ */
-.user-card {
-  position: relative;
+/* 统一卡片毛玻璃基底 */
+.user-card, .settings-card {
+  background: rgba(255, 255, 255, 0.65) !important;
+  backdrop-filter: blur(24px) saturate(120%);
+  -webkit-backdrop-filter: blur(24px) saturate(120%);
+  border: 1px solid rgba(255, 255, 255, 0.9) !important;
+  border-radius: 24px !important;
+  box-shadow:
+      0 12px 32px rgba(0, 50, 150, 0.04),
+      inset 0 1px 1px rgba(255, 255, 255, 0.5) !important;
   overflow: hidden;
+}
+
+:deep(.el-card__body) {
   padding: 0 !important;
 }
 
-:deep(.user-card .el-card__body) {
-  padding: 0;
-}
-
+/* ════════════════════════════════════════════════════════════════════
+   左侧：用户名片卡
+   ════════════════════════════════════════════════════════════════════ */
 .card-bg {
-  height: 120px;
-  background: linear-gradient(135deg, var(--theme-klein-blue-light) 0%, var(--theme-klein-blue) 100%);
+  height: 130px;
+  /* 清新浅海渐变 */
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
   position: relative;
 }
-
 .card-bg::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 100 C 20 0 50 0 100 100 Z' fill='rgba(255,255,255,0.05)'/%3E%3C/svg%3E") repeat-x;
+  background: url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 100 C 20 0 50 0 100 100 Z' fill='rgba(255,255,255,0.1)'/%3E%3C/svg%3E") repeat-x;
   background-size: cover;
 }
 
 .avatar-container {
   display: flex;
   justify-content: center;
-  margin-top: -50px;
+  margin-top: -55px;
   position: relative;
   z-index: 2;
 }
@@ -1081,22 +1147,27 @@ watch(activeTab, (tab) => {
 .avatar-wrapper {
   position: relative;
   border-radius: 50%;
-  padding: 4px;
-  background: rgba(250, 249, 246, 0.8);
-  backdrop-filter: blur(8px);
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 150, 255, 0.15);
+  transition: transform 0.3s ease;
+}
+.avatar-wrapper:hover {
+  transform: translateY(-4px) scale(1.02);
 }
 
 .user-avatar {
   display: block;
+  border-radius: 50%;
 }
 
 .avatar-mask {
   position: absolute;
-  inset: 4px;
+  inset: 6px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1104,35 +1175,33 @@ watch(activeTab, (tab) => {
   opacity: 0;
   transition: opacity 0.3s ease;
 }
-
 .avatar-wrapper:hover .avatar-mask {
   opacity: 1;
 }
 
 .user-info-center {
   text-align: center;
-  padding: 16px 20px;
+  padding: 16px 20px 8px;
 }
-
 .main-name {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--theme-text-primary);
+  font-size: 22px;
+  font-weight: 700;
+  color: #1d2129;
   margin-bottom: 4px;
 }
-
 .sub-name {
   font-size: 13px;
-  color: var(--theme-text-muted);
-  margin-bottom: 12px;
+  color: #86909c;
+  margin-bottom: 14px;
 }
 
 .custom-tag {
-  background: rgba(0, 47, 167, 0.08) !important;
-  border: 1px solid rgba(0, 47, 167, 0.2) !important;
-  color: var(--theme-klein-blue) !important;
+  background: rgba(22, 93, 255, 0.06) !important;
+  border: 1px solid rgba(22, 93, 255, 0.2) !important;
+  color: #165dff !important;
   border-radius: 12px;
-  padding: 0 12px;
+  padding: 0 14px;
+  font-weight: 500;
 }
 
 .user-stats {
@@ -1140,509 +1209,267 @@ watch(activeTab, (tab) => {
   padding: 0 20px 24px;
   justify-content: space-around;
 }
-
 .core-stats {
   padding-top: 0;
 }
-
 .stat-item {
   text-align: center;
 }
-
 .stat-label {
   font-size: 12px;
-  color: var(--theme-text-muted);
+  color: #86909c;
   margin-bottom: 6px;
 }
-
 .stat-value {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--theme-text-primary);
+  font-size: 15px;
+  font-weight: 700;
 }
 
-.text-primary   { color: var(--theme-klein-blue); }
-.text-seafoam   { color: var(--theme-success, #67c23a); }
-.text-danger    { color: var(--theme-coral, #f56c6c); }
-.text-income    { color: var(--theme-success, #67c23a); font-weight: 600; }
-.text-expense   { color: var(--theme-coral, #f56c6c); font-weight: 600; }
+/* 文本高亮颜色 */
+.text-primary   { color: #165dff; }
+.text-seafoam   { color: #00b42a; }
+.text-danger    { color: #f53f3f; }
+.text-income    { color: #00b42a; font-weight: 700; }
+.text-expense   { color: #f53f3f; font-weight: 700; }
 
-/* ═══ 右侧设置样式 ═══ */
+/* 虚线分割线 */
+:deep(.el-divider--horizontal) {
+  margin: 16px 0;
+  border-top: 1px dashed rgba(0, 0, 0, 0.08);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   右侧：多 Tab 区域面板
+   ════════════════════════════════════════════════════════════════════ */
 .settings-card {
-  min-height: 400px;
+  min-height: 600px;
+  padding: 24px !important;
 }
 
 .tab-content {
-  padding: 12px 4px;
+  padding: 16px 4px 24px;
+  animation: fadeIn 0.4s ease;
 }
 
+/* 深度定制 Element Plus Tabs */
+:deep(.profile-tabs .el-tabs__nav-wrap::after) {
+  height: 1px;
+  background-color: rgba(0, 0, 0, 0.05);
+}
 :deep(.profile-tabs .el-tabs__item) {
   font-size: 15px;
+  color: #86909c;
+  transition: all 0.3s;
+}
+:deep(.profile-tabs .el-tabs__item.is-active) {
+  font-weight: 700;
+  color: #165dff;
+}
+:deep(.profile-tabs .el-tabs__active-bar) {
+  background-color: #165dff;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
 }
 
-:deep(.profile-tabs .el-tabs__item.is-active) {
+/* 标签状态色 */
+.tag-success { background: rgba(0, 180, 42, 0.1) !important; border-color: transparent !important; color: #00b42a !important; }
+.tag-danger { background: rgba(245, 63, 63, 0.1) !important; border-color: transparent !important; color: #f53f3f !important; }
+.tag-warning { background: rgba(255, 125, 0, 0.1) !important; border-color: transparent !important; color: #ff7d00 !important; }
+
+/* ════════════════════════════════════════════════════════════════════
+   表格透明化 (Glass Table) - 极其重要
+   ════════════════════════════════════════════════════════════════════ */
+:deep(.el-table), :deep(.el-table tr), :deep(.el-table th.el-table__cell), :deep(.el-table td.el-table__cell) {
+  background: transparent !important;
+  border-bottom: 1px solid rgba(0,0,0,0.04) !important;
+}
+:deep(.el-table th.el-table__cell) {
+  color: #86909c;
   font-weight: 600;
 }
-
-/* ═══ 标签状态色 ═══ */
-.tag-success {
-  background: rgba(82, 196, 26, 0.1) !important;
-  border-color: rgba(82, 196, 26, 0.3) !important;
-  color: var(--theme-success, #52c41a) !important;
+:deep(.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell) {
+  background: rgba(255, 255, 255, 0.4) !important;
+}
+:deep(.el-table::before), :deep(.el-table::after) {
+  display: none;
+}
+:deep(.el-table tbody tr:hover > td) {
+  background-color: rgba(22, 93, 255, 0.04) !important;
 }
 
-.tag-danger {
-  background: rgba(245, 108, 108, 0.1) !important;
-  border-color: rgba(245, 108, 108, 0.3) !important;
-  color: var(--theme-coral, #f56c6c) !important;
-}
-
-.tag-warning {
-  background: rgba(250, 173, 20, 0.1) !important;
-  border-color: rgba(250, 173, 20, 0.3) !important;
-  color: var(--theme-warning, #faad14) !important;
-}
-
-/* ═══ 通用分页 ═══ */
 .pagination-wrapper {
   display: flex;
   justify-content: flex-end;
-  margin-top: 16px;
+  margin-top: 24px;
 }
 
-/* ═══ 区块标题 ═══ */
+/* 区块标题 */
 .section-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--theme-text-primary);
-  margin-bottom: 16px;
-  margin-top: 4px;
-}
-
-/* ═══ Tab 3：我的学习 ═══ */
-.learning-stats-row {
-  margin-bottom: 20px;
-}
-
-.stat-card {
-  background: linear-gradient(135deg, var(--theme-primary-soft), rgba(22, 93, 255, 0.04));
-  border: 1px solid var(--theme-border-light);
-  border-radius: 12px;
-  padding: 20px 16px;
-  text-align: center;
-  transition: box-shadow 0.3s ease;
-}
-
-.stat-card:hover {
-  box-shadow: var(--theme-shadow);
-}
-
-.stat-card-num {
-  font-size: 26px;
+  font-size: 16px;
   font-weight: 700;
-  color: var(--theme-klein-blue);
-  margin-bottom: 6px;
-  line-height: 1.2;
-}
-
-.stat-card-label {
-  font-size: 13px;
-  color: var(--theme-text-muted);
-}
-
-.quick-entry-row {
-  margin-bottom: 24px;
-}
-
-.quick-entry-card {
+  color: #1d2129;
+  margin-bottom: 16px;
+  margin-top: 8px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border: 1px solid var(--theme-border-light);
-  border-radius: 12px;
-  background: var(--theme-card-bg);
-  transition: box-shadow 0.3s ease;
+}
+.section-title::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 16px;
+  background: #165dff;
+  border-radius: 2px;
+  margin-right: 8px;
 }
 
-.quick-entry-card:hover {
-  box-shadow: var(--theme-shadow);
-}
-
-.quick-entry-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.quick-entry-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--theme-text-primary);
-}
-
-.quick-entry-desc {
-  font-size: 13px;
-  color: var(--theme-text-muted);
-}
-
-/* ═══ Tab 4：我的积分 ═══ */
-.points-balance-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: linear-gradient(135deg, var(--theme-klein-blue), var(--theme-primary-dark));
+/* ════════════════════════════════════════════════════════════════════
+   内嵌玻璃卡片通用样式 (Glass Item)
+   ════════════════════════════════════════════════════════════════════ */
+.stat-card, .quick-entry-card, .badge-card, .task-item, .fav-card, .obs-item {
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.8);
   border-radius: 16px;
-  padding: 28px 32px;
-  margin-bottom: 24px;
-  color: #fff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.02);
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  backdrop-filter: blur(10px);
+}
+.stat-card:hover, .quick-entry-card:hover, .badge-card:hover, .task-item:hover, .fav-card:hover, .obs-item:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(22, 93, 255, 0.1);
+  border-color: rgba(22, 93, 255, 0.2);
+  background: rgba(255, 255, 255, 0.8);
 }
 
-.balance-main {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+/* ── Tab 3：我的学习 ── */
+.learning-stats-row { margin-bottom: 24px; }
+.stat-card {
+  padding: 24px 16px;
+  text-align: center;
 }
-
-.balance-label {
-  font-size: 14px;
-  opacity: 0.85;
-}
-
-.balance-num {
-  font-size: 40px;
-  font-weight: 700;
+.stat-card-num {
+  font-size: 28px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #165dff, #00d2ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 8px;
   line-height: 1.2;
 }
+.stat-card-label { font-size: 13px; color: #86909c; font-weight: 500; }
 
-.balance-sub {
-  font-size: 13px;
-  opacity: 0.8;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.quick-entry-row { margin-bottom: 24px; }
+.quick-entry-card {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 24px;
 }
+.quick-entry-info { display: flex; align-items: center; gap: 12px; }
+.quick-entry-title { font-size: 16px; font-weight: 600; color: #1d2129; }
+.quick-entry-desc { font-size: 13px; color: #86909c; }
 
-.balance-sub b {
-  font-weight: 600;
-  opacity: 1;
+/* ── Tab 4：我的积分 ── */
+.points-balance-card {
+  display: flex; align-items: center; justify-content: space-between;
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  border-radius: 20px;
+  padding: 32px 40px;
+  margin-bottom: 28px;
+  color: #fff;
+  box-shadow: 0 12px 24px rgba(79, 172, 254, 0.3);
 }
+.balance-main { display: flex; flex-direction: column; gap: 8px; }
+.balance-label { font-size: 15px; opacity: 0.9; font-weight: 500;}
+.balance-num { font-size: 46px; font-weight: 800; line-height: 1; text-shadow: 0 4px 12px rgba(0,0,0,0.1);}
+.balance-sub { font-size: 13px; opacity: 0.9; display: flex; align-items: center; gap: 10px; margin-top: 4px;}
+.balance-sub b { font-weight: 700; opacity: 1; font-size: 15px;}
+.balance-sub :deep(.el-divider--vertical) { height: 16px; border-color: rgba(255, 255, 255, 0.5); }
+.balance-actions { display: flex; flex-direction: column; gap: 12px; flex-shrink: 0; }
+.balance-actions .el-button { min-width: 130px; border-radius: 20px; font-weight: 600; }
+.balance-actions .el-button--primary { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); color: #fff; }
+.balance-actions .el-button--primary:hover { background: #fff; color: #165dff; }
+.balance-actions .el-button--default { color: #165dff; border: none; }
 
-.balance-sub :deep(.el-divider--vertical) {
-  height: 14px;
-  border-color: rgba(255, 255, 255, 0.4);
-}
+.points-sub-tabs { margin-top: 8px; }
+:deep(.points-sub-tabs .el-tabs__header) { margin-bottom: 20px; }
 
-.balance-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  flex-shrink: 0;
-}
-
-.balance-actions .el-button {
-  min-width: 120px;
-}
-
-.points-sub-tabs {
-  margin-top: 0;
-}
-
-:deep(.points-sub-tabs .el-tabs__header) {
-  margin-bottom: 16px;
-}
-
-/* ═══ Tab 5：我的成就 ═══ */
-.badge-grid {
-  margin-bottom: 8px;
-}
-
+/* ── Tab 5：我的成就 ── */
+.badge-grid { margin-bottom: 12px; }
 .badge-card {
   text-align: center;
-  padding: 20px 12px;
-  border: 1px solid var(--theme-border-light);
-  border-radius: 12px;
-  background: var(--theme-card-bg);
+  padding: 24px 12px;
   margin-bottom: 16px;
-  transition: box-shadow 0.3s ease;
 }
+.badge-locked { opacity: 0.5; filter: grayscale(1); background: rgba(0,0,0,0.02); }
+.badge-icon { color: #165dff; margin-bottom: 12px; filter: drop-shadow(0 4px 8px rgba(22, 93, 255, 0.2));}
+.badge-locked .badge-icon { color: #86909c; filter: none;}
+.badge-name { font-size: 15px; font-weight: 700; color: #1d2129; margin-bottom: 6px; }
+.badge-desc { font-size: 12px; color: #86909c; line-height: 1.4;}
 
-.badge-card:hover {
-  box-shadow: var(--theme-shadow);
-}
-
-.badge-locked {
-  opacity: 0.45;
-  filter: grayscale(1);
-}
-
-.badge-icon {
-  color: var(--theme-klein-blue);
-  margin-bottom: 8px;
-}
-
-.badge-locked .badge-icon {
-  color: var(--theme-text-muted);
-}
-
-.badge-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--theme-text-primary);
-  margin-bottom: 4px;
-}
-
-.badge-desc {
-  font-size: 12px;
-  color: var(--theme-text-muted);
-}
-
-.task-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
+.task-list { display: flex; flex-direction: column; gap: 14px; }
 .task-item {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 14px 16px;
-  border: 1px solid var(--theme-border-light);
-  border-radius: 10px;
-  background: var(--theme-card-bg);
+  display: flex; align-items: center; gap: 16px;
+  padding: 16px 20px;
 }
+.task-info { width: 180px; flex-shrink: 0; }
+.task-name { font-size: 15px; font-weight: 600; color: #1d2129; margin-bottom: 4px; }
+.task-reward { font-size: 13px; color: #ff7d00; font-weight: 500;}
+.task-progress { flex: 1; display: flex; align-items: center; gap: 12px; }
+.task-progress .el-progress { flex: 1; }
+.task-progress-text { font-size: 13px; color: #86909c; min-width: 45px; font-weight: 500;}
+.task-action { flex-shrink: 0; min-width: 80px; text-align: right; }
 
-.task-info {
-  width: 160px;
-  flex-shrink: 0;
-}
-
-.task-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--theme-text-primary);
-  margin-bottom: 2px;
-}
-
-.task-reward {
-  font-size: 12px;
-  color: var(--theme-coral);
-}
-
-.task-progress {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.task-progress .el-progress {
-  flex: 1;
-}
-
-.task-progress-text {
-  font-size: 12px;
-  color: var(--theme-text-muted);
-  min-width: 40px;
-}
-
-.task-action {
-  flex-shrink: 0;
-  min-width: 72px;
-  text-align: right;
-}
-
-/* ═══ Tab 6：我的收藏 ═══ */
-.fav-sub-tabs {
-  margin-bottom: 8px;
-}
-
-:deep(.fav-sub-tabs .el-tabs__header) {
-  margin-bottom: 16px;
-}
-
-.fav-grid {
-  row-gap: 16px;
-}
-
+/* ── Tab 6：我的收藏 ── */
+.fav-sub-tabs { margin-bottom: 8px; }
+:deep(.fav-sub-tabs .el-tabs__header) { margin-bottom: 20px; }
+.fav-grid { row-gap: 16px; }
 .fav-card {
   position: relative;
-  border: 1px solid var(--theme-border-light);
-  border-radius: 12px;
   overflow: hidden;
-  background: var(--theme-card-bg);
-  transition: box-shadow 0.3s ease;
   margin-bottom: 16px;
 }
+.fav-thumb { width: 100%; height: 140px; overflow: hidden; background: #f2f3f5; }
+.fav-thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s;}
+.fav-card:hover .fav-thumb img { transform: scale(1.05); }
+.fav-info { padding: 16px; }
+.fav-title { font-size: 15px; font-weight: 600; color: #1d2129; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fav-time { font-size: 12px; color: #86909c; margin-top: 6px; }
+.fav-remove-btn { position: absolute; top: 10px; right: 10px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(4px); border-radius: 8px; padding: 4px 10px; font-size: 12px; opacity: 0; transition: opacity 0.3s;}
+.fav-card:hover .fav-remove-btn { opacity: 1; }
 
-.fav-card:hover {
-  box-shadow: var(--theme-shadow);
-}
-
-.fav-thumb {
-  width: 100%;
-  height: 120px;
-  overflow: hidden;
-  background: var(--theme-primary-soft);
-}
-
-.fav-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.fav-info {
-  padding: 12px 14px 8px;
-}
-
-.fav-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--theme-text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.fav-time {
-  font-size: 12px;
-  color: var(--theme-text-muted);
-  margin-top: 4px;
-}
-
-.fav-remove-btn {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 8px;
-  padding: 2px 8px;
-  font-size: 12px;
-}
-
-/* ═══ Tab 7：我的观察 ═══ */
-.obs-header {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 20px;
-}
-
-.obs-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
+/* ── Tab 7：我的观察 ── */
+.obs-header { display: flex; justify-content: flex-end; margin-bottom: 20px; }
+.obs-list { display: flex; flex-direction: column; gap: 16px; }
 .obs-item {
-  display: flex;
-  gap: 16px;
-  border: 1px solid var(--theme-border-light);
-  border-radius: 12px;
+  display: flex; gap: 20px;
   padding: 16px;
-  background: var(--theme-card-bg);
-  transition: box-shadow 0.3s ease;
+}
+.obs-image { width: 160px; height: 110px; border-radius: 10px; overflow: hidden; flex-shrink: 0; background: #f2f3f5; }
+.obs-image img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s;}
+.obs-item:hover .obs-image img { transform: scale(1.05);}
+.obs-content { flex: 1; display: flex; flex-direction: column; justify-content: space-between; padding: 4px 0;}
+.obs-title { font-size: 16px; font-weight: 700; color: #1d2129; margin-bottom: 8px; }
+.obs-meta { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #86909c; margin-bottom: 12px; }
+.obs-meta .el-divider--vertical { height: 12px; margin: 0 6px; border-color: rgba(0,0,0,0.1);}
+.obs-tags { display: flex; gap: 10px; }
+
+/* 动画 Keyframes */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.obs-item:hover {
-  box-shadow: var(--theme-shadow);
-}
-
-.obs-image {
-  width: 140px;
-  height: 100px;
-  border-radius: 8px;
-  overflow: hidden;
-  flex-shrink: 0;
-  background: var(--theme-primary-soft);
-}
-
-.obs-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.obs-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.obs-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--theme-text-primary);
-  margin-bottom: 8px;
-}
-
-.obs-meta {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  color: var(--theme-text-muted);
-  margin-bottom: 10px;
-}
-
-.obs-meta .el-divider--vertical {
-  height: 13px;
-  margin: 0 4px;
-}
-
-.obs-tags {
-  display: flex;
-  gap: 8px;
-}
-
-/* ═══ 响应式微调 ═══ */
+/* 响应式微调 */
 @media (max-width: 768px) {
-  .points-balance-card {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 20px;
-    padding: 20px 24px;
-  }
-
-  .balance-num {
-    font-size: 32px;
-  }
-
-  .balance-actions {
-    flex-direction: row;
-    width: 100%;
-  }
-
-  .balance-actions .el-button {
-    flex: 1;
-  }
-
-  .task-item {
-    flex-wrap: wrap;
-  }
-
-  .task-info {
-    width: 100%;
-  }
-
-  .task-progress {
-    flex: 1;
-    min-width: 140px;
-  }
-
-  .obs-item {
-    flex-direction: column;
-  }
-
-  .obs-image {
-    width: 100%;
-    height: 160px;
-  }
-
-  .fav-thumb {
-    height: 100px;
-  }
+  .user-card, .settings-card { border-radius: 16px !important; }
+  .points-balance-card { flex-direction: column; align-items: flex-start; gap: 24px; padding: 24px; }
+  .balance-num { font-size: 36px; }
+  .balance-actions { flex-direction: row; width: 100%; }
+  .balance-actions .el-button { flex: 1; }
+  .task-item { flex-wrap: wrap; }
+  .task-info { width: 100%; }
+  .task-progress { flex: 1; min-width: 140px; }
+  .obs-item { flex-direction: column; }
+  .obs-image { width: 100%; height: 180px; }
+  .fav-thumb { height: 120px; }
 }
 </style>
