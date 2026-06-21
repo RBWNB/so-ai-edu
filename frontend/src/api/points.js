@@ -1,0 +1,17 @@
+import http from "@/utils/http";
+
+/**
+ * C 端积分 API
+ * 对应后端 PointsController (/points)
+ */
+
+// 积分余额（含累计获得/消耗）
+export const getPointsAccount = () => http.get("/points/account");
+
+// 积分流水（分页）
+export const getPointsTransactions = (pageNum = 1, pageSize = 6) =>
+  http.get("/points/transactions", { params: { pageNum, pageSize } });
+
+// 兑换记录（分页）
+export const getExchangeOrders = (pageNum = 1, pageSize = 6) =>
+  http.get("/points/exchange-orders", { params: { pageNum, pageSize } });
