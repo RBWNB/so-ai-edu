@@ -151,9 +151,9 @@ const threeCanvas = ref(null);
 /** 粒子数量响应式分级（按屏幕宽度） */
 const getParticleCount = () => {
   const w = window.innerWidth;
-  if (w < 768) return 600;   // 移动端
-  if (w < 1024) return 900;  // 平板
-  return 1200;               // 桌面端
+  if (w < 768) return 700;   // 移动端
+  if (w < 1024) return 1100; // 平板
+  return 1600;               // 桌面端
 };
 let PARTICLE_COUNT = getParticleCount();
 
@@ -249,9 +249,9 @@ const createGlowTexture = () => {
     size / 2,
   );
   gradient.addColorStop(0, "rgba(255,255,255,1)");
-  gradient.addColorStop(0.12, "rgba(255,255,255,0.85)");
-  gradient.addColorStop(0.35, "rgba(255,255,255,0.35)");
-  gradient.addColorStop(0.65, "rgba(255,255,255,0.06)");
+  gradient.addColorStop(0.18, "rgba(255,255,255,0.9)");
+  gradient.addColorStop(0.4, "rgba(255,255,255,0.45)");
+  gradient.addColorStop(0.7, "rgba(255,255,255,0.1)");
   gradient.addColorStop(1, "rgba(255,255,255,0)");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, size, size);
@@ -306,20 +306,30 @@ const initThree = () => {
     positions[i * 3 + 1] = (Math.random() - 0.5) * viewHeight;
     positions[i * 3 + 2] = (Math.random() - 0.5) * 30;
 
-    // 颜色：主色 #165dff ↔ 辅色 #36cfc9 之间随机混合，加微量扰动
-    const t = Math.random();
-    const color = new THREE.Color().copy(COLOR_PRIMARY).lerp(COLOR_AUX, t);
-    color.r += (Math.random() - 0.5) * 0.08;
-    color.g += (Math.random() - 0.5) * 0.08;
-    color.b += (Math.random() - 0.5) * 0.08;
-    colors[i * 3] = Math.max(0, Math.min(1, color.r));
-    colors[i * 3 + 1] = Math.max(0, Math.min(1, color.g));
-    colors[i * 3 + 2] = Math.max(0, Math.min(1, color.b));
+    // 颜色：主色 #165dff ↔ 辅色 #36cfc9 之间随机混合，加大扰动提亮
+    const roll = Math.random();
+    if (roll < 0.08) {
+      // 8% 生物荧光亮点：亮白 → 亮青
+      const sparkT = Math.random();
+      const sparkColor = new THREE.Color().setHSL(0.55 + sparkT * 0.08, 0.9, 0.65 + sparkT * 0.3);
+      colors[i * 3] = sparkColor.r;
+      colors[i * 3 + 1] = sparkColor.g;
+      colors[i * 3 + 2] = sparkColor.b;
+    } else {
+      const t = Math.random();
+      const color = new THREE.Color().copy(COLOR_PRIMARY).lerp(COLOR_AUX, t);
+      color.r += (Math.random() - 0.5) * 0.12;
+      color.g += (Math.random() - 0.5) * 0.12;
+      color.b += (Math.random() - 0.5) * 0.12;
+      colors[i * 3] = Math.max(0, Math.min(1, color.r));
+      colors[i * 3 + 1] = Math.max(0, Math.min(1, color.g));
+      colors[i * 3 + 2] = Math.max(0, Math.min(1, color.b));
+    }
 
-    // 大小：大部分为微小的浮游颗粒，少数较大（模拟远近层次）
-    sizes[i] = Math.random() < 0.85
-      ? Math.random() * 0.22 + 0.06    // 微小颗粒
-      : Math.random() * 0.55 + 0.2;    // 少数大颗粒
+    // 大小：大部分为中等浮游颗粒，少数较大（模拟远近层次）
+    sizes[i] = Math.random() < 0.82
+      ? Math.random() * 0.4 + 0.1     // 82% 中等颗粒
+      : Math.random() * 0.9 + 0.35;   // 18% 大型颗粒
 
     speeds[i] = Math.random() * 0.25 + 0.08;          // 上升速度
     phases[i] = Math.random() * Math.PI * 2;           // 漂移相位
@@ -330,15 +340,16 @@ const initThree = () => {
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   geometry.setAttribute("size", new THREE.BufferAttribute(sizes, 1));
 
-  // 材质：光晕纹理 + 半透明混合，与浅色背景自然融合
+  // 材质：光晕纹理 + 加法混合，粒子亮眼且自带氛围光感
   const material = new THREE.PointsMaterial({
-    size: 0.45,
+    size: 0.65,
     map: glowTexture,
     vertexColors: true,
     depthWrite: false,
     depthTest: false,
     transparent: true,
-    opacity: 0.45,
+    opacity: 0.62,
+    blending: THREE.AdditiveBlending,
   });
 
   points = new THREE.Points(geometry, material);
@@ -489,17 +500,26 @@ const rebuildParticles = () => {
     positions[i * 3] = (Math.random() - 0.5) * viewWidth;
     positions[i * 3 + 1] = (Math.random() - 0.5) * viewHeight;
     positions[i * 3 + 2] = (Math.random() - 0.5) * 30;
-    const t = Math.random();
-    const color = new THREE.Color().copy(COLOR_PRIMARY).lerp(COLOR_AUX, t);
-    color.r += (Math.random() - 0.5) * 0.08;
-    color.g += (Math.random() - 0.5) * 0.08;
-    color.b += (Math.random() - 0.5) * 0.08;
-    colors[i * 3] = Math.max(0, Math.min(1, color.r));
-    colors[i * 3 + 1] = Math.max(0, Math.min(1, color.g));
-    colors[i * 3 + 2] = Math.max(0, Math.min(1, color.b));
-    sizes[i] = Math.random() < 0.85
-      ? Math.random() * 0.22 + 0.06
-      : Math.random() * 0.55 + 0.2;
+    const roll = Math.random();
+    if (roll < 0.08) {
+      const sparkT = Math.random();
+      const sparkColor = new THREE.Color().setHSL(0.55 + sparkT * 0.08, 0.9, 0.65 + sparkT * 0.3);
+      colors[i * 3] = sparkColor.r;
+      colors[i * 3 + 1] = sparkColor.g;
+      colors[i * 3 + 2] = sparkColor.b;
+    } else {
+      const t = Math.random();
+      const color = new THREE.Color().copy(COLOR_PRIMARY).lerp(COLOR_AUX, t);
+      color.r += (Math.random() - 0.5) * 0.12;
+      color.g += (Math.random() - 0.5) * 0.12;
+      color.b += (Math.random() - 0.5) * 0.12;
+      colors[i * 3] = Math.max(0, Math.min(1, color.r));
+      colors[i * 3 + 1] = Math.max(0, Math.min(1, color.g));
+      colors[i * 3 + 2] = Math.max(0, Math.min(1, color.b));
+    }
+    sizes[i] = Math.random() < 0.82
+      ? Math.random() * 0.4 + 0.1
+      : Math.random() * 0.9 + 0.35;
     speeds[i] = Math.random() * 0.25 + 0.08;
     phases[i] = Math.random() * Math.PI * 2;
     driftAmps[i] = Math.random() * 0.35 + 0.1;
