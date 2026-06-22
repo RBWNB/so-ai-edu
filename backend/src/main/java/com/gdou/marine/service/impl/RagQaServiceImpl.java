@@ -41,6 +41,8 @@ import java.util.stream.Collectors;
 public class RagQaServiceImpl implements RagQaService {
     private static final int DEFAULT_TOP_K = 5;
     private static final int HISTORY_LIMIT = 10;
+    private static final double DEFAULT_MIN_SCORE = 0.75; // 相似度阈值
+    private static final String NO_KNOWLEDGE_TIP = "非常抱歉，知识库中暂时没有找到与您问题匹配的内容，请换个问题提问awa";
 
     private final EmbeddingModel embeddingModel;
     private final EmbeddingStore<TextSegment> embeddingStore;
@@ -72,20 +74,35 @@ public class RagQaServiceImpl implements RagQaService {
     public String ask(String question, String sessionId, Long userId) {
         validateQuestion(question, sessionId);
         long start = System.currentTimeMillis();
-
         saveMessage(userId, sessionId, "user", question);
+
         try {
             List<EmbeddingMatch<TextSegment>> matches = retrieve(question, DEFAULT_TOP_K);
-            List<ChatMessage> messages = buildMessages(question, sessionId, matches);
+
+            //过滤低相似度，无匹配直接短路返回
+            List<EmbeddingMatch<TextSegment>> validMatches = matches.stream()
+                    .filter(match -> match.score() >= DEFAULT_MIN_SCORE)
+                    .collect(Collectors.toList());
+
+            if (validMatches.isEmpty()) {
+                // 直接保存答复并返回，不调用大模型
+                saveMessage(userId, sessionId, "assistant", NO_KNOWLEDGE_TIP);
+                saveCallLog(userId, "SUCCESS", null, start, null);
+                return NO_KNOWLEDGE_TIP;
+            }
+
+            List<ChatMessage> messages = buildMessages(question, sessionId, validMatches);
             ChatResponse response = chatLanguageModel.chat(messages);
+
             if (response == null || response.aiMessage() == null) {
                 throw new RuntimeException("AI model returned empty response");
             }
-            String answer = response.aiMessage().text();
 
+            String answer = response.aiMessage().text();
             saveMessage(userId, sessionId, "assistant", answer);
             saveCallLog(userId, "SUCCESS", null, start, response.tokenUsage());
             return answer;
+
         } catch (Exception e) {
             saveCallLog(userId, "FAIL", e.getMessage(), start, null);
             throw new RuntimeException("RAG question answering failed", e);
@@ -98,7 +115,6 @@ public class RagQaServiceImpl implements RagQaService {
     public SseEmitter askStream(String question, String sessionId, Long userId) {
         SseEmitter emitter = new SseEmitter(180_000L);
 
-        // 参数校验（提前 fail）
         try {
             validateQuestion(question, sessionId);
         } catch (Exception e) {
@@ -111,7 +127,6 @@ public class RagQaServiceImpl implements RagQaService {
         StringBuilder answer = new StringBuilder();
         saveMessage(userId, sessionId, "user", question);
 
-        // 检索（同步，因为流式 Chat 前需要上下文）
         List<EmbeddingMatch<TextSegment>> matches;
         try {
             matches = retrieve(question, DEFAULT_TOP_K);
@@ -122,7 +137,20 @@ public class RagQaServiceImpl implements RagQaService {
             return emitter;
         }
 
-        List<ChatMessage> messages = buildMessages(question, sessionId, matches);
+        // 过滤低相似度，无匹配直接短路返回
+        List<EmbeddingMatch<TextSegment>> validMatches = matches.stream()
+                .filter(match -> match.score() >= DEFAULT_MIN_SCORE)
+                .collect(Collectors.toList());
+
+        if (validMatches.isEmpty()) {
+            saveMessage(userId, sessionId, "assistant", NO_KNOWLEDGE_TIP);
+            saveCallLog(userId, "SUCCESS", null, start, null);
+            sendEvent(emitter, "complete", NO_KNOWLEDGE_TIP);
+            emitter.complete();
+            return emitter;
+        }
+
+        List<ChatMessage> messages = buildMessages(question, sessionId, validMatches);
 
         try {
             streamingChatLanguageModel.chat(messages, new StreamingChatResponseHandler() {
@@ -140,12 +168,9 @@ public class RagQaServiceImpl implements RagQaService {
 
                 @Override
                 public void onCompleteResponse(ChatResponse chatResponse) {
-                    // 保存 assistant 消息
                     saveMessage(userId, sessionId, "assistant", answer.toString());
-                    // 保存调用日志（优先用 Response 里的 TokenUsage，否则估算）
                     TokenUsage usage = chatResponse != null ? chatResponse.tokenUsage() : null;
                     saveCallLog(userId, "SUCCESS", null, start, usage);
-
                     try {
                         emitter.send(SseEmitter.event()
                                 .name("complete")
@@ -170,7 +195,7 @@ public class RagQaServiceImpl implements RagQaService {
         return emitter;
     }
 
-    // ==================== 历史查询 ====================
+    // 历史查询
 
     @Override
     public List<ConversationMessage> getHistory(String sessionId) {
@@ -200,13 +225,22 @@ public class RagQaServiceImpl implements RagQaService {
                 .collect(Collectors.joining("\n---\n"));
 
         List<ChatMessage> messages = new ArrayList<>();
+        // 核心修改：强约束仅用知识库 + 固定回答格式
         messages.add(SystemMessage.from("""
-                You are a professional marine science assistant.
-                Answer in Chinese. Use the provided context first.
-                If the context does not contain enough information, say so clearly and give a cautious answer.
-                Context:
-                %s
-                """.formatted(StringUtils.hasText(context) ? context : "No retrieved context.")));
+            你是专业的海洋科学知识助手，必须严格遵守以下所有规则：
+            1. 绝对禁止使用上下文以外的任何知识、常识、推断或脑补内容，所有回答必须完全来自下方【知识库上下文】。
+            2. 如果上下文内容不足以回答问题，直接输出"知识库中暂无相关内容"，不得编造、补充、引申或道歉。
+            3. 回答必须严格按照以下固定格式输出，不得增减模块、不得添加额外解释和客套语。
+
+            ### 问题解答
+            （基于上下文整理的清晰答案，分点表述，逻辑清晰）
+
+            ### 参考依据
+            （列出回答所依据的知识库原文核心要点）
+
+            【知识库上下文】
+            %s
+            """.formatted(StringUtils.hasText(context) ? context : "无")));
 
         List<ConversationMessage> history = conversationMessageMapper.selectRecentBySessionId(sessionId, HISTORY_LIMIT);
         boolean skipNextAsToolResult = false;
@@ -216,9 +250,7 @@ public class RagQaServiceImpl implements RagQaService {
             }
             String content = item.getContent();
             boolean hasContent = StringUtils.hasText(content);
-
             if ("assistant".equalsIgnoreCase(item.getRole())) {
-                // 工具调用响应：text 为空 或 内容为 JSON 工具调用描述 → 下一条 user 是工具返回值
                 if (looksLikeToolCall(content)) {
                     skipNextAsToolResult = true;
                     continue;
