@@ -157,6 +157,7 @@ public class AchievementController {
      * 领取任务奖励
      * 前置条件：任务已完成 + 奖励未领取
      */
+    @Log(module = "积分模块", description = "领取任务奖励")
     @PostMapping("/claim/{taskId}")
     public Map<String, Object> claimReward(@PathVariable Long taskId, Authentication auth) {
         Map<String, Object> result = new HashMap<>();
