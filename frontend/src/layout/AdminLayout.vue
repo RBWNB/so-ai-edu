@@ -40,7 +40,7 @@
         <div class="header-right">
           <el-button
               type="text"
-              icon="House"
+              :icon="House"
               class="back-to-c-btn"
               @click="goToCEduHome"
           >
