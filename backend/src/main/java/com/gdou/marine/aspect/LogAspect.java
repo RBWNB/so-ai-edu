@@ -80,11 +80,7 @@ public class LogAspect {
             return;
         }
 
-        // 过滤 GET / HEAD / OPTIONS 等只读请求
         String httpMethod = request.getMethod().toUpperCase();
-        if (!LOGGABLE_METHODS.contains(httpMethod)) {
-            return;
-        }
 
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
         Method method = signature.getMethod();
@@ -97,6 +93,10 @@ public class LogAspect {
             module = logAnnotation.module();
             description = logAnnotation.description();
         } else {
+            // 无 @Log 注解时，只记录写操作，避免 GET 查询请求泛滥
+            if (!LOGGABLE_METHODS.contains(httpMethod)) {
+                return;
+            }
             String className = joinPoint.getTarget().getClass().getSimpleName();
             module = className.replace("Controller", "");
             description = method.getName();
