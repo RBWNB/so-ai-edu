@@ -6,7 +6,7 @@
         <div class="panel-header" @mousedown="startDrag">
           <div class="panel-title">
             <el-icon :size="18"><ChatDotRound /></el-icon>
-            <span>RAG 智能问答</span>
+            <span>海洋知识智能问答</span>
             <el-tag size="small" type="success" effect="dark">知识库增强</el-tag>
           </div>
           <div class="panel-actions">
@@ -46,12 +46,12 @@
               <el-avatar :size="28" :icon="msg.role === 'user' ? UserFilled : ChatDotRound" />
             </div>
             <div class="msg-bubble">
-              <div class="msg-role-label">{{ msg.role === "user" ? "你" : "RAG 助手" }}</div>
+              <div class="msg-role-label">{{ msg.role === "user" ? "你" : "海洋小助手" }}</div>
               <div
                 v-if="msg.role === 'assistant'"
                 class="msg-content markdown-body"
-                v-html="renderMarkdown(msg.content)"
-              />
+                v-html="msg.displayHtml || msg.content"
+              ></div>
               <div v-else class="msg-content">{{ msg.content }}</div>
             </div>
           </div>
@@ -103,6 +103,7 @@
 <script setup>
 import { nextTick, onMounted, ref } from "vue";
 import { marked } from "marked";
+import DOMPurify from "dompurify";
 import { ElMessage } from "element-plus";
 import {
   ChatDotRound,
@@ -116,7 +117,12 @@ import {
 } from "@element-plus/icons-vue";
 import { askRag, askRagStream, getRagHistory } from "@/api/rag";
 
-marked.setOptions({ breaks: true, gfm: true });
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+  mangle: false,
+  headerIds: false
+});
 
 const STORAGE_KEY = "rag_session_id";
 
@@ -217,15 +223,65 @@ const loadHistory = async () => {
     const res = await getRagHistory(sid);
     const data = res?.data?.data || res?.data;
     if (Array.isArray(data) && data.length > 0) {
+      // ★ loadHistory 的做法：全新数组 + 每个对象预先算好 displayHtml
       messages.value = data.map((m) => ({
         id: m.id,
         role: m.role,
         content: m.content,
+        streaming: false,
+        displayHtml: safeParseMarkdown(m.content || ""),
       }));
       await scrollToBottom();
     }
   } catch {
     // 首次使用无历史
+  }
+};
+
+/**
+ * ★ 流式 Markdown 规范化
+ *
+ * 【根因说明】
+ * SSE 流式返回的 markdown 可能缺少换行符与标题空格，例如：
+ *   "###问题解答...内容。### 参考依据..."
+ * CommonMark 规范要求：
+ *   1. ### 必须在行首（前面是换行或字符串开头）
+ *   2. ### 后面必须有空格（"###text" 不是标题，"### text" 才是）
+ * 缺失换行/空格时，marked 无法识别标题/列表等语法，会原样输出纯文本。
+ *
+ * 本函数在 marked.parse() 之前做无损规范化，对已规范的文本是幂等的。
+ */
+const normalizeMarkdown = (text) => {
+  if (!text) return "";
+  let result = text;
+  // ① 确保标题标记后有空格：###text → ### text（不破坏已正确的 ### text）
+  result = result.replace(/(#{1,6})([^\s#])/gm, "$1 $2");
+  // ② 在非行首的标题前插入换行
+  //    [^\n#] 排除 # 号，防止 "### " 被拆成 "#\n## "（贪心匹配会把 ### 的第一个 # 当作前导字符）
+  result = result.replace(/([^\n#])(#{1,6}\s)/g, "$1\n$2");
+  // ③ 在非行首的列表标记前插入换行（排除 ** 等加粗标记被误拆分）
+  result = result.replace(/([^\n])(?<![*-])([-*]\s)/g, "$1\n$2");
+  // ④ 在 `1. ` 有序列表前插入换行
+  result = result.replace(/([^\n])(\d+\.\s)/g, "$1\n$2");
+  // ⑤ 压缩多余空行
+  result = result.replace(/\n{3,}/g, "\n\n");
+  return result;
+};
+
+/**
+ * ★ 统一 Markdown 解析函数
+ * 先规范化再解析。增加 console.error 以便排查静默失败。
+ */
+const safeParseMarkdown = (text) => {
+  if (!text) return "";
+  try {
+    const normalized = normalizeMarkdown(text);
+    const raw = marked.parse(normalized);
+    const clean = DOMPurify.sanitize(raw);
+    return clean;
+  } catch (e) {
+    console.error("[safeParseMarkdown] 解析失败:", e, "输入:", text.slice(0, 100));
+    return text;
   }
 };
 
@@ -242,8 +298,13 @@ const handleSend = async () => {
   controller = new AbortController();
 
   const aiMsgId = Date.now() + 1;
-  messages.value.push({ id: aiMsgId, role: "assistant", content: "" });
-  const aiMsg = messages.value[messages.value.length - 1];
+  messages.value.push({
+    id: aiMsgId,
+    role: "assistant",
+    content: "",
+    streaming: true,
+    displayHtml: "",
+  });
 
   let gotStreamChunk = false;
 
@@ -253,36 +314,88 @@ const handleSend = async () => {
     signal: controller.signal,
     onMessage: async (chunk) => {
       gotStreamChunk = true;
-      aiMsg.content += chunk;
+      // 通过 findIndex 每次定位到数组中的实际位置，避免闭包引用过期
+      const idx = messages.value.findIndex((m) => m.id === aiMsgId);
+      if (idx === -1) return;
+      const target = messages.value[idx];
+      target.content += chunk;
+      target.displayHtml = safeParseMarkdown(target.content);
+      await nextTick();
       await scrollToBottom();
     },
+
     onDone: async () => {
       streaming.value = false;
       controller = null;
-      if (!aiMsg.content.trim()) {
-        aiMsg.content = "（AI 暂无输出）";
+
+      const idx = messages.value.findIndex((m) => m.id === aiMsgId);
+      if (idx === -1) return;
+
+      const current = messages.value[idx];
+      if (!current.content.trim()) {
+        current.content = "（AI 暂无输出）";
       }
-      // 刷新 sessionId（后端可能更新了）
+      const finalHtml = safeParseMarkdown(current.content);
+
+      // ★★★ 核心修复 ★★★
+      // 采用与 loadHistory 完全一致的策略：全量替换整个 messages 数组。
+      // 这会让 Vue 的 v-for 拿到一个全新的数组引用，触发完整的 diff + patch，
+      // 所有 v-html 指令都会从零初始化，彻底规避增量更新时的缓存/复用问题。
+      messages.value = messages.value.map((m) => {
+        if (m.id !== aiMsgId) return m;
+        return {
+          ...m,
+          streaming: false,
+          displayHtml: finalHtml,
+        };
+      });
+
       await scrollToBottom();
     },
+
     onError: async (err) => {
       streaming.value = false;
       controller = null;
       console.warn("RAG 流式失败:", err);
-      if (!gotStreamChunk) {
-        // 回退到非流式
+
+      const idx = messages.value.findIndex((m) => m.id === aiMsgId);
+      if (idx === -1) return;
+
+      const current = messages.value[idx];
+
+      if (gotStreamChunk) {
+        // ★ 已收到部分内容：全量替换数组
+        const finalHtml = safeParseMarkdown(current.content);
+        messages.value = messages.value.map((m) => {
+          if (m.id !== aiMsgId) return m;
+          return { ...m, streaming: false, displayHtml: finalHtml };
+        });
+
+        if (err.name !== "AbortError") {
+          ElMessage.error("问答服务连接中断，已展示已接收内容");
+        }
+      } else {
+        // 完全没收到内容：回退到非流式请求
         try {
           const resp = await askRag({ question, sessionId });
           const payload = resp?.data?.data || resp?.data;
-          aiMsg.content =
+          const fallbackContent =
             typeof payload === "string" ? payload : payload?.answer || payload?.data || "（暂无输出）";
+          const finalHtml = safeParseMarkdown(fallbackContent);
+          messages.value = messages.value.map((m) => {
+            if (m.id !== aiMsgId) return m;
+            return { ...m, content: fallbackContent, streaming: false, displayHtml: finalHtml };
+          });
         } catch (fallbackErr) {
           console.error("RAG 非流式也失败:", fallbackErr);
-          aiMsg.content = "请求失败，请稍后重试。";
+          const errContent = "请求失败，请稍后重试。";
+          messages.value = messages.value.map((m) => {
+            if (m.id !== aiMsgId) return m;
+            return { ...m, content: errContent, streaming: false, displayHtml: errContent };
+          });
         }
-      } else if (err.name !== "AbortError") {
-        ElMessage.error("问答服务暂不可用");
       }
+
       await scrollToBottom();
     },
   });
@@ -308,16 +421,7 @@ const scrollToBottom = async () => {
   }
 };
 
-const renderMarkdown = (text) => {
-  if (!text) return "";
-  try {
-    return marked.parse(text);
-  } catch {
-    return text;
-  }
-};
-
-// ========== 暴露给父组件 ==========
+//暴露给父组件
 defineExpose({ open, close });
 
 onMounted(() => {
