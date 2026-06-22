@@ -10,6 +10,7 @@ import com.gdou.marine.mapper.UserBadgeMapper;
 import com.gdou.marine.mapper.UserTaskRecordMapper;
 import com.gdou.marine.service.BadgeAwardService;
 import com.gdou.marine.service.TaskProgressService;
+import com.gdou.marine.service.UserPointAccountService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,6 +47,9 @@ public class AchievementController {
 
     @Autowired
     private TaskProgressService taskProgressService;
+
+    @Autowired
+    private UserPointAccountService userPointAccountService;
 
     /**
      * 勋章墙：已获得勋章 + 全量勋章定义（前端区分灰显）
@@ -198,9 +202,9 @@ public class AchievementController {
             rec.setUpdatedAt(LocalDateTime.now());
             userTaskRecordMapper.updateById(rec);
 
-            // TODO: 调用 userPointAccountService.earnPoints(userId, task.getRewardPoints(), "task", taskId, task.getTitle())
-            // 当前积分系统已就绪，如需自动发奖，取消下面注释：
-            // userPointAccountService.earnPoints(userId, task.getRewardPoints(), "task", taskId, "完成每日任务：" + task.getTitle());
+            // 发放积分奖励
+            userPointAccountService.earnPoints(userId, task.getRewardPoints(),
+                    "task", taskId, "完成每日任务：" + task.getTitle());
 
             result.put("success", true);
             result.put("message", "已领取「" + task.getTitle() + "」奖励 +" + task.getRewardPoints() + " 积分");
