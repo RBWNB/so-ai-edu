@@ -49,7 +49,6 @@ public class DashScopeOpenAiEmbeddingModel implements EmbeddingModel {
 
     @Override
     public Response<List<Embedding>> embedAll(List<TextSegment> segments) {
-        System.err.println(">>> DashScopeOpenAiEmbeddingModel.embedAll called, model=" + modelName + ", count=" + (segments == null ? 0 : segments.size()));
         if (segments == null || segments.isEmpty()) {
             return Response.from(Collections.emptyList());
         }
@@ -71,7 +70,6 @@ public class DashScopeOpenAiEmbeddingModel implements EmbeddingModel {
         }
 
         String requestJson = GSON.toJson(body);
-        System.err.println(">>> Embedding request: " + url + " | body=" + requestJson);
 
         try {
             HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();

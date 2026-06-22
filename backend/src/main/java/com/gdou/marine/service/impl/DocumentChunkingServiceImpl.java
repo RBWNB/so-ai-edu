@@ -42,18 +42,16 @@ public class DocumentChunkingServiceImpl implements DocumentChunkingService{
         this.embeddingModel = embeddingModel;
         this.embeddingStore = embeddingStore;
         this.tokenizer = tokenizer;
-        System.err.println(">>> DocumentChunkingServiceImpl injected EmbeddingModel: " + embeddingModel.getClass().getName());
+
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void chunkAndStore(Long documentId, String content) {
         if (documentId == null || !StringUtils.hasText(content)) {
-            System.err.println(">>> chunkAndStore skipped: docId=" + documentId + ", hasContent=" + StringUtils.hasText(content));
             return;
         }
 
-        System.err.println(">>> chunkAndStore: docId=" + documentId + ", contentLength=" + content.length());
 
         deleteDocumentVectors(documentId);
 
@@ -65,15 +63,11 @@ public class DocumentChunkingServiceImpl implements DocumentChunkingService{
             @Override public int estimateTokenCountInMessage(ChatMessage msg) { return estimateTokenCountInText(msg.toString()); }
             @Override public int estimateTokenCountInMessages(Iterable<ChatMessage> msgs) { int c=0; for (var m : msgs) c+=estimateTokenCountInMessage(m); return c; }
         };
-        System.err.println(">>> creating splitter with local tokenizer");
         List<TextSegment> segments;
         try {
             DocumentSplitter splitter = DocumentSplitters.recursive(500, 100, localTokenizer);
-            System.err.println(">>> splitter created, about to split...");
             segments = splitter.split(document);
-            System.err.println(">>> chunkAndStore: segments.size=" + segments.size());
         } catch (Exception e) {
-            System.err.println(">>> split FAILED: " + e.getClass().getName() + " - " + e.getMessage());
             e.printStackTrace();
             throw e;
         }
