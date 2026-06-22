@@ -870,8 +870,7 @@ const goToPointsDetail = () => {
 };
 
 const goToPointsShop = () => {
-  // TODO: 路由 → /points/shop (商品来自 point_shop_item 表)
-  ElMessage.info("跳转至积分商店（待对接路由）");
+  router.push("/points/shop");
 };
 
 const statusTagClass = (status) => {

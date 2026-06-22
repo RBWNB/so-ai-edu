@@ -117,7 +117,18 @@ INSERT INTO point_transaction (user_id, points, biz_type, description, created_a
 UPDATE user_point_account SET total_earned_points = 80, available_points = 100 WHERE user_id = 2;
 
 -- ==============================================
--- 11. 初始化 用户角色
+-- 11. 初始化积分商店商品
+-- ==============================================
+INSERT INTO point_shop_item (id, name, description, item_type, points_price, stock, status) VALUES
+    (1, '物种图鉴实体卡片', '精美印刷的海洋物种图鉴卡片，收藏佳品', 'virtual_item', 100, 50, 1),
+    (2, 'AI 问答次数包（10次）', '额外获得10次AI导师问答机会', 'coupon', 200, NULL, 1),
+    (3, '专属头像框·海洋之蓝', '个人主页专属蓝色海洋主题头像框', 'avatar_frame', 500, 20, 1),
+    (4, '生态系统3D模型解锁', '解锁红树林生态系统3D交互模型', 'virtual_item', 300, 30, 1),
+    (5, '知识之星加速卡', '答题经验+50%，有效期7天', 'coupon', 150, NULL, 1),
+    (6, '深海探索者称号', '个人主页显示特殊称号「深海探索者」', 'badge', 800, 10, 1);
+
+-- ==============================================
+-- 12. 初始化 用户角色
 -- ==============================================
 INSERT INTO app_role (id, role_code, role_name, description) VALUES
                                                                  (1, 'ADMIN', '系统管理员', '拥有全部管理权限'),

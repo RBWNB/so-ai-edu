@@ -19,8 +19,10 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * C 端积分 Controller
  * @author FlnyXx
+ * @version 1.0
+ * @date 2026/6/22
+ * @Description C 端积分 Controller
  */
 @RestController
 @RequestMapping("/points")
@@ -173,6 +175,101 @@ public class PointsController {
             result.put("data", page);
         } catch (Exception e) {
             log.error("获取兑换记录失败", e);
+            result.put("success", false);
+            result.put("message", e.getMessage());
+        }
+        return result;
+    }
+
+    /** 积分商店商品列表 */
+    @GetMapping("/shop-items")
+    public Map<String, Object> getShopItems(Authentication auth) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            List<PointShopItem> items = pointShopItemMapper.selectList(
+                    new LambdaQueryWrapper<PointShopItem>()
+                            .eq(PointShopItem::getStatus, (byte) 1)
+                            .orderByAsc(PointShopItem::getPointsPrice));
+
+            List<Map<String, Object>> list = items.stream().map(i -> {
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("id", i.getId());
+                item.put("name", i.getName());
+                item.put("description", i.getDescription());
+                item.put("itemType", i.getItemType());
+                item.put("pointsPrice", i.getPointsPrice());
+                item.put("stock", i.getStock()); // null=无限
+                return item;
+            }).collect(Collectors.toList());
+
+            result.put("success", true);
+            result.put("data", list);
+        } catch (Exception e) {
+            log.error("获取积分商店失败", e);
+            result.put("success", false);
+            result.put("message", e.getMessage());
+        }
+        return result;
+    }
+
+    /** 兑换商品 */
+    @PostMapping("/exchange/{itemId}")
+    public Map<String, Object> exchange(@PathVariable Long itemId, Authentication auth) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            Long userId = extractUserId(auth);
+            if (userId == null) {
+                result.put("success", false);
+                result.put("message", "请先登录");
+                return result;
+            }
+
+            PointShopItem item = pointShopItemMapper.selectById(itemId);
+            if (item == null || item.getStatus() != 1) {
+                result.put("success", false);
+                result.put("message", "商品不存在或已下架");
+                return result;
+            }
+
+            // 库存检查
+            if (item.getStock() != null && item.getStock() <= 0) {
+                result.put("success", false);
+                result.put("message", "该商品已售罄");
+                return result;
+            }
+
+            // 扣积分（余额不足会抛异常）
+            UserPointAccount account = new UserPointAccount();
+            account.setUserId(userId);
+            account.setAvailablePoints(0);
+            try {
+                userPointAccountService.spendPoints(userId, item.getPointsPrice(),
+                        "shop", item.getId(), "兑换商品：" + item.getName());
+            } catch (IllegalStateException e) {
+                result.put("success", false);
+                result.put("message", "积分不足，需要" + item.getPointsPrice() + "积分");
+                return result;
+            }
+
+            // 扣库存
+            if (item.getStock() != null) {
+                item.setStock(item.getStock() - 1);
+                pointShopItemMapper.updateById(item);
+            }
+
+            // 建订单
+            PointExchangeOrder order = new PointExchangeOrder();
+            order.setUserId(userId);
+            order.setItemId(itemId);
+            order.setPointsCost(item.getPointsPrice());
+            order.setOrderStatus("SUCCESS");
+            order.setCreatedAt(java.time.LocalDateTime.now());
+            pointExchangeOrderMapper.insert(order);
+
+            result.put("success", true);
+            result.put("message", "兑换成功！已消耗" + item.getPointsPrice() + "积分");
+        } catch (Exception e) {
+            log.error("兑换失败", e);
             result.put("success", false);
             result.put("message", e.getMessage());
         }

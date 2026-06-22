@@ -128,6 +128,12 @@ const router = createRouter({
           meta: { title: "错题本", requiresAuth: true },
           component: () => import("@/views/edu/learning/WrongBook.vue"),
         },
+        {
+          path: "points/shop",
+          name: "EduPointsShop",
+          meta: { title: "积分商店", requiresAuth: true },
+          component: () => import("@/views/edu/points/Shop.vue"),
+        },
       ],
     },
     // 公共路由 — 无布局

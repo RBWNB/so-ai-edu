@@ -15,3 +15,9 @@ export const getPointsTransactions = (pageNum = 1, pageSize = 6) =>
 // 兑换记录（分页）
 export const getExchangeOrders = (pageNum = 1, pageSize = 6) =>
   http.get("/points/exchange-orders", { params: { pageNum, pageSize } });
+
+// 积分商店商品列表
+export const getShopItems = () => http.get("/points/shop-items");
+
+// 兑换商品
+export const exchangeItem = (itemId) => http.post(`/points/exchange/${itemId}`);
