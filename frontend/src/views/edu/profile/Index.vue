@@ -320,19 +320,15 @@
             <el-tab-pane label="我的成就" name="achievement">
               <div class="tab-content">
                 <!--
-                  DB 依赖：
-                  - user_badge     (user_id, badge_code, badge_name, description, earned_at)
-                  - learning_task  (id, title, description, task_type, target_value, reward_points)
-                  - user_task_record (user_id, task_id, progress_value, completed, completed_at, reward_claimed)
-                  待建 API：
-                  - GET  /badge/list           → 用户已获得勋章
-                  - GET  /badge/all-defined     → 全量勋章定义（含未获得，可从 point_shop_item item_type='badge' 或前端硬编码）
-                  - GET  /task/daily            → 今日任务列表 + 完成进度
-                  - POST /task/{id}/claim       → 领取任务奖励
+                  DB 依赖：user_badge / learning_task / user_task_record
+                  API 状态：
+                  ✅ GET  /achievement/badges        → 已获得勋章
+                  ✅ GET  /achievement/daily-tasks    → 每日任务 + 进度
+                  ✅ POST /achievement/claim/{taskId} → 领取奖励
                 -->
                 <!-- 勋章墙 -->
                 <div class="section-title">勋章墙</div>
-                <el-row :gutter="16" class="badge-grid">
+                <el-row :gutter="16" class="badge-grid" v-loading="badgeLoading">
                   <el-col :xs="12" :md="6" v-for="badge in badgeList" :key="badge.badgeCode">
                     <!-- DB: user_badge.earned_at 不为空 → 已获得；未获得来自 badge 定义表差值 -->
                     <div class="badge-card" :class="{ 'badge-locked': !badge.earned }">
@@ -353,7 +349,7 @@
 
                 <!-- 每日任务 -->
                 <div class="section-title">每日任务</div>
-                <div class="task-list">
+                <div class="task-list" v-loading="taskLoading">
                   <!-- DB: learning_task JOIN user_task_record -->
                   <div class="task-item" v-for="task in dailyTaskList" :key="task.taskId">
                     <div class="task-info">
@@ -528,6 +524,7 @@ import {
 import { getUserProfile, updatePasswordApi, updateUserProfile, uploadAvatarApi } from "@/api/sysUser";
 import { getLearningProfile, getAnswerHistory, getAiSessionCount } from "@/api/learning";
 import { getPointsAccount, getPointsTransactions, getExchangeOrders } from "@/api/points";
+import { getBadges, getDailyTasks, claimTaskReward, dailyCheckin } from "@/api/achievement";
 import { useAuthStore } from "@/store/auth";
 
 const authStore = useAuthStore();
@@ -884,44 +881,119 @@ const statusTagClass = (status) => {
 };
 
 // ═══ Tab 5：我的成就 ═══
-// DB: user_badge (badge_code, badge_name, description, earned_at)
-//     未获得勋章来源：point_shop_item WHERE item_type='badge' 或前端静态定义
-const badgeList = ref([
-  // ---- 已获得 ----
-  { badgeCode: "first_quiz", badgeName: "初识海洋", icon: Medal, earned: true, earnedAt: "2026-05-01", unlockCondition: "" },
-  { badgeCode: "quiz_master", badgeName: "答题达人", icon: StarFilled, earned: true, earnedAt: "2026-05-15", unlockCondition: "" },
-  { badgeCode: "eco_guardian", badgeName: "生态卫士", icon: Present, earned: true, earnedAt: "2026-06-01", unlockCondition: "" },
-  { badgeCode: "perfect_streak", badgeName: "十连答对", icon: TrophyBase, earned: true, earnedAt: "2026-06-10", unlockCondition: "" },
-  { badgeCode: "persistence", badgeName: "持之以恒", icon: Medal, earned: true, earnedAt: "2026-06-15", unlockCondition: "" },
-  { badgeCode: "ai_explorer", badgeName: "AI探索者", icon: StarFilled, earned: true, earnedAt: "2026-06-18", unlockCondition: "" },
-  { badgeCode: "collector", badgeName: "收藏达人", icon: Present, earned: true, earnedAt: "2026-06-19", unlockCondition: "" },
-  { badgeCode: "knowledge_star", badgeName: "知识之星", icon: TrophyBase, earned: true, earnedAt: "2026-06-20", unlockCondition: "" },
-  // ---- 未获得（解锁条件来自 point_shop_item 或前端定义）----
-  { badgeCode: "encyclopedia", badgeName: "百科全书", icon: Medal, earned: false, earnedAt: "", unlockCondition: "累计答对500题" },
-  { badgeCode: "eco_expert", badgeName: "生态专家", icon: TrophyBase, earned: false, earnedAt: "", unlockCondition: "识别100种物种" },
-  { badgeCode: "social_star", badgeName: "社交达人", icon: StarFilled, earned: false, earnedAt: "", unlockCondition: "发布50条观察记录" },
-  { badgeCode: "supreme_king", badgeName: "至尊王者", icon: Present, earned: false, earnedAt: "", unlockCondition: "达到Lv.30等级" },
-]);
+// API: GET /achievement/badges ✅  /achievement/daily-tasks ✅  POST /achievement/claim/{taskId} ✅
+const badgeLoading = ref(false);
+const taskLoading = ref(false);
 
-// DB: learning_task JOIN user_task_record
-// task_type ∈ ('daily_quiz', 'read_species', 'ask_ai', 'upload_observation')
-const dailyTaskList = ref([
-  { taskId: 1, title: "每日签到", taskType: "daily_checkin", rewardPoints: 5, targetValue: 1, progressValue: 1, progressPercent: 100, completed: true, rewardClaimed: true },
-  { taskId: 2, title: "答对3道题目", taskType: "daily_quiz", rewardPoints: 15, targetValue: 3, progressValue: 3, progressPercent: 100, completed: true, rewardClaimed: true },
-  { taskId: 3, title: "完成一次AI问答", taskType: "ask_ai", rewardPoints: 10, targetValue: 1, progressValue: 1, progressPercent: 100, completed: true, rewardClaimed: true },
-  { taskId: 4, title: "浏览5个物种详情", taskType: "read_species", rewardPoints: 20, targetValue: 5, progressValue: 3, progressPercent: 60, completed: false, rewardClaimed: false },
-  { taskId: 5, title: "发布1条观察记录", taskType: "upload_observation", rewardPoints: 15, targetValue: 1, progressValue: 0, progressPercent: 0, completed: false, rewardClaimed: false },
-  { taskId: 6, title: "收藏3个物种或知识点", taskType: "bookmark", rewardPoints: 10, targetValue: 3, progressValue: 1, progressPercent: 33, completed: false, rewardClaimed: false },
-]);
+// ---- 全量勋章定义（前端静态，后端只回已获得列表）----
+const ALL_BADGE_DEFS = [
+  { badgeCode: "first_quiz", badgeName: "初识海洋", icon: Medal, unlockCondition: "首次完成答题" },
+  { badgeCode: "quiz_master", badgeName: "答题达人", icon: StarFilled, unlockCondition: "累计答对100题" },
+  { badgeCode: "eco_guardian", badgeName: "生态卫士", icon: Present, unlockCondition: "浏览50个物种详情" },
+  { badgeCode: "perfect_streak", badgeName: "十连答对", icon: TrophyBase, unlockCondition: "连续答对10题" },
+  { badgeCode: "persistence", badgeName: "持之以恒", icon: Medal, unlockCondition: "连续签到7天" },
+  { badgeCode: "ai_explorer", badgeName: "AI探索者", icon: StarFilled, unlockCondition: "完成20次AI问答" },
+  { badgeCode: "collector", badgeName: "收藏达人", icon: Present, unlockCondition: "收藏30个物种或知识" },
+  { badgeCode: "knowledge_star", badgeName: "知识之星", icon: TrophyBase, unlockCondition: "达到Lv.10等级" },
+  { badgeCode: "encyclopedia", badgeName: "百科全书", icon: Medal, unlockCondition: "累计答对500题" },
+  { badgeCode: "eco_expert", badgeName: "生态专家", icon: TrophyBase, unlockCondition: "识别100种物种" },
+  { badgeCode: "social_star", badgeName: "社交达人", icon: StarFilled, unlockCondition: "发布50条观察记录" },
+  { badgeCode: "supreme_king", badgeName: "至尊王者", icon: Present, unlockCondition: "达到Lv.30等级" },
+];
 
-const claimReward = (task) => {
-  // TODO: POST /task/{taskId}/claim → 写入 point_transaction + 更新 user_task_record.reward_claimed=1
-  ElMessage.success(`已领取「${task.title}」奖励 +${task.rewardPoints} 积分`);
+const badgeList = ref([]);   // 合并后：已获得在前，未获得在后
+const dailyTaskList = ref([]);
+
+const fetchBadges = async () => {
+  badgeLoading.value = true;
+  try {
+    const res = await getBadges();
+    const earnedList = res.data.data ?? [];
+    const earnedCodes = new Set(earnedList.map(b => b.badgeCode));
+    // 合并全量定义 + 已获得数据
+    badgeList.value = ALL_BADGE_DEFS.map(def => {
+      const earned = earnedList.find(b => b.badgeCode === def.badgeCode);
+      return {
+        ...def,
+        earned: !!earned,
+        earnedAt: earned?.earnedAt || "",
+      };
+    });
+    // 更新左侧名片勋章数
+    coreOverview.badgeCount = earnedList.length;
+    // 新获得的勋章弹窗恭喜
+    const newlyAwarded = res.data.newlyAwarded;
+    if (newlyAwarded && newlyAwarded.length > 0) {
+      const names = newlyAwarded.map(b => b.badgeName).join('、');
+      ElMessage.success(`🎉 恭喜获得新勋章：${names}`);
+    }
+  } catch (err) {
+    console.error("获取勋章失败", err);
+  } finally {
+    badgeLoading.value = false;
+  }
 };
 
-const goDoTask = (task) => {
-  // TODO: 根据 task_type 跳转对应页面
-  ElMessage.info(`去完成「${task.title}」（待对接路由）`);
+const fetchDailyTasks = async () => {
+  taskLoading.value = true;
+  try {
+    const res = await getDailyTasks();
+    dailyTaskList.value = res.data.data ?? [];
+  } catch (err) {
+    console.error("获取每日任务失败", err);
+  } finally {
+    taskLoading.value = false;
+  }
+};
+
+const claimReward = async (task) => {
+  try {
+    const res = await claimTaskReward(task.taskId);
+    if (res.data.success) {
+      ElMessage.success(res.data.message || `已领取 +${task.rewardPoints} 积分`);
+      // 刷新任务列表 + 积分余额
+      fetchDailyTasks();
+      fetchPointsAccount();
+    } else {
+      ElMessage.warning(res.data.message || "领取失败");
+    }
+  } catch (err) {
+    ElMessage.error("领取奖励失败");
+  }
+};
+
+// 每日任务路由映射（对齐 seed_data 6 个任务，以后不变）
+const TASK_ROUTE_MAP = {
+  daily_quiz:         "/quiz",
+  ask_ai:             "/ai-assistant",
+  read_species:       "/encyclopedia",
+  bookmark:           "/encyclopedia",
+};
+
+const goDoTask = async (task) => {
+  // 签到 → 就地签到
+  if (task.taskType === "daily_checkin") {
+    try {
+      const res = await dailyCheckin();
+      if (res.data.success) {
+        ElMessage.success(res.data.message);
+        fetchDailyTasks();            // 刷新任务列表
+        fetchPointsAccount();         // 刷新积分
+      } else {
+        ElMessage.warning(res.data.message);
+      }
+    } catch (err) {
+      ElMessage.error("签到失败");
+    }
+    return;
+  }
+  // 其他任务 → 跳转
+  const route = TASK_ROUTE_MAP[task.taskType];
+  if (route) {
+    router.push(route);
+  } else {
+    ElMessage.info(`请前往对应页面完成「${task.title}」`);
+  }
 };
 
 // ═══ Tab 6：我的收藏 ═══
@@ -1069,25 +1141,26 @@ const fetchPointsData = () => {
   fetchExchangeOrders();
 };
 
+/** 加载 Tab5 所有数据 */
+const fetchAchievementData = () => {
+  fetchBadges();
+  fetchDailyTasks();
+};
+
 // 切换 Tab 拉取数据
-let learningDataFetched = false;
-let pointsDataFetched = false;
+const dataFetchedFlags = { learning: false, points: false, achievement: false };
 watch(activeTab, (tab) => {
   if (tab === "learning") {
-    if (!learningDataFetched) {
-      learningDataFetched = true;
-      fetchLearningData();
-    } else {
-      fetchLearningData();
-    }
+    fetchLearningData();
+    dataFetchedFlags.learning = true;
   }
   if (tab === "points") {
-    if (!pointsDataFetched) {
-      pointsDataFetched = true;
-      fetchPointsData();
-    } else {
-      fetchPointsData();
-    }
+    fetchPointsData();
+    dataFetchedFlags.points = true;
+  }
+  if (tab === "achievement") {
+    fetchAchievementData();
+    dataFetchedFlags.achievement = true;
   }
 });
 </script>

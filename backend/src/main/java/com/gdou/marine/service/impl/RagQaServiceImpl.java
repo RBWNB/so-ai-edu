@@ -5,6 +5,7 @@ import com.gdou.marine.entity.ConversationMessage;
 import com.gdou.marine.mapper.AiCallLogMapper;
 import com.gdou.marine.mapper.ConversationMessageMapper;
 import com.gdou.marine.service.RagQaService;
+import com.gdou.marine.service.TaskProgressService;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
@@ -51,6 +52,7 @@ public class RagQaServiceImpl implements RagQaService {
     private final ConversationMessageMapper conversationMessageMapper;
     private final AiCallLogMapper aiCallLogMapper;
     private final String chatModelName;
+    private final TaskProgressService taskProgressService;
 
     public RagQaServiceImpl(EmbeddingModel embeddingModel,
                             EmbeddingStore<TextSegment> embeddingStore,
@@ -58,6 +60,7 @@ public class RagQaServiceImpl implements RagQaService {
                             StreamingChatLanguageModel streamingChatLanguageModel,
                             ConversationMessageMapper conversationMessageMapper,
                             AiCallLogMapper aiCallLogMapper,
+                            TaskProgressService taskProgressService,
                             @Value("${app.ai.chat.model:deepseek-v3}") String chatModelName) {
         this.embeddingModel = embeddingModel;
         this.embeddingStore = embeddingStore;
@@ -65,6 +68,7 @@ public class RagQaServiceImpl implements RagQaService {
         this.streamingChatLanguageModel = streamingChatLanguageModel;
         this.conversationMessageMapper = conversationMessageMapper;
         this.aiCallLogMapper = aiCallLogMapper;
+        this.taskProgressService = taskProgressService;
         this.chatModelName = chatModelName;
     }
 
@@ -305,6 +309,11 @@ public class RagQaServiceImpl implements RagQaService {
         message.setRole(role);
         message.setContent(content);
         conversationMessageMapper.insert(message);
+
+        // 用户提问时更新每日任务进度
+        if ("user".equals(role) && userId != null) {
+            taskProgressService.incrementProgress(userId, "ask_ai");
+        }
     }
 
     private void saveCallLog(Long userId,

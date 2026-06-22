@@ -6,6 +6,7 @@ import com.gdou.marine.entity.QuizAttempt;
 import com.gdou.marine.entity.QuizQuestion;
 import com.gdou.marine.mapper.QuizAttemptMapper;
 import com.gdou.marine.mapper.QuizQuestionMapper;
+import com.gdou.marine.service.TaskProgressService;
 import com.gdou.marine.service.TtsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +34,9 @@ public class ExamController {
 
     @Autowired
     private TtsService ttsService;
+
+    @Autowired
+    private TaskProgressService taskProgressService;
 
     /**
      * 开始答题：随机抽取 30 道已启用的题目（不返回答案）
@@ -162,6 +166,11 @@ public class ExamController {
             }
 
             int score = (int) Math.round((double) correctCount / totalCount * 100);
+
+            // 更新每日任务进度：答对 N 题
+            if (userId != null && correctCount > 0) {
+                taskProgressService.incrementProgress(userId, "daily_quiz", correctCount);
+            }
 
             result.put("success", true);
             result.put("score", score);
