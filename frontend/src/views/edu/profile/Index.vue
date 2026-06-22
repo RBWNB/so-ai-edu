@@ -132,15 +132,15 @@
                 <!--
                   API 已完成：PUT /sys-user/password
                 -->
-                <el-form ref="passwordFormRef" :model="passwordForm" :rules="passwordRules" label-width="80px" label-position="top">
+                <el-form ref="passwordFormRef" :model="passwordForm" :rules="passwordRules" label-width="80px" label-position="top" class="security-form">
                   <el-form-item label="原密码" prop="oldPassword">
-                    <el-input v-model="passwordForm.oldPassword" type="password" placeholder="请输入当前密码" show-password style="max-width: 320px;" />
+                    <el-input v-model="passwordForm.oldPassword" type="password" placeholder="请输入当前密码" show-password />
                   </el-form-item>
                   <el-form-item label="新密码" prop="newPassword">
-                    <el-input v-model="passwordForm.newPassword" type="password" placeholder="请输入新密码（至少6位）" show-password style="max-width: 320px;" />
+                    <el-input v-model="passwordForm.newPassword" type="password" placeholder="请输入新密码（至少6位）" show-password />
                   </el-form-item>
                   <el-form-item label="确认密码" prop="confirmPassword">
-                    <el-input v-model="passwordForm.confirmPassword" type="password" placeholder="请再次输入新密码" show-password style="max-width: 320px;" />
+                    <el-input v-model="passwordForm.confirmPassword" type="password" placeholder="请再次输入新密码" show-password />
                   </el-form-item>
                   <el-form-item style="margin-top: 12px;">
                     <el-button type="primary" @click="submitPassword" :loading="changingPassword">更新密码</el-button>
@@ -1316,12 +1316,31 @@ watch(activeTab, (tab) => {
    ════════════════════════════════════════════════════════════════════ */
 .settings-card {
   min-height: 600px;
-  padding: 24px !important;
+  padding: 20px 24px !important;
+}
+
+/* 安全设置表单用适中的宽度，和基本资料对齐 */
+.security-form {
+  max-width: 420px;
 }
 
 .tab-content {
   padding: 16px 4px 24px;
   animation: fadeIn 0.4s ease;
+}
+
+/* 个人资料表单更紧凑 */
+.tab-content :deep(.el-form-item) {
+  margin-bottom: 16px;
+}
+
+.tab-content :deep(.el-form-item__label) {
+  padding-bottom: 4px !important;
+  font-size: 13px;
+}
+
+.tab-content :deep(.el-form-item:last-child) {
+  margin-bottom: 0;
 }
 
 /* 深度定制 Element Plus Tabs */
@@ -1534,6 +1553,25 @@ watch(activeTab, (tab) => {
 /* 响应式微调 */
 @media (max-width: 768px) {
   .user-card, .settings-card { border-radius: 16px !important; }
+  .settings-card { padding: 16px !important; min-height: auto; }
+  .tab-content { padding: 12px 0 16px; }
+
+  /* 小屏下表单字段改为单列 */
+  .tab-content :deep(.el-row) {
+    flex-direction: column;
+  }
+  .tab-content :deep(.el-col) {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .tab-content :deep(.el-form-item) {
+    margin-bottom: 14px;
+  }
+
+  .security-form {
+    max-width: 100%;
+  }
+
   .points-balance-card { flex-direction: column; align-items: flex-start; gap: 24px; padding: 24px; }
   .balance-num { font-size: 36px; }
   .balance-actions { flex-direction: row; width: 100%; }
