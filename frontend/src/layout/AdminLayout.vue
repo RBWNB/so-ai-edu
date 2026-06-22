@@ -38,13 +38,22 @@
           </div>
         </div>
         <div class="header-right">
+          <el-button
+              type="text"
+              icon="House"
+              class="back-to-c-btn"
+              @click="goToCEduHome"
+          >
+            返回海洋学堂首页
+          </el-button>
+
           <el-dropdown @command="handleCommand">
             <div class="user-info-dropdown">
               <el-avatar :size="32" :src="userAvatar">
                 <el-icon><User /></el-icon>
               </el-avatar>
               <span class="username-text">{{ authStore.username }}</span>
-              <el-icon class="el-icon--right"><arrow-down /></el-icon>
+              <el-icon class="el-icon--right"><ArrowDown /></el-icon>
             </div>
             <template #dropdown>
               <el-dropdown-menu>
@@ -71,7 +80,7 @@ import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/store/auth";
 import { ElMessageBox, ElMessage } from "element-plus";
-import { ArrowDown, Ship, SwitchButton, User } from "@element-plus/icons-vue";
+import { ArrowDown, Ship, SwitchButton, User, House } from "@element-plus/icons-vue";
 import { iconMap } from "@/utils/iconMap";
 import { getUserProfile } from "@/api/sysUser";
 
@@ -90,6 +99,10 @@ const userAvatar = computed(() => {
   }
   return "";
 });
+
+const goToCEduHome = () => {
+  router.push("/home");
+};
 
 const handleCommand = (command) => {
   if (command === "profile") {
@@ -227,6 +240,20 @@ const handleLogout = () => {
   align-items: center;
   padding-right: 20px;
 }
+
+.back-to-c-btn {
+  margin-right: 16px;
+  color: var(--theme-text-primary);
+  font-size: 14px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+.back-to-c-btn:hover {
+  background-color: var(--theme-primary-soft);
+  color: var(--theme-primary);
+}
+
 .user-info-dropdown {
   display: flex;
   align-items: center;
@@ -272,6 +299,14 @@ const handleLogout = () => {
   }
   .username-text {
     display: none;
+  }
+  /* 移动端隐藏按钮文字 */
+  .back-to-c-btn span {
+    display: none;
+  }
+  .back-to-c-btn {
+    margin-right: 8px;
+    padding: 8px;
   }
   .main {
     padding: 12px;
