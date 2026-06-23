@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
 import java.io.Serializable;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -34,6 +35,12 @@ public class UserTaskRecord implements Serializable {
      */
     @TableField("task_id")
     private Long taskId;
+
+    /**
+     * 任务所属日期（用于每日刷新）
+     */
+    @TableField("task_date")
+    private LocalDate taskDate;
 
     /**
      * 当前进度值

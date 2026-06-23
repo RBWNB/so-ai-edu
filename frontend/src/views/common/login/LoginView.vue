@@ -94,13 +94,8 @@
         :style="particle.style"
     />
 
-    <!-- 泡泡 -->
-    <div
-        v-for="bubble in bubbles"
-        :key="'bubble-' + bubble.id"
-        class="bubble"
-        :style="bubble.style"
-    />
+    <!-- 气泡容器（纯 DOM 管理） -->
+    <div class="bubble-container" ref="bubbleContainerRef"></div>
 
     <!-- 鲸鱼 -->
     <div
@@ -333,7 +328,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { useAuthStore } from '@/store/auth';
@@ -518,7 +513,7 @@ const handleRegister = async () => {
         phone: registerForm.phone,
         applyRole: registerForm.applyRole,
       });
-      ElMessage.success('注册成功');
+      ElMessage.success('注册成功，请等待审核');
       currentStep.value = 1;
       setTimeout(() => {
         registerFormRef.value.resetFields();
@@ -548,7 +543,7 @@ const handleTabChange = (tabName) => {
 };
 
 // ================================================================
-// ==================== 背景特效（全部保留） ======================
+// ==================== 背景特效 ===================================
 // ================================================================
 
 const mouseX = ref(0);
@@ -556,13 +551,13 @@ const mouseY = ref(0);
 const whaleBlink = ref(false);
 const whaleJump = ref(false);
 const particles = ref([]);
-const bubbles = ref([]);
 const floatingShapes = ref([]);
 const stars = ref([]);
 const fishes = ref([]);
 const jellyfishes = ref([]);
 const seaweeds = ref([]);
 const waveCanvas = ref(null);
+const bubbleContainerRef = ref(null);
 
 let blinkTimeoutId = null;
 let bubbleIntervalId = null;
@@ -776,33 +771,70 @@ function buildSeaweeds() {
   for (let i = 0; i < 80; i++) createSeaweed();
 }
 
-// ─── 气泡 ──────────────
+// ─── 气泡（使用 Web Animations API） ──────────────
+let bubbleAnimations = [];
+
 function createBubble() {
-  const id = Date.now() + Math.random();
+  const container = bubbleContainerRef.value;
+  if (!container) return;
+
+  // 创建气泡元素
+  const el = document.createElement('div');
+  el.className = 'bubble';
+
+  // 随机参数
   const size = 6 + Math.random() * 18;
   const startX = 5 + Math.random() * 90;
   const startY = 30 + Math.random() * 50;
-  const drift = (Math.random() - 0.5) * 200;
-  const rise = 150 + Math.random() * 200;
-  bubbles.value.push({
-    id,
-    style: {
-      left: `${startX}%`,
-      top: `${startY}%`,
-      width: size + 'px',
-      height: size + 'px',
-      animationDuration: `${6 + Math.random() * 5}s`,
-      animationDelay: `${Math.random() * 2}s`,
-      '--drift': drift + 'px',
-      '--rise': '-' + rise + 'px',
-    },
-  });
-  setTimeout(() => {
-    bubbles.value = bubbles.value.filter((x) => x.id !== id);
-  }, 12000);
+  const driftX = (Math.random() - 0.5) * 200;
+  const riseY = -(150 + Math.random() * 200);
+  const duration = 6000 + Math.random() * 5000;
+
+  // 设置样式
+  el.style.cssText = `
+    left: ${startX}%;
+    top: ${startY}%;
+    width: ${size}px;
+    height: ${size}px;
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.85), rgba(180,220,255,0.25));
+    backdrop-filter: blur(2px);
+    border: 1px solid rgba(255,255,255,0.5);
+    box-shadow: inset 0 -4px 10px rgba(255,255,255,0.2);
+    z-index: 4;
+    will-change: transform, opacity;
+  `;
+
+  container.appendChild(el);
+
+  // 使用 Web Animations API
+  const anim = el.animate(
+      [
+        { transform: 'translate(0, 0) scale(0.3)', opacity: 0.9 },
+        { transform: `translate(${driftX * 0.3}px, ${riseY * 0.3}px) scale(0.7)`, opacity: 1, offset: 0.3 },
+        { transform: `translate(${driftX * 0.7}px, ${riseY * 0.7}px) scale(1.1)`, opacity: 0.9, offset: 0.7 },
+        { transform: `translate(${driftX}px, ${riseY}px) scale(1.6)`, opacity: 0 },
+      ],
+      {
+        duration: duration,
+        easing: 'linear',
+      }
+  );
+
+  // 动画结束后移除元素
+  anim.onfinish = () => {
+    if (el.parentNode) el.parentNode.removeChild(el);
+    // 从跟踪数组中移除
+    const idx = bubbleAnimations.indexOf(anim);
+    if (idx > -1) bubbleAnimations.splice(idx, 1);
+  };
+
+  bubbleAnimations.push(anim);
 }
 
 function startBubbleSystem() {
+  // 初始生成一批气泡
   for (let i = 0; i < 15; i++) {
     setTimeout(() => createBubble(), i * 200);
   }
@@ -873,6 +905,11 @@ onUnmounted(() => {
   if (bubbleIntervalId) clearInterval(bubbleIntervalId);
   if (whaleMoveIntervalId) clearInterval(whaleMoveIntervalId);
   if (resizeHandler) window.removeEventListener('resize', resizeHandler);
+  // 停止所有气泡动画
+  bubbleAnimations.forEach(anim => {
+    try { anim.cancel(); } catch (e) {}
+  });
+  bubbleAnimations = [];
 });
 </script>
 
@@ -899,7 +936,7 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-/* ===== 丁达尔效应光束（从左上角射出） ===== */
+/* ===== 丁达尔效应光束 ===== */
 .tyndall-container {
   position: absolute;
   inset: 0;
@@ -1217,6 +1254,26 @@ onUnmounted(() => {
   50%      { transform: translateY(-45px) scale(1.2); opacity: 1; }
 }
 
+/* ===== 气泡容器 ===== */
+.bubble-container {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  overflow: hidden;
+}
+/* 气泡基样式（JS 负责具体位置和动画） */
+.bubble {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform, opacity;
+  /* 背景和边框由 JS 内联设置，但保留默认样式兜底 */
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.85), rgba(180, 220, 255, 0.25));
+  backdrop-filter: blur(2px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: inset 0 -4px 10px rgba(255, 255, 255, 0.2);
+}
+
 /* ===== 鲸鱼 ===== */
 .whale-wrapper {
   position: absolute;
@@ -1244,36 +1301,6 @@ onUnmounted(() => {
 }
 .whale-wrapper.jump {
   animation: whaleJump 1.2s ease;
-}
-
-/* ===== 泡泡 ===== */
-.bubble {
-  position: absolute;
-  border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.85), rgba(180, 220, 255, 0.25));
-  backdrop-filter: blur(2px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  z-index: 4;
-  animation: bubbleFloat linear forwards;
-  box-shadow: inset 0 -4px 10px rgba(255, 255, 255, 0.2);
-}
-@keyframes bubbleFloat {
-  0% {
-    opacity: 0.9;
-    transform: translate(0, 0) scale(0.3);
-  }
-  30% {
-    opacity: 1;
-    transform: translate(calc(var(--drift) * 0.3), calc(var(--rise) * 0.3)) scale(0.7);
-  }
-  70% {
-    opacity: 0.9;
-    transform: translate(calc(var(--drift) * 0.7), calc(var(--rise) * 0.7)) scale(1.1);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(var(--drift), var(--rise)) scale(1.6);
-  }
 }
 
 /* ===== 登录卡 ===== */
@@ -1318,7 +1345,7 @@ onUnmounted(() => {
   font-size: 13px;
 }
 
-/* ===== el-tabs 样式适配 ===== */
+/* ===== el-tabs ===== */
 .auth-tabs {
   --el-tabs-header-margin: 0 0 20px 0;
 }
@@ -1474,7 +1501,7 @@ onUnmounted(() => {
   transform: translateY(0);
 }
 
-/* ===== 分步注册样式 ===== */
+/* ===== 分步注册 ===== */
 .register-container {
   display: flex;
   flex-direction: column;
@@ -1652,7 +1679,7 @@ onUnmounted(() => {
   transition: all 0.2s ease;
 }
 
-/* ===== 关键帧动画 ===== */
+/* ===== 关键帧 ===== */
 @keyframes oceanFlow {
   0%   { background-position: 0% 50%; }
   50%  { background-position: 100% 50%; }
@@ -1729,9 +1756,6 @@ onUnmounted(() => {
   }
   .tyndall-glow {
     display: none;
-  }
-  .auth-section {
-    padding: 24px 16px;
   }
   :deep(.el-input__wrapper) {
     height: 40px !important;

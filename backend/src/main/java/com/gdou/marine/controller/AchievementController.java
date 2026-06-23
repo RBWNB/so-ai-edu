@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -117,10 +118,11 @@ public class AchievementController {
                             .eq(LearningTask::getStatus, (byte) 1)
                             .orderByAsc(LearningTask::getId));
 
-            // 查询用户今日任务记录
+            // 查询用户今日任务记录（按 task_date 隔离，每天独立）
             List<UserTaskRecord> records = userTaskRecordMapper.selectList(
                     new LambdaQueryWrapper<UserTaskRecord>()
-                            .eq(UserTaskRecord::getUserId, userId));
+                            .eq(UserTaskRecord::getUserId, userId)
+                            .eq(UserTaskRecord::getTaskDate, LocalDate.now()));
 
             Map<Long, UserTaskRecord> recordMap = records.stream()
                     .collect(Collectors.toMap(UserTaskRecord::getTaskId, r -> r, (a, b) -> b));
@@ -177,14 +179,15 @@ public class AchievementController {
                 return result;
             }
 
-            // 查询用户任务记录
+            // 查询用户今日任务记录（按 task_date 定位今日记录）
             UserTaskRecord rec = userTaskRecordMapper.selectOne(
                     new LambdaQueryWrapper<UserTaskRecord>()
                             .eq(UserTaskRecord::getUserId, userId)
-                            .eq(UserTaskRecord::getTaskId, taskId));
+                            .eq(UserTaskRecord::getTaskId, taskId)
+                            .eq(UserTaskRecord::getTaskDate, LocalDate.now()));
             if (rec == null) {
                 result.put("success", false);
-                result.put("message", "尚未完成该任务");
+                result.put("message", "今日尚未完成该任务");
                 return result;
             }
             if (rec.getCompleted() != 1) {

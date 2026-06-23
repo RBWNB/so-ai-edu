@@ -290,17 +290,20 @@ CREATE TABLE learning_task (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='学习任务';
 
 -- 21.用户任务完成记录表
+-- task_date: 任务所属日期，按天重置进度。唯一索引 (user_id, task_id, task_date)
+--             保证每个用户每天每个任务只有一条记录
 CREATE TABLE user_task_record (
                                   id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
                                   user_id BIGINT UNSIGNED NOT NULL,
                                   task_id BIGINT UNSIGNED NOT NULL,
+                                  task_date DATE NOT NULL COMMENT '任务所属日期，用于每日刷新',
                                   progress_value INT NOT NULL DEFAULT 0,
                                   completed TINYINT NOT NULL DEFAULT 0,
                                   completed_at DATETIME,
                                   reward_claimed TINYINT NOT NULL DEFAULT 0,
                                   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                                   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                                  UNIQUE KEY uk_user_task (user_id, task_id),
+                                  UNIQUE KEY uk_user_task_date (user_id, task_id, task_date),
                                   CONSTRAINT fk_task_record_user FOREIGN KEY (user_id) REFERENCES app_user(id),
                                   CONSTRAINT fk_task_record_task FOREIGN KEY (task_id) REFERENCES learning_task(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户任务完成记录';

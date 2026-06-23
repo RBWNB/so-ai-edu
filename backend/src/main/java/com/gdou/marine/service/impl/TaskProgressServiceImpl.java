@@ -54,16 +54,19 @@ public class TaskProgressServiceImpl implements TaskProgressService {
             return;
         }
 
-        // 查或建用户任务记录
+        // 查找今天的任务记录（按 task_date 隔离每日进度）
+        LocalDate today = LocalDate.now();
         UserTaskRecord rec = userTaskRecordMapper.selectOne(
                 new LambdaQueryWrapper<UserTaskRecord>()
                         .eq(UserTaskRecord::getUserId, userId)
-                        .eq(UserTaskRecord::getTaskId, task.getId()));
+                        .eq(UserTaskRecord::getTaskId, task.getId())
+                        .eq(UserTaskRecord::getTaskDate, today));
 
         if (rec == null) {
             rec = new UserTaskRecord();
             rec.setUserId(userId);
             rec.setTaskId(task.getId());
+            rec.setTaskDate(today);
             rec.setProgressValue(0);
             rec.setCompleted((byte) 0);
             rec.setRewardClaimed((byte) 0);
@@ -105,37 +108,30 @@ public class TaskProgressServiceImpl implements TaskProgressService {
                         .eq(LearningTask::getStatus, (byte) 1));
         if (task == null) return false;
 
-        // 查今日是否已签到（completed_at 为今天）
+        LocalDate today = LocalDate.now();
+
+        // 查今日是否已签到（利用 task_date 索引，简洁准确）
         UserTaskRecord rec = userTaskRecordMapper.selectOne(
                 new LambdaQueryWrapper<UserTaskRecord>()
                         .eq(UserTaskRecord::getUserId, userId)
-                        .eq(UserTaskRecord::getTaskId, task.getId()));
+                        .eq(UserTaskRecord::getTaskId, task.getId())
+                        .eq(UserTaskRecord::getTaskDate, today));
 
-        LocalDate today = LocalDate.now();
-        if (rec != null && rec.getCompletedAt() != null
-                && rec.getCompletedAt().toLocalDate().equals(today)) {
+        if (rec != null) {
             return false; // 今日已签到
         }
 
-        // 执行签到
-        if (rec == null) {
-            rec = new UserTaskRecord();
-            rec.setUserId(userId);
-            rec.setTaskId(task.getId());
-            rec.setProgressValue(1);
-            rec.setCompleted((byte) 1);
-            rec.setCompletedAt(LocalDateTime.now());
-            rec.setRewardClaimed((byte) 0);
-            rec.setCreatedAt(LocalDateTime.now());
-            userTaskRecordMapper.insert(rec);
-        } else {
-            rec.setProgressValue(1);
-            rec.setCompleted((byte) 1);
-            rec.setCompletedAt(LocalDateTime.now());
-            rec.setRewardClaimed((byte) 0);
-            rec.setUpdatedAt(LocalDateTime.now());
-            userTaskRecordMapper.updateById(rec);
-        }
+        // 执行签到（新建今日记录）
+        rec = new UserTaskRecord();
+        rec.setUserId(userId);
+        rec.setTaskId(task.getId());
+        rec.setTaskDate(today);
+        rec.setProgressValue(1);
+        rec.setCompleted((byte) 1);
+        rec.setCompletedAt(LocalDateTime.now());
+        rec.setRewardClaimed((byte) 0);
+        rec.setCreatedAt(LocalDateTime.now());
+        userTaskRecordMapper.insert(rec);
 
         log.info("用户 {} 每日签到成功", userId);
         return true;
