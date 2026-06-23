@@ -17,7 +17,7 @@
               accept="image/*"
               style="display:none"
             />
-            <el-dropdown trigger="click" @command="handleAvatarCommand" placement="bottom">
+            <el-dropdown trigger="click" @command="handleAvatarCommand" placement="bottom" popper-class="avatar-glass-popper">
               <div class="avatar-wrapper" v-loading="uploading">
                 <div class="avatar-frame-box" :class="'frame-' + (profileForm.avatarFrame || 'default')">
                   <el-avatar :size="96" :src="profileForm.avatarUrl" class="user-avatar">
@@ -104,15 +104,8 @@
             <!-- ========== Tab 1：基本资料（保留原有） ========== -->
             <el-tab-pane label="基本资料" name="basic">
               <div class="tab-content">
-                <!--
-                  API 已完成：
-                  GET  /sys-user/profile     → 获取个人资料
-                  PUT  /sys-user/profile     → 更新个人资料
-                  POST /sys-user/upload/avatar → 上传头像
-                  DB: app_user (username, real_name, email, phone, avatar_url, status)
-                -->
-                <el-form ref="formRef" :model="profileForm" :rules="rules" label-width="80px" label-position="top">
-                  <el-row :gutter="20">
+                <el-form ref="formRef" :model="profileForm" :rules="rules" label-width="80px" label-position="top" class="profile-form">
+                  <el-row :gutter="24">
                     <el-col :span="12">
                       <el-form-item label="账号" prop="username">
                         <el-input v-model="profileForm.username" disabled />
@@ -124,7 +117,7 @@
                       </el-form-item>
                     </el-col>
                   </el-row>
-                  <el-row :gutter="20">
+                  <el-row :gutter="24">
                     <el-col :span="12">
                       <el-form-item label="邮箱" prop="email">
                         <el-input v-model="profileForm.email" placeholder="请输入邮箱" />
@@ -136,9 +129,9 @@
                       </el-form-item>
                     </el-col>
                   </el-row>
-                  <el-form-item style="margin-top: 12px;">
-                    <el-button type="primary" @click="submitProfile" :loading="submitting">保存修改</el-button>
-                  </el-form-item>
+                  <div class="form-actions">
+                    <el-button class="submit-btn" @click="submitProfile" :loading="submitting">保存修改</el-button>
+                  </div>
                 </el-form>
               </div>
             </el-tab-pane>
@@ -146,9 +139,6 @@
             <!-- ========== Tab 2：安全设置（保留原有） ========== -->
             <el-tab-pane label="安全设置" name="security">
               <div class="tab-content">
-                <!--
-                  API 已完成：PUT /sys-user/password
-                -->
                 <el-form ref="passwordFormRef" :model="passwordForm" :rules="passwordRules" label-width="80px" label-position="top" class="security-form">
                   <el-form-item label="原密码" prop="oldPassword">
                     <el-input v-model="passwordForm.oldPassword" type="password" placeholder="请输入当前密码" show-password />
@@ -159,9 +149,9 @@
                   <el-form-item label="确认密码" prop="confirmPassword">
                     <el-input v-model="passwordForm.confirmPassword" type="password" placeholder="请再次输入新密码" show-password />
                   </el-form-item>
-                  <el-form-item style="margin-top: 12px;">
-                    <el-button type="primary" @click="submitPassword" :loading="changingPassword">更新密码</el-button>
-                  </el-form-item>
+                  <div class="form-actions">
+                    <el-button class="submit-btn" @click="submitPassword" :loading="changingPassword">确认更新</el-button>
+                  </div>
                 </el-form>
               </div>
             </el-tab-pane>
@@ -536,7 +526,7 @@
   </div>
 
   <!-- ═══ 头像框选择弹窗 ═══ -->
-  <el-dialog v-model="frameDialogVisible" title="选择头像框" width="540px" :close-on-click-modal="false" class="frame-dialog">
+  <el-dialog v-model="frameDialogVisible" title="选择头像框" width="640px" :close-on-click-modal="false" class="frame-dialog">
     <div class="frame-grid">
       <div
         v-for="f in frameList"
@@ -1506,9 +1496,7 @@ watch(activeTab, (tab) => {
   border-top: 1px dashed rgba(0, 0, 0, 0.08);
 }
 
-/* ════════════════════════════════════════════════════════════════════
-   右侧：多 Tab 区域面板
-   ════════════════════════════════════════════════════════════════════ */
+/* 多 Tab 区域面板 */
 .settings-card {
   min-height: 600px;
   padding: 20px 24px !important;
@@ -1517,11 +1505,23 @@ watch(activeTab, (tab) => {
 /* 安全设置表单用适中的宽度，和基本资料对齐 */
 .security-form {
   max-width: 420px;
+  margin-top: 8px;
+}
+
+.profile-form {
+  max-width: 600px;
+  margin-top: 8px;
 }
 
 .tab-content {
   padding: 16px 4px 24px;
   animation: fadeIn 0.4s ease;
+}
+
+.form-actions {
+  margin-top: 28px;
+  display: flex;
+  justify-content: flex-start; /* 靠左对齐，也可以改成 center */
 }
 
 /* 个人资料表单更紧凑 */
@@ -1530,8 +1530,30 @@ watch(activeTab, (tab) => {
 }
 
 .tab-content :deep(.el-form-item__label) {
-  padding-bottom: 4px !important;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1d2129;
+  padding-bottom: 8px !important;
+}
+.tab-content :deep(.el-input__wrapper) {
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06) inset;
+  border-radius: 12px;
+  padding: 6px 16px;
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.tab-content :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1.5px #165dff inset !important;
+  background: #fff;
+}
+.tab-content :deep(.el-input__inner) {
+  color: #1d2129;
+  font-weight: 600;
+  height: 38px;
+}
+.tab-content :deep(.el-input__inner::placeholder) {
+  color: #c9cdd4;
+  font-weight: 400;
 }
 
 .tab-content :deep(.el-form-item:last-child) {
@@ -1556,6 +1578,26 @@ watch(activeTab, (tab) => {
   background-color: #165dff;
   height: 3px;
   border-radius: 3px 3px 0 0;
+}
+
+/* 按钮样式 */
+.submit-btn {
+  min-width: 140px;
+  height: 42px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #165dff, #00d2ff);
+  border: none;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  box-shadow: 0 6px 16px rgba(22, 93, 255, 0.25);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(22, 93, 255, 0.4);
+  color: #fff;
 }
 
 /* 标签状态色 */
@@ -1898,6 +1940,11 @@ watch(activeTab, (tab) => {
 }
 
 /* ═══ 头像框样式 ═══ */
+.avatar-frame-selector {
+  text-align: center;
+  margin-top: 4px;
+}
+
 .avatar-frame-box {
   display: inline-flex;
   border-radius: 50%;
@@ -1954,9 +2001,33 @@ watch(activeTab, (tab) => {
 
 .frame-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 12px;
-  padding: 4px 0;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  padding: 12px 8px;
+}
+.dialog-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+}
+.glass-cancel-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border: none;
+  color: #4e5969;
+  font-weight: 600;
+  border-radius: 12px;
+  min-width: 90px;
+  height: 38px;
+  transition: all 0.3s;
+}
+.glass-cancel-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #1d2129;
+}
+.submit-btn.mini {
+  height: 38px;
+  min-width: 100px;
+  border-radius: 12px;
 }
 
 .frame-card {
@@ -2128,4 +2199,69 @@ watch(activeTab, (tab) => {
   box-shadow: 0 0 16px rgba(108, 60, 199, 0.6);
 }
 .frame-royal .user-avatar { border: 3px solid #fff; border-radius: 50%; }
+</style>
+<style>
+/* ════════ 头像点击后的下拉菜单 (全局玻璃化) ════════ */
+.avatar-glass-popper {
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(24px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(150%) !important;
+  border: 1px solid rgba(255, 255, 255, 1) !important;
+  border-radius: 16px !important;
+  padding: 8px !important;
+  box-shadow: 0 16px 32px rgba(0, 50, 150, 0.1) !important;
+}
+
+.avatar-glass-popper .el-dropdown-menu {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.avatar-glass-popper .el-dropdown-menu__item {
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 14px;
+  color: #4e5969 !important;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.avatar-glass-popper .el-dropdown-menu__item:hover {
+  background: rgba(22, 93, 255, 0.08) !important;
+  color: #165dff !important;
+  transform: translateX(4px);
+}
+
+.avatar-glass-popper .el-popper__arrow::before {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 1px solid rgba(255, 255, 255, 1) !important;
+}
+
+/* ════════ 头像框选择弹窗 (全局玻璃化) ════════ */
+.glass-dialog {
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(30px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(150%) !important;
+  border: 1px solid rgba(255, 255, 255, 1) !important;
+  border-radius: 24px !important;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.1) !important;
+}
+.glass-dialog .el-dialog__header {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  margin-right: 0;
+  padding: 20px 24px;
+}
+.glass-dialog .el-dialog__title {
+  font-weight: 700;
+  font-size: 17px;
+  color: #1d2129;
+}
+.glass-dialog .el-dialog__body {
+  padding: 20px 24px;
+}
+.glass-dialog .el-dialog__footer {
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  padding: 16px 24px;
+}
 </style>
