@@ -13,6 +13,7 @@ CREATE TABLE app_user (
                           email VARCHAR(128) UNIQUE,
                           phone VARCHAR(20) UNIQUE,
                           avatar_url VARCHAR(500),
+                          avatar_frame VARCHAR(32) NOT NULL DEFAULT 'default' COMMENT '当前头像框编码',
                           status TINYINT NOT NULL DEFAULT 1 COMMENT '1 enabled, 0 disabled',
                           last_login_time DATETIME,
                           created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -6,10 +6,12 @@ const TOKEN_KEY = "marine_token";
 const USERNAME_KEY = "marine_username";
 const ROLES_KEY = "marine_roles";
 const AVATAR_KEY = "marine_avatar";
+const AVATAR_FRAME_KEY = "marine_avatar_frame";
 
 export const getStoredToken = () => localStorage.getItem(TOKEN_KEY) || "";
 export const getStoredUsername = () => localStorage.getItem(USERNAME_KEY) || "";
 export const getStoredAvatar = () => localStorage.getItem(AVATAR_KEY) || "";
+export const getStoredAvatarFrame = () => localStorage.getItem(AVATAR_FRAME_KEY) || "default";
 
 const getStoredJSON = (key) => {
   try {
@@ -60,6 +62,7 @@ export const useAuthStore = defineStore("auth", {
     username: getStoredUsername(),
     roles: getStoredRoles(),
     avatarUrl: getStoredAvatar(),
+    avatarFrame: getStoredAvatarFrame(),
   }),
   getters: {
     isLoggedIn: (state) => Boolean(state.token),
@@ -92,6 +95,7 @@ export const useAuthStore = defineStore("auth", {
         this.roles = data.roles || this.roles;
         // 格式化头像后同步
         this.avatarUrl = this.formatAvatarUrl(data.avatarUrl);
+        this.avatarFrame = data.avatarFrame || "default";
 
         // 持久化到本地存储，刷新不丢失
         localStorage.setItem(USERNAME_KEY, this.username);
@@ -106,11 +110,12 @@ export const useAuthStore = defineStore("auth", {
       }
     },
 
-    setAuth(token, username, roles = [], avatarUrl = "") {
+    setAuth(token, username, roles = [], avatarUrl = "", avatarFrame = "default") {
       this.token = token || "";
       this.username = username || "";
       this.roles = roles;
       this.avatarUrl = this.formatAvatarUrl(avatarUrl);
+      this.avatarFrame = avatarFrame || "default";
 
       if (this.token) {
         localStorage.setItem(TOKEN_KEY, this.token);
@@ -131,6 +136,11 @@ export const useAuthStore = defineStore("auth", {
         localStorage.setItem(ROLES_KEY, JSON.stringify(this.roles));
       } else {
         localStorage.removeItem(ROLES_KEY);
+      }
+      if (this.avatarFrame) {
+        localStorage.setItem(AVATAR_FRAME_KEY, this.avatarFrame);
+      } else {
+        localStorage.removeItem(AVATAR_FRAME_KEY);
       }
     },
 
@@ -160,11 +170,13 @@ export const useAuthStore = defineStore("auth", {
       this.username = "";
       this.roles = [];
       this.avatarUrl = "";
+      this.avatarFrame = "default";
 
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USERNAME_KEY);
       localStorage.removeItem(ROLES_KEY);
       localStorage.removeItem(AVATAR_KEY);
+      localStorage.removeItem(AVATAR_FRAME_KEY);
     },
 
     hasRole(role) {

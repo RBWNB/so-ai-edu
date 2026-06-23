@@ -44,6 +44,12 @@ export const updatePasswordApi = (data) =>
     http.put("/sys-user/password", data);
 
 /**
+ * 更新头像框
+ */
+export const updateAvatarFrameApi = (frameCode) =>
+    http.put("/sys-user/avatar-frame", { frameCode });
+
+/**
  * 审核通过用户
  */
 export const approveUser = (id) =>

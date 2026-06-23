@@ -21,3 +21,6 @@ export const getShopItems = () => http.get("/points/shop-items");
 
 // 兑换商品
 export const exchangeItem = (itemId) => http.post(`/points/exchange/${itemId}`);
+
+// 已拥有的头像框编码列表
+export const getOwnedFrames = () => http.get("/points/owned-frames");

@@ -81,9 +81,11 @@
           <template v-if="authStore.isLoggedIn">
             <el-dropdown @command="handleUserCommand" popper-class="glass-dropdown">
               <div class="user-trigger">
-                <el-avatar :size="32" :src="userAvatar">
-                  <el-icon><User /></el-icon>
-                </el-avatar>
+                <div class="header-avatar-frame" :class="'frame-' + (authStore.avatarFrame || 'default')">
+                  <el-avatar :size="28" :src="userAvatar">
+                    <el-icon><User /></el-icon>
+                  </el-avatar>
+                </div>
                 <span class="username">{{ authStore.username }}</span>
                 <el-icon class="arrow-icon"><ArrowDown /></el-icon>
               </div>
@@ -1197,4 +1199,49 @@ const handleUserCommand = (command) => {
   background: rgba(10, 20, 42, 0.95) !important;
   border: 1px solid rgba(255, 255, 255, 0.15) !important;
 }
+
+/* ═══ 顶部导航栏头像框 ═══ */
+.header-avatar-frame {
+  display: inline-flex;
+  border-radius: 50%;
+  padding: 3px;
+  margin-right: 2px;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+.header-avatar-frame .el-avatar {
+  display: block;
+  border-radius: 50%;
+}
+
+.header-avatar-frame.frame-default { background: #dcdfe6; }
+
+.header-avatar-frame.frame-gold {
+  background: linear-gradient(135deg, #f6d365, #fda085);
+  box-shadow: 0 0 8px rgba(246, 211, 101, 0.5);
+}
+.header-avatar-frame.frame-gold .el-avatar { border: 2px solid #fff; }
+
+.header-avatar-frame.frame-ocean {
+  background: linear-gradient(135deg, #00d2ff, #165dff);
+  box-shadow: 0 0 10px rgba(0, 210, 255, 0.5);
+}
+.header-avatar-frame.frame-ocean .el-avatar { border: 2px solid #fff; }
+
+.header-avatar-frame.frame-rainbow {
+  background: linear-gradient(90deg, #ff6b6b, #feca57, #48dbfb, #ff9ff3);
+  background-size: 200% 100%;
+  animation: header-rainbow-spin 3s linear infinite;
+}
+.header-avatar-frame.frame-rainbow .el-avatar { border: 2px solid #fff; }
+@keyframes header-rainbow-spin {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+.header-avatar-frame.frame-flame {
+  background: linear-gradient(135deg, #ff4500, #ff8c00, #ffd700);
+  box-shadow: 0 0 12px rgba(255, 69, 0, 0.5);
+}
+.header-avatar-frame.frame-flame .el-avatar { border: 2px solid #fff; }
 </style>

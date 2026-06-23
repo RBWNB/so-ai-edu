@@ -96,6 +96,25 @@ public class SysUserController {
         }
     }
 
+    @PutMapping("/avatar-frame")
+    @PreAuthorize("isAuthenticated()")
+    @Log(module = "用户管理", description = "更新头像框")
+    public ResponseEntity<?> updateAvatarFrame(@RequestBody Map<String, String> body) {
+        try {
+            Long userId = getCurrentUserId();
+            String frameCode = body.get("frameCode");
+            if (frameCode == null || frameCode.isBlank()) {
+                return ResponseEntity.badRequest().body("头像框编码不能为空");
+            }
+            sysUserService.updateAvatarFrame(userId, frameCode);
+            return ResponseEntity.ok(Map.of("success", true, "avatarFrame", frameCode));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(ex.getMessage());
+        } catch (Exception ex) {
+            return ResponseEntity.internalServerError().body("更新头像框失败");
+        }
+    }
+
     @PutMapping("/password")
     @PreAuthorize("isAuthenticated()")
     @Log(module = "用户管理", description = "修改密码")

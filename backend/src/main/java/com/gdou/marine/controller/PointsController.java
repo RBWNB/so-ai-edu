@@ -232,6 +232,59 @@ public class PointsController {
         return result;
     }
 
+    /** 已拥有的头像框编码列表 */
+    @GetMapping("/owned-frames")
+    public Map<String, Object> getOwnedFrames(Authentication auth) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            Long userId = extractUserId(auth);
+            if (userId == null) {
+                result.put("success", false);
+                result.put("message", "请先登录");
+                return result;
+            }
+
+            // 查所有 avatar_frame 类型的商品
+            List<PointShopItem> frameItems = pointShopItemMapper.selectList(
+                    new LambdaQueryWrapper<PointShopItem>()
+                            .eq(PointShopItem::getItemType, "avatar_frame")
+                            .eq(PointShopItem::getStatus, (byte) 1));
+
+            if (frameItems.isEmpty()) {
+                result.put("success", true);
+                result.put("data", List.of("default"));
+                return result;
+            }
+
+            // 用户已兑换的商品 ID 集合
+            Set<Long> ownedItemIds = pointExchangeOrderMapper.selectList(
+                    new LambdaQueryWrapper<PointExchangeOrder>()
+                            .eq(PointExchangeOrder::getUserId, userId)
+                            .select(PointExchangeOrder::getItemId))
+                    .stream()
+                    .map(PointExchangeOrder::getItemId)
+                    .collect(Collectors.toSet());
+
+            // 从 description 提取 frame_code，筛选出已拥有的
+            List<String> ownedFrames = new ArrayList<>();
+            ownedFrames.add("default"); // 默认框永远可用
+            for (PointShopItem item : frameItems) {
+                if (item.getDescription() != null && item.getDescription().startsWith("frame_code:")
+                        && ownedItemIds.contains(item.getId())) {
+                    ownedFrames.add(item.getDescription().replace("frame_code:", ""));
+                }
+            }
+
+            result.put("success", true);
+            result.put("data", ownedFrames);
+        } catch (Exception e) {
+            log.error("获取已拥有头像框失败", e);
+            result.put("success", false);
+            result.put("message", e.getMessage());
+        }
+        return result;
+    }
+
     /** 兑换商品 */
     @Log(module = "积分商城", description = "兑换商品")
     @PostMapping("/exchange/{itemId}")

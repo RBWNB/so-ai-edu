@@ -15,14 +15,21 @@
               accept="image/*"
             >
               <div class="avatar-wrapper" v-loading="uploading">
-                <el-avatar :size="100" :src="profileForm.avatarUrl" class="user-avatar">
-                  <img src="https://cube.elemecdn.com/e/fd/0fc769396203ba652971805f60932png.png" />
-                </el-avatar>
+                <div class="avatar-frame-box" :class="'frame-' + (profileForm.avatarFrame || 'default')">
+                  <el-avatar :size="96" :src="profileForm.avatarUrl" class="user-avatar">
+                    <img src="https://cube.elemecdn.com/e/fd/0fc769396203ba652971805f60932png.png" />
+                  </el-avatar>
+                </div>
                 <div class="avatar-mask">
                   <el-icon :size="24"><Camera /></el-icon>
                 </div>
               </div>
             </el-upload>
+            <div class="avatar-frame-selector">
+              <el-button size="small" text type="primary" @click="openFrameDialog">
+                头像框
+              </el-button>
+            </div>
           </div>
 
           <div class="user-info-center">
@@ -517,6 +524,36 @@
       </el-col>
     </el-row>
   </div>
+
+  <!-- ═══ 头像框选择弹窗 ═══ -->
+  <el-dialog v-model="frameDialogVisible" title="选择头像框" width="420px" :close-on-click-modal="false">
+    <div class="frame-grid">
+      <div
+        v-for="f in frameList"
+        :key="f.code"
+        class="frame-option"
+        :class="{
+          'frame-active': pendingFrame === f.code,
+          'frame-locked': !ownedFrames.has(f.code)
+        }"
+        @click="ownedFrames.has(f.code) && selectFrame(f.code)"
+      >
+        <div class="frame-preview" :class="'frame-' + f.code">
+          <el-avatar :size="64" :src="profileForm.avatarUrl" class="user-avatar">
+            <img src="https://cube.elemecdn.com/e/fd/0fc769396203ba652971805f60932png.png" />
+          </el-avatar>
+          <div v-if="!ownedFrames.has(f.code)" class="frame-lock-overlay">
+            <el-icon :size="20"><Lock /></el-icon>
+          </div>
+        </div>
+        <div class="frame-name">{{ f.name }}</div>
+      </div>
+    </div>
+    <template #footer>
+      <el-button @click="frameDialogVisible = false">取消</el-button>
+      <el-button type="primary" :loading="frameSaving" @click="saveFrame">保存</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup>
@@ -524,13 +561,13 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import {
-  Camera, Reading, ChatDotRound,
+  Camera, Reading, ChatDotRound, Lock,
   Medal, TrophyBase, StarFilled, Present,
   Location, Clock, Plus
 } from "@element-plus/icons-vue";
-import { getUserProfile, updatePasswordApi, updateUserProfile, uploadAvatarApi } from "@/api/sysUser";
+import { getUserProfile, updatePasswordApi, updateUserProfile, uploadAvatarApi, updateAvatarFrameApi } from "@/api/sysUser";
 import { getLearningProfile, getAnswerHistory, getAiSessionCount } from "@/api/learning";
-import { getPointsAccount, getPointsTransactions, getExchangeOrders } from "@/api/points";
+import { getPointsAccount, getPointsTransactions, getExchangeOrders, getOwnedFrames } from "@/api/points";
 import { getBadges, getDailyTasks, claimTaskReward, dailyCheckin } from "@/api/achievement";
 import { useAuthStore } from "@/store/auth";
 
@@ -562,7 +599,8 @@ const profileForm = reactive({
   realName: "",   // app_user.real_name
   email: "",      // app_user.email
   phone: "",      // app_user.phone
-  avatarUrl: ""   // app_user.avatar_url
+  avatarUrl: "",  // app_user.avatar_url
+  avatarFrame: "default"  // app_user.avatar_frame
 });
 
 const rules = {
@@ -591,6 +629,7 @@ const fetchProfile = async () => {
     userStatus.value = res.data.status ?? 1;
     profileForm.avatarUrl = formatAvatarUrl(profileForm.avatarUrl);
     authStore.avatarUrl = profileForm.avatarUrl;
+    authStore.avatarFrame = profileForm.avatarFrame || "default";
   } catch (err) {
     ElMessage.error("获取个人资料失败");
   } finally {
@@ -1010,6 +1049,52 @@ const claimReward = async (task) => {
     }
   } catch (err) {
     ElMessage.error("领取奖励失败");
+  }
+};
+
+// ═══ 头像框 ═══
+const frameDialogVisible = ref(false);
+const frameSaving = ref(false);
+const pendingFrame = ref("default");
+const ownedFrames = ref(new Set(["default"]));
+const frameList = [
+  { code: "default", name: "默认" },
+  { code: "gold",    name: "黄金边框" },
+  { code: "ocean",   name: "深海边框" },
+  { code: "rainbow", name: "彩虹边框" },
+  { code: "flame",   name: "火焰边框" },
+];
+
+const openFrameDialog = async () => {
+  pendingFrame.value = profileForm.avatarFrame || "default";
+  frameDialogVisible.value = true;
+  // 拉取已拥有的头像框
+  try {
+    const res = await getOwnedFrames();
+    if (res.data.success) {
+      ownedFrames.value = new Set(res.data.data || ["default"]);
+    }
+  } catch { /* 离线也能用默认框 */ }
+};
+
+const selectFrame = (code) => {
+  pendingFrame.value = code;
+};
+
+const saveFrame = async () => {
+  frameSaving.value = true;
+  try {
+    const res = await updateAvatarFrameApi(pendingFrame.value);
+    if (res.data.success || res.status === 200) {
+      profileForm.avatarFrame = pendingFrame.value;
+      authStore.avatarFrame = pendingFrame.value;  // 同步到全局
+      frameDialogVisible.value = false;
+      ElMessage.success("头像框已更换");
+    }
+  } catch (err) {
+    ElMessage.error("更换头像框失败");
+  } finally {
+    frameSaving.value = false;
   }
 };
 
@@ -1751,5 +1836,124 @@ watch(activeTab, (tab) => {
   .obs-item { flex-direction: column; }
   .obs-image { width: 100%; height: 180px; }
   .fav-thumb { height: 120px; }
+}
+
+/* ═══ 头像框样式 ═══ */
+.avatar-frame-selector {
+  text-align: center;
+  margin-top: 4px;
+}
+
+.avatar-frame-box {
+  display: inline-flex;
+  border-radius: 50%;
+  padding: 5px;
+  transition: all 0.3s ease;
+}
+.avatar-frame-box .user-avatar {
+  display: block;
+  border-radius: 50%;
+}
+
+/* 默认边框 */
+.frame-default {
+  background: #dcdfe6;
+}
+
+/* 黄金边框 */
+.frame-gold {
+  background: linear-gradient(135deg, #f6d365, #fda085);
+  box-shadow: 0 0 14px rgba(246, 211, 101, 0.6);
+}
+.frame-gold .user-avatar { border: 3px solid #fff; border-radius: 50%; }
+
+/* 深海边框 */
+.frame-ocean {
+  background: linear-gradient(135deg, #00d2ff, #165dff);
+  box-shadow: 0 0 16px rgba(0, 210, 255, 0.6);
+}
+.frame-ocean .user-avatar { border: 3px solid #fff; border-radius: 50%; }
+
+/* 彩虹边框 */
+.frame-rainbow {
+  background: linear-gradient(90deg, #ff6b6b, #feca57, #48dbfb, #ff9ff3);
+  background-size: 200% 100%;
+  animation: rainbow-spin 3s linear infinite;
+}
+.frame-rainbow .user-avatar { border: 3px solid #fff; border-radius: 50%; }
+@keyframes rainbow-spin {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+/* 火焰边框 */
+.frame-flame {
+  background: linear-gradient(135deg, #ff4500, #ff8c00, #ffd700);
+  box-shadow: 0 0 18px rgba(255, 69, 0, 0.6);
+}
+.frame-flame .user-avatar { border: 3px solid #fff; border-radius: 50%; }
+
+/* ═══ 头像框选择弹窗 ═══ */
+:deep(.frame-grid) {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 8px 0;
+}
+.frame-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 8px;
+  border: 2px solid #ebeef5;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.frame-option:hover {
+  border-color: #409eff;
+  background: rgba(64, 158, 255, 0.04);
+}
+.frame-option.frame-active {
+  border-color: #409eff;
+  background: rgba(64, 158, 255, 0.08);
+}
+.frame-preview {
+  display: inline-flex;
+  border-radius: 50%;
+  padding: 4px;
+}
+.frame-preview .user-avatar {
+  border-radius: 50%;
+}
+
+/* 未获得的头像框：灰显 + 锁 */
+.frame-locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.6);
+}
+.frame-locked:hover {
+  border-color: #ebeef5 !important;
+  background: transparent !important;
+}
+.frame-lock-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.25);
+  border-radius: 50%;
+  color: #fff;
+}
+.frame-preview {
+  position: relative;
+}
+
+.frame-name {
+  font-size: 13px;
+  color: #606266;
 }
 </style>

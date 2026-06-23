@@ -15,11 +15,18 @@
 
     <!-- 商品网格 -->
     <el-row :gutter="16" class="shop-grid" v-loading="loading">
-      <el-col :xs="24" :sm="12" :md="8" v-for="item in shopItems" :key="item.id">
-        <div class="shop-card">
-          <div class="item-icon">{{ typeIcon(item.itemType) }}</div>
+      <el-col :xs="24" :sm="12" :md="8" v-for="item in sortedItems" :key="item.id">
+        <div class="shop-card" :class="{ 'shop-card-disabled': item._purchased || (item.stock !== null && item.stock === 0) }">
+          <div class="item-icon" v-if="item.itemType !== 'avatar_frame'">{{ typeIcon(item.itemType) }}</div>
+          <div class="item-icon item-icon-frame" v-else>
+            <div class="shop-frame-preview" :class="'frame-' + frameCodeFromDesc(item.description)">
+              <el-avatar :size="48" :src="authStore.avatarUrl">
+                <el-icon :size="22"><User /></el-icon>
+              </el-avatar>
+            </div>
+          </div>
           <div class="item-name">{{ item.name }}</div>
-          <div class="item-desc">{{ item.description }}</div>
+          <div class="item-desc">{{ item.itemType === 'avatar_frame' ? '兑换后在个人中心佩戴' : item.description }}</div>
           <div class="item-meta">
             <span class="item-price">
               <el-icon :size="14"><Coin /></el-icon>
@@ -34,11 +41,11 @@
               type="primary"
               size="default"
               class="exchange-btn"
-              :disabled="item.stock === 0 || availablePoints < item.pointsPrice"
+              :disabled="!item._canBuy"
               :loading="exchangingId === item.id"
               @click="handleExchange(item)"
           >
-            {{ item.stock === 0 ? '已售罄' : (availablePoints < item.pointsPrice ? '积分不足' : '立即兑换') }}
+            {{ item._purchased ? '已拥有' : (item.stock === 0 ? '已售罄' : (availablePoints < item.pointsPrice ? '积分不足' : '立即兑换')) }}
           </el-button>
         </div>
       </el-col>
@@ -49,15 +56,46 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Coin } from "@element-plus/icons-vue";
-import { getPointsAccount, getShopItems, exchangeItem } from "@/api/points";
+import { Coin, User } from "@element-plus/icons-vue";
+import { getPointsAccount, getShopItems, getOwnedFrames, exchangeItem } from "@/api/points";
+import { useAuthStore } from "@/store/auth";
+
+const authStore = useAuthStore();
 
 const loading = ref(false);
 const exchangingId = ref(null);
 const availablePoints = ref(0);
 const shopItems = ref([]);
+const ownedFramesSet = ref(new Set());
+
+const sortedItems = computed(() => {
+  const points = availablePoints.value;
+  const owned = ownedFramesSet.value;
+
+  const items = shopItems.value.map(item => {
+    const isFrame = item.itemType === 'avatar_frame';
+    const code = frameCodeFromDesc(item.description);
+    const alreadyPurchased = isFrame && owned.has(code);
+    const soldOut = !alreadyPurchased && item.stock !== null && item.stock === 0;
+    const poor = !alreadyPurchased && !soldOut && points < item.pointsPrice;
+
+    let _tier;
+    if (alreadyPurchased) _tier = 3;     // 已拥有
+    else if (soldOut) _tier = 2;         // 售罄
+    else if (poor) _tier = 1;            // 积分不足
+    else _tier = 0;                       // 可兑换
+
+    return { ...item, _purchased: alreadyPurchased, _tier, _canBuy: _tier === 0 };
+  });
+
+  // 按层级排序，同层级按 ID
+  return items.sort((a, b) => {
+    if (a._tier !== b._tier) return a._tier - b._tier;
+    return a.id - b.id;
+  });
+});
 
 const typeIcon = (type) => {
   const icons = {
@@ -69,15 +107,22 @@ const typeIcon = (type) => {
   return icons[type] || "📦";
 };
 
+const frameCodeFromDesc = (desc) => {
+  if (!desc) return "default";
+  return desc.startsWith("frame_code:") ? desc.replace("frame_code:", "") : "default";
+};
+
 const fetchData = async () => {
   loading.value = true;
   try {
-    const [accountRes, itemsRes] = await Promise.all([
+    const [accountRes, itemsRes, framesRes] = await Promise.all([
       getPointsAccount(),
       getShopItems(),
+      getOwnedFrames(),
     ]);
     availablePoints.value = accountRes.data.data?.availablePoints ?? 0;
     shopItems.value = itemsRes.data.data ?? [];
+    ownedFramesSet.value = new Set(framesRes.data.data || []);
   } catch (err) {
     ElMessage.error("加载商店失败");
   } finally {
@@ -322,6 +367,16 @@ onMounted(fetchData);
   cursor: not-allowed;
 }
 
+/* 不可购买的商品卡片（置灰） */
+.shop-card-disabled {
+  opacity: 0.6;
+}
+.shop-card-disabled:hover {
+  transform: none !important;
+  border-color: rgba(255, 255, 255, 0.8) !important;
+  box-shadow: none !important;
+}
+
 /* 进入动画 */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
@@ -341,4 +396,46 @@ onMounted(fetchData);
     justify-content: space-between;
   }
 }
+
+/* ═══ 商店头像框预览 ═══ */
+.item-icon-frame {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.shop-frame-preview {
+  display: inline-flex;
+  border-radius: 50%;
+  padding: 3px;
+}
+.shop-frame-preview .el-avatar {
+  display: block;
+  border-radius: 50%;
+}
+.shop-frame-preview.frame-default { background: #dcdfe6; }
+.shop-frame-preview.frame-gold {
+  background: linear-gradient(135deg, #f6d365, #fda085);
+  box-shadow: 0 0 8px rgba(246, 211, 101, 0.5);
+}
+.shop-frame-preview.frame-gold .el-avatar { border: 2px solid #fff; }
+.shop-frame-preview.frame-ocean {
+  background: linear-gradient(135deg, #00d2ff, #165dff);
+  box-shadow: 0 0 10px rgba(0, 210, 255, 0.5);
+}
+.shop-frame-preview.frame-ocean .el-avatar { border: 2px solid #fff; }
+.shop-frame-preview.frame-rainbow {
+  background: linear-gradient(90deg, #ff6b6b, #feca57, #48dbfb, #ff9ff3);
+  background-size: 200% 100%;
+  animation: shop-rainbow 3s linear infinite;
+}
+.shop-frame-preview.frame-rainbow .el-avatar { border: 2px solid #fff; }
+@keyframes shop-rainbow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+.shop-frame-preview.frame-flame {
+  background: linear-gradient(135deg, #ff4500, #ff8c00, #ffd700);
+  box-shadow: 0 0 12px rgba(255, 69, 0, 0.5);
+}
+.shop-frame-preview.frame-flame .el-avatar { border: 2px solid #fff; }
 </style>

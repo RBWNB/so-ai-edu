@@ -350,6 +350,22 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         }
     }
 
+    @Override
+    public void updateAvatarFrame(Long userId, String frameCode) {
+        validateUserId(userId);
+        ensureUserExists(userId);
+        if (!StringUtils.hasText(frameCode)) {
+            throw new IllegalArgumentException("头像框编码不能为空");
+        }
+        boolean updated = this.lambdaUpdate()
+                .eq(SysUser::getId, userId)
+                .set(SysUser::getAvatarFrame, frameCode)
+                .update();
+        if (!updated) {
+            throw new IllegalStateException("更新头像框失败");
+        }
+    }
+
     // ==================== 私有方法 ====================
 
     private void validateRegisterRequest(RegisterRequestDTO registerRequest) {
@@ -416,6 +432,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         profileVO.setEmail(user.getEmail());
         profileVO.setPhone(user.getPhone());
         profileVO.setAvatarUrl(user.getAvatarUrl());
+        profileVO.setAvatarFrame(user.getAvatarFrame());
         profileVO.setStatus(user.getStatus());
         return profileVO;
     }

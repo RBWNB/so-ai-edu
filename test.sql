@@ -88,3 +88,19 @@ SELECT '✅ 每日任务刷新迁移完成' AS status;
 --   ALTER TABLE user_task_record DROP COLUMN task_date;
 --   SET SESSION SQL_MODE = @OLD_SQL_MODE;
 -- ============================================================
+-- 清空旧商品（如果有外键关联兑换记录，先删关联）
+DELETE FROM point_exchange_order;
+DELETE FROM point_shop_item;
+
+-- 插入新商品
+INSERT INTO point_shop_item (id, name, description, item_type, points_price, stock, status) VALUES
+                                                                                                (1, '💎 积分盲盒', '随机获得 50%~200% 的积分返还，稳赚不赔', 'virtual_item', 100, 50, 1),
+                                                                                                (2, '🎫 任务快进卡', '一键完成一个进行中的每日任务，直接领取奖励', 'coupon', 200, NULL, 1),
+                                                                                                (3, '🏅 隐藏称号·蔚蓝守护者', '永久获得稀有勋章「蔚蓝守护者」，不在常规成就列表中', 'badge', 500, 1, 1),
+                                                                                                (4, '📊 深度学习报告', '基于你的答题数据生成一份专属学习分析报告，包含正确率趋势与薄弱知识点', 'virtual_item', 300, 30, 1),
+                                                                                                (5, '⚡ 双倍经验卡', '当日答题正确时升级经验翻倍（×2），第二天自动失效', 'coupon', 150, NULL, 1),
+                                                                                                (6, '🏅 隐藏称号·深渊征服者', '永久获得稀有勋章「深渊征服者」，深海探索者的终极荣誉', 'badge', 800, 1, 1),
+                                                                                                (7, '专属头像框·海洋之蓝', 'frame_code:ocean', 'avatar_frame', 500, 20, 1),
+                                                                                                (8, '黄金边框', 'frame_code:gold', 'avatar_frame', 200, NULL, 1),
+                                                                                                (9, '彩虹边框', 'frame_code:rainbow', 'avatar_frame', 500, NULL, 1),
+                                                                                                (10, '火焰边框', 'frame_code:flame', 'avatar_frame', 400, NULL, 1);
