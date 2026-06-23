@@ -236,17 +236,22 @@
       </div>
     </template>
   </div>
+  <LevelUpPopup ref="levelUpRef" />
 </template>
 
 <script setup>
 import { ref, reactive, computed, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { startExam, submitExam, getExamHistory, examTts } from '@/api/exam'
+import { getLearningProfile } from '@/api/learning'
+import LevelUpPopup from "@/components/LevelUpPopup.vue";
 
 // ==================== 状态管理 ====================
 const phase = ref('start') // 'start' | 'answering' | 'result'
 const startLoading = ref(false)
 const submitLoading = ref(false)
+
+const levelUpRef = ref(null) //获得升级弹窗的实例
 
 const questions = ref([])
 const currentIndex = ref(0)
@@ -448,6 +453,11 @@ const handleSubmit = async () => {
     return
   }
 
+  // 提交前获取当前等级（用于升级检测）
+  const oldLevel = await getLearningProfile()
+    .then(r => r.data.data?.level ?? null)
+    .catch(() => null);
+
   submitLoading.value = true
   try {
     const res = await submitExam({ answers })
@@ -461,7 +471,23 @@ const handleSubmit = async () => {
         optionsJson: questions.value[idx]?.optionsJson || '',
         questionType: questions.value[idx]?.questionType || 'single',
       }))
+
+      // 切换到结果界面
       phase.value = 'result'
+
+      // 检测升级：提交前后等级对比
+      if (oldLevel !== null) {
+        try {
+          const profileRes = await getLearningProfile();
+          const newLevel = profileRes.data.data?.level ?? oldLevel;
+          if (newLevel > oldLevel) {
+            setTimeout(() => {
+              levelUpRef.value?.show(newLevel, ['+ 答题经验', '解锁新等级特权']);
+            }, 600);
+          }
+        } catch { /* 静默 */ }
+      }
+
     } else {
       ElMessage.error(res.data.message || '提交失败')
     }
