@@ -438,4 +438,52 @@ onMounted(fetchData);
   box-shadow: 0 0 12px rgba(255, 69, 0, 0.5);
 }
 .shop-frame-preview.frame-flame .el-avatar { border: 2px solid #fff; }
+
+/* ═══ 商店新头像框预览 ═══ */
+.shop-frame-preview.frame-dashed {
+  background: repeating-conic-gradient(#fd7000 0deg 18deg, transparent 18deg 36deg);
+  box-shadow: 0 0 10px rgba(237, 35, 76, 0.5);
+  animation: shop-dash-glow 2s ease-in-out infinite;
+}
+.shop-frame-preview.frame-dashed .el-avatar { border: 2px solid #fff; }
+@keyframes shop-dash-glow {
+  0%, 100% { box-shadow: 0 0 10px rgba(237, 35, 76, 0.5); }
+  50% { box-shadow: 0 0 20px rgba(237, 35, 76, 0.8); }
+}
+
+.shop-frame-preview.frame-neon {
+  background: linear-gradient(135deg, #00fff5, #ff00e4);
+  box-shadow: 0 0 12px rgba(0, 255, 245, 0.6), 0 0 24px rgba(255, 0, 228, 0.35);
+  animation: shop-neon-pulse 3s ease-in-out infinite;
+}
+.shop-frame-preview.frame-neon .el-avatar { border: 2px solid rgba(255,255,255,0.9); }
+@keyframes shop-neon-pulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(0, 255, 245, 0.6), 0 0 24px rgba(255, 0, 228, 0.35); }
+  50% { box-shadow: 0 0 20px rgba(0, 255, 245, 0.8), 0 0 36px rgba(255, 0, 228, 0.55); }
+}
+
+.shop-frame-preview.frame-aurora {
+  background: linear-gradient(135deg, #00f260, #0575e6, #a855f7);
+  background-size: 200% 200%;
+  animation: shop-aurora-shift 4s ease infinite;
+  box-shadow: 0 0 12px rgba(5, 117, 230, 0.45);
+}
+.shop-frame-preview.frame-aurora .el-avatar { border: 2px solid rgba(255,255,255,0.9); }
+@keyframes shop-aurora-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.shop-frame-preview.frame-crystal {
+  background: linear-gradient(135deg, #e0eafc, #cfdef3, #b8c6db);
+  box-shadow: 0 0 10px rgba(176, 196, 222, 0.5), inset 0 0 6px rgba(255,255,255,0.5);
+}
+.shop-frame-preview.frame-crystal .el-avatar { border: 2px solid rgba(255,255,255,0.95); }
+
+.shop-frame-preview.frame-royal {
+  background: linear-gradient(135deg, #6c3cc7, #9b59b6, #f1c40f);
+  box-shadow: 0 0 14px rgba(108, 60, 199, 0.55);
+}
+.shop-frame-preview.frame-royal .el-avatar { border: 2px solid #fff; }
 </style>

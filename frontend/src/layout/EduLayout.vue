@@ -81,7 +81,7 @@
           <template v-if="authStore.isLoggedIn">
             <el-dropdown @command="handleUserCommand" popper-class="glass-dropdown">
               <div class="user-trigger">
-                <div class="header-avatar-frame" :class="'frame-' + (authStore.avatarFrame || 'default')">
+                <div class="header-avatar-frame" :class="headerFrameClass">
                   <el-avatar :size="28" :src="userAvatar">
                     <el-icon><User /></el-icon>
                   </el-avatar>
@@ -798,6 +798,14 @@ const isAdmin = computed(() => {
   return roles.some((r) => ["ADMIN", "MANAGER"].includes(r));
 });
 
+/* 头像框类名（响应式，实时跟随 Pinia 状态） */
+const headerFrameClass = computed(() => 'frame-' + (authStore.avatarFrame || 'default'));
+
+// 监听头像框变化 -> 同步到 localStorage + 强制触发模板更新
+watch(() => authStore.avatarFrame, (val) => {
+  localStorage.setItem('marine_avatar_frame', val || 'default');
+}, { immediate: false });
+
 /* 头像 */
 const userAvatar = computed(() => {
   const url = authStore.avatarUrl;
@@ -1244,4 +1252,52 @@ const handleUserCommand = (command) => {
   box-shadow: 0 0 12px rgba(255, 69, 0, 0.5);
 }
 .header-avatar-frame.frame-flame .el-avatar { border: 2px solid #fff; }
+
+/* ═══ 导航栏新头像框 ═══ */
+.header-avatar-frame.frame-dashed {
+  background: repeating-conic-gradient(#fd7000 0deg 18deg, transparent 18deg 36deg);
+  box-shadow: 0 0 8px rgba(237, 35, 76, 0.45);
+  animation: header-dash-glow 2s ease-in-out infinite;
+}
+.header-avatar-frame.frame-dashed .el-avatar { border: 2px solid #fff; }
+@keyframes header-dash-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(237, 35, 76, 0.45); }
+  50% { box-shadow: 0 0 18px rgba(237, 35, 76, 0.75); }
+}
+
+.header-avatar-frame.frame-neon {
+  background: linear-gradient(135deg, #00fff5, #ff00e4);
+  box-shadow: 0 0 10px rgba(0, 255, 245, 0.55), 0 0 20px rgba(255, 0, 228, 0.3);
+  animation: header-neon-pulse 3s ease-in-out infinite;
+}
+.header-avatar-frame.frame-neon .el-avatar { border: 2px solid rgba(255,255,255,0.9); }
+@keyframes header-neon-pulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(0, 255, 245, 0.55), 0 0 20px rgba(255, 0, 228, 0.3); }
+  50% { box-shadow: 0 0 18px rgba(0, 255, 245, 0.75), 0 0 32px rgba(255, 0, 228, 0.5); }
+}
+
+.header-avatar-frame.frame-aurora {
+  background: linear-gradient(135deg, #00f260, #0575e6, #a855f7);
+  background-size: 200% 200%;
+  animation: header-aurora-shift 4s ease infinite;
+  box-shadow: 0 0 10px rgba(5, 117, 230, 0.4);
+}
+.header-avatar-frame.frame-aurora .el-avatar { border: 2px solid rgba(255,255,255,0.9); }
+@keyframes header-aurora-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.header-avatar-frame.frame-crystal {
+  background: linear-gradient(135deg, #e0eafc, #cfdef3, #b8c6db);
+  box-shadow: 0 0 8px rgba(176, 196, 222, 0.5), inset 0 0 4px rgba(255,255,255,0.5);
+}
+.header-avatar-frame.frame-crystal .el-avatar { border: 2px solid rgba(255,255,255,0.95); }
+
+.header-avatar-frame.frame-royal {
+  background: linear-gradient(135deg, #6c3cc7, #9b59b6, #f1c40f);
+  box-shadow: 0 0 12px rgba(108, 60, 199, 0.5);
+}
+.header-avatar-frame.frame-royal .el-avatar { border: 2px solid #fff; }
 </style>

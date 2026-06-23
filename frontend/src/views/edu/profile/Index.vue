@@ -6,14 +6,18 @@
         <el-card class="user-card" shadow="never" v-loading="loading">
           <div class="card-bg"></div>
           <div class="avatar-container">
+            <!-- 隐藏的文件上传（通过下拉菜单触发） -->
             <el-upload
+              ref="uploadRef"
               class="avatar-uploader"
               action="#"
               :auto-upload="false"
               :show-file-list="false"
               :on-change="handleAvatarChange"
               accept="image/*"
-            >
+              style="display:none"
+            />
+            <el-dropdown trigger="click" @command="handleAvatarCommand" placement="bottom">
               <div class="avatar-wrapper" v-loading="uploading">
                 <div class="avatar-frame-box" :class="'frame-' + (profileForm.avatarFrame || 'default')">
                   <el-avatar :size="96" :src="profileForm.avatarUrl" class="user-avatar">
@@ -21,15 +25,21 @@
                   </el-avatar>
                 </div>
                 <div class="avatar-mask">
-                  <el-icon :size="24"><Camera /></el-icon>
+                  <el-icon :size="18"><Camera /></el-icon>
+                  <span class="avatar-mask-text">更换</span>
                 </div>
               </div>
-            </el-upload>
-            <div class="avatar-frame-selector">
-              <el-button size="small" text type="primary" @click="openFrameDialog">
-                头像框
-              </el-button>
-            </div>
+              <template #dropdown>
+                <el-dropdown-menu class="avatar-dropdown-menu">
+                  <el-dropdown-item command="upload">
+                    <el-icon><Camera /></el-icon> 修改头像
+                  </el-dropdown-item>
+                  <el-dropdown-item command="frame">
+                    <el-icon><Picture /></el-icon> 更换头像框
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
 
           <div class="user-info-center">
@@ -526,27 +536,33 @@
   </div>
 
   <!-- ═══ 头像框选择弹窗 ═══ -->
-  <el-dialog v-model="frameDialogVisible" title="选择头像框" width="420px" :close-on-click-modal="false">
+  <el-dialog v-model="frameDialogVisible" title="选择头像框" width="540px" :close-on-click-modal="false" class="frame-dialog">
     <div class="frame-grid">
       <div
         v-for="f in frameList"
         :key="f.code"
-        class="frame-option"
+        class="frame-card"
         :class="{
-          'frame-active': pendingFrame === f.code,
-          'frame-locked': !ownedFrames.has(f.code)
+          'frame-card-active': pendingFrame === f.code,
+          'frame-card-locked': !ownedFrames.has(f.code)
         }"
         @click="ownedFrames.has(f.code) && selectFrame(f.code)"
       >
-        <div class="frame-preview" :class="'frame-' + f.code">
-          <el-avatar :size="64" :src="profileForm.avatarUrl" class="user-avatar">
-            <img src="https://cube.elemecdn.com/e/fd/0fc769396203ba652971805f60932png.png" />
-          </el-avatar>
-          <div v-if="!ownedFrames.has(f.code)" class="frame-lock-overlay">
-            <el-icon :size="20"><Lock /></el-icon>
+        <div class="frame-card-preview">
+          <div class="frame-card-ring" :class="'frame-' + f.code">
+            <el-avatar :size="56" :src="profileForm.avatarUrl" class="user-avatar" />
+          </div>
+          <div v-if="!ownedFrames.has(f.code)" class="frame-card-lock">
+            <el-icon :size="16"><Lock /></el-icon>
+          </div>
+          <div v-if="f.code === 'default' || (profileForm.avatarFrame === f.code && ownedFrames.has(f.code) && pendingFrame !== f.code)" class="frame-card-badge">
+            {{ f.code === 'default' ? '默认' : '已装备' }}
+          </div>
+          <div v-if="pendingFrame === f.code" class="frame-card-check">
+            <el-icon :size="16"><Check /></el-icon>
           </div>
         </div>
-        <div class="frame-name">{{ f.name }}</div>
+        <div class="frame-card-name">{{ f.name }}</div>
       </div>
     </div>
     <template #footer>
@@ -561,7 +577,7 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import {
-  Camera, Reading, ChatDotRound, Lock,
+  Camera, Picture, Check, Reading, ChatDotRound, Lock,
   Medal, TrophyBase, StarFilled, Present,
   Location, Clock, Plus
 } from "@element-plus/icons-vue";
@@ -630,6 +646,7 @@ const fetchProfile = async () => {
     profileForm.avatarUrl = formatAvatarUrl(profileForm.avatarUrl);
     authStore.avatarUrl = profileForm.avatarUrl;
     authStore.avatarFrame = profileForm.avatarFrame || "default";
+    localStorage.setItem('marine_avatar_frame', profileForm.avatarFrame || "default");
   } catch (err) {
     ElMessage.error("获取个人资料失败");
   } finally {
@@ -1053,6 +1070,7 @@ const claimReward = async (task) => {
 };
 
 // ═══ 头像框 ═══
+const uploadRef = ref(null);
 const frameDialogVisible = ref(false);
 const frameSaving = ref(false);
 const pendingFrame = ref("default");
@@ -1063,6 +1081,11 @@ const frameList = [
   { code: "ocean",   name: "深海边框" },
   { code: "rainbow", name: "彩虹边框" },
   { code: "flame",   name: "火焰边框" },
+  { code: "dashed",  name: "烈焰虚线" },
+  { code: "neon",    name: "霓虹光效" },
+  { code: "aurora",  name: "极光幻彩" },
+  { code: "crystal", name: "冰晶之辉" },
+  { code: "royal",   name: "紫金皇冠" },
 ];
 
 const openFrameDialog = async () => {
@@ -1081,6 +1104,17 @@ const selectFrame = (code) => {
   pendingFrame.value = code;
 };
 
+/** 头像下拉菜单命令 */
+const handleAvatarCommand = (cmd) => {
+  if (cmd === 'upload') {
+    // 触发隐藏的 file input
+    const input = uploadRef.value?.$el?.querySelector('input[type="file"]');
+    if (input) input.click();
+  } else if (cmd === 'frame') {
+    openFrameDialog();
+  }
+};
+
 const saveFrame = async () => {
   frameSaving.value = true;
   try {
@@ -1088,6 +1122,7 @@ const saveFrame = async () => {
     if (res.data.success || res.status === 200) {
       profileForm.avatarFrame = pendingFrame.value;
       authStore.avatarFrame = pendingFrame.value;  // 同步到全局
+      localStorage.setItem('marine_avatar_frame', pendingFrame.value); // 持久化
       frameDialogVisible.value = false;
       ElMessage.success("头像框已更换");
     }
@@ -1378,14 +1413,38 @@ watch(activeTab, (tab) => {
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.4);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 2px;
   color: #fff;
   opacity: 0;
   transition: opacity 0.3s ease;
 }
 .avatar-wrapper:hover .avatar-mask {
   opacity: 1;
+}
+.avatar-mask-text {
+  font-size: 11px;
+  font-weight: 500;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+
+/* 头像下拉菜单样式 */
+:deep(.avatar-dropdown-menu) {
+  min-width: 140px;
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+:deep(.avatar-dropdown-menu .el-dropdown-menu__item) {
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 14px;
+  gap: 8px;
+}
+:deep(.avatar-dropdown-menu .el-dropdown-menu__item .el-icon) {
+  margin-right: 6px;
 }
 
 .user-info-center {
@@ -1839,11 +1898,6 @@ watch(activeTab, (tab) => {
 }
 
 /* ═══ 头像框样式 ═══ */
-.avatar-frame-selector {
-  text-align: center;
-  margin-top: 4px;
-}
-
 .avatar-frame-box {
   display: inline-flex;
   border-radius: 50%;
@@ -1893,67 +1947,185 @@ watch(activeTab, (tab) => {
 }
 .frame-flame .user-avatar { border: 3px solid #fff; border-radius: 50%; }
 
-/* ═══ 头像框选择弹窗 ═══ */
-:deep(.frame-grid) {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  padding: 8px 0;
+/* ═══ 头像框选择弹窗 — 卡片式布局 ═══ */
+.frame-dialog :deep(.el-dialog__body) {
+  padding: 20px 24px;
 }
-.frame-option {
+
+.frame-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.frame-card {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding: 16px 8px;
-  border: 2px solid #ebeef5;
-  border-radius: 12px;
+  padding: 16px 6px 12px;
+  border-radius: 14px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s ease;
+  border: 2px solid transparent;
+  background: rgba(255, 255, 255, 0.4);
+  position: relative;
 }
-.frame-option:hover {
-  border-color: #409eff;
-  background: rgba(64, 158, 255, 0.04);
-}
-.frame-option.frame-active {
-  border-color: #409eff;
-  background: rgba(64, 158, 255, 0.08);
-}
-.frame-preview {
-  display: inline-flex;
-  border-radius: 50%;
-  padding: 4px;
-}
-.frame-preview .user-avatar {
-  border-radius: 50%;
+.frame-card:hover {
+  border-color: rgba(64, 158, 255, 0.3);
+  background: rgba(64, 158, 255, 0.05);
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
 }
 
-/* 未获得的头像框：灰显 + 锁 */
-.frame-locked {
+.frame-card-active {
+  border-color: #409eff !important;
+  background: rgba(64, 158, 255, 0.08) !important;
+  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.15), 0 6px 20px rgba(64, 158, 255, 0.1) !important;
+}
+
+.frame-card-locked {
   opacity: 0.45;
   cursor: not-allowed;
   filter: grayscale(0.6);
 }
-.frame-locked:hover {
-  border-color: #ebeef5 !important;
-  background: transparent !important;
+.frame-card-locked:hover {
+  border-color: transparent !important;
+  background: rgba(255, 255, 255, 0.4) !important;
+  transform: none !important;
+  box-shadow: none !important;
 }
-.frame-lock-overlay {
+
+.frame-card-preview {
+  position: relative;
+  display: inline-flex;
+}
+
+.frame-card-ring {
+  display: inline-flex;
+  border-radius: 50%;
+  padding: 4px;
+}
+.frame-card-ring .user-avatar {
+  border-radius: 50%;
+}
+
+.frame-card-lock {
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0,0,0,0.25);
+  background: rgba(0,0,0,0.35);
   border-radius: 50%;
   color: #fff;
 }
-.frame-preview {
-  position: relative;
+
+.frame-card-badge {
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  padding: 0 8px;
+  height: 18px;
+  line-height: 18px;
+  border-radius: 9px;
+  background: rgba(0, 180, 42, 0.85);
+  color: #fff;
+  white-space: nowrap;
+  font-weight: 600;
+  backdrop-filter: blur(4px);
 }
 
-.frame-name {
-  font-size: 13px;
-  color: #606266;
+.frame-card-check {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #409eff;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(64, 158, 255, 0.4);
 }
+
+.frame-card-name {
+  font-size: 12px;
+  color: #606266;
+  font-weight: 500;
+  text-align: center;
+  line-height: 1.3;
+}
+
+@media (max-width: 540px) {
+  .frame-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* ═══ 新头像框 ═══ */
+
+/* 烈焰虚线 — 橙红渐变 + 脉冲光晕 */
+.frame-dashed {
+  background: repeating-conic-gradient(
+    #fd7000 0deg 18deg,
+    transparent 18deg 36deg
+  );
+  box-shadow: 0 0 14px rgba(237, 35, 76, 0.5);
+  animation: frame-dash-glow 2s ease-in-out infinite;
+}
+.frame-dashed .user-avatar { border: 3px solid #fff; border-radius: 50%; }
+@keyframes frame-dash-glow {
+  0%, 100% { box-shadow: 0 0 14px rgba(237, 35, 76, 0.5); }
+  50% { box-shadow: 0 0 26px rgba(237, 35, 76, 0.85); }
+}
+
+/* 霓虹光效 — 青 → 品红渐变色 + 双重光晕 */
+.frame-neon {
+  background: linear-gradient(135deg, #00fff5, #ff00e4);
+  box-shadow:
+    0 0 14px rgba(0, 255, 245, 0.7),
+    0 0 28px rgba(255, 0, 228, 0.4);
+  animation: frame-neon-pulse 3s ease-in-out infinite;
+}
+.frame-neon .user-avatar { border: 3px solid rgba(255,255,255,0.9); border-radius: 50%; }
+@keyframes frame-neon-pulse {
+  0%, 100% { box-shadow: 0 0 14px rgba(0, 255, 245, 0.7), 0 0 28px rgba(255, 0, 228, 0.4); }
+  50% { box-shadow: 0 0 24px rgba(0, 255, 245, 0.9), 0 0 44px rgba(255, 0, 228, 0.6); }
+}
+
+/* 极光幻彩 — 绿 → 蓝 → 紫 流动渐变 */
+.frame-aurora {
+  background: linear-gradient(135deg, #00f260, #0575e6, #a855f7);
+  background-size: 200% 200%;
+  animation: frame-aurora-shift 4s ease infinite;
+  box-shadow: 0 0 16px rgba(5, 117, 230, 0.5);
+}
+.frame-aurora .user-avatar { border: 3px solid rgba(255,255,255,0.9); border-radius: 50%; }
+@keyframes frame-aurora-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* 冰晶之辉 — 冰蓝通透质感 */
+.frame-crystal {
+  background: linear-gradient(135deg, #e0eafc, #cfdef3, #b8c6db);
+  box-shadow:
+    0 0 12px rgba(176, 196, 222, 0.6),
+    inset 0 0 8px rgba(255, 255, 255, 0.6);
+}
+.frame-crystal .user-avatar { border: 3px solid rgba(255,255,255,0.95); border-radius: 50%; }
+
+/* 紫金皇冠 — 深紫 + 金线点缀 */
+.frame-royal {
+  background: linear-gradient(135deg, #6c3cc7, #9b59b6, #f1c40f);
+  box-shadow: 0 0 16px rgba(108, 60, 199, 0.6);
+}
+.frame-royal .user-avatar { border: 3px solid #fff; border-radius: 50%; }
 </style>

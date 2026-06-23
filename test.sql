@@ -103,4 +103,12 @@ INSERT INTO point_shop_item (id, name, description, item_type, points_price, sto
                                                                                                 (7, '专属头像框·海洋之蓝', 'frame_code:ocean', 'avatar_frame', 500, 20, 1),
                                                                                                 (8, '黄金边框', 'frame_code:gold', 'avatar_frame', 200, NULL, 1),
                                                                                                 (9, '彩虹边框', 'frame_code:rainbow', 'avatar_frame', 500, NULL, 1),
-                                                                                                (10, '火焰边框', 'frame_code:flame', 'avatar_frame', 400, NULL, 1);
+                                                                                                (10, '火焰边框', 'frame_code:flame', 'avatar_frame', 400, NULL, 1),
+                                                                                                (11, '烈焰虚线边框', 'frame_code:dashed', 'avatar_frame', 250, NULL, 1),
+                                                                                                (12, '霓虹光效边框', 'frame_code:neon', 'avatar_frame', 350, NULL, 1),
+                                                                                                (13, '极光幻彩边框', 'frame_code:aurora', 'avatar_frame', 450, NULL, 1),
+                                                                                                (14, '冰晶之辉边框', 'frame_code:crystal', 'avatar_frame', 300, NULL, 1),
+                                                                                                (15, '紫金皇冠边框', 'frame_code:royal', 'avatar_frame', 550, 50, 1);
+
+ALTER TABLE app_user
+    ADD COLUMN avatar_frame VARCHAR(255) DEFAULT NULL COMMENT '用户头像框资源地址/标识';
