@@ -35,6 +35,7 @@ export const STATIC_MENUS = {
     { id: 8,  name: "用户管理",        code: "sys-users",      type: 2, path: "/admin/system/users",          icon: "User" },
     { id: 9,  name: "角色管理",        code: "sys-roles",      type: 2, path: "/admin/system/roles",          icon: "Avatar" },
     { id: 10, name: "操作日志",        code: "operation-log",  type: 2, path: "/admin/system/operation-log",  icon: "Document" },
+    { id: 11, name: "积分商店管理",    code: "shop-manage",    type: 2, path: "/admin/system/shop-manage",    icon: "Setting" },
   ],
   MANAGER: [
     { id: 1, name: "数据看板",       code: "dashboard",      type: 2, path: "/admin/dashboard",            icon: "DataBoard" },
@@ -44,6 +45,7 @@ export const STATIC_MENUS = {
     { id: 5, name: "生态系统管理",    code: "ecosystem",      type: 2, path: "/admin/ecosystem",             icon: "Odometer" },
     { id: 6, name: "RAG 知识库",      code: "knowledge",      type: 2, path: "/admin/knowledge",             icon: "Document" },
     { id: 7, name: "题库管理",        code: "quiz-manage",    type: 2, path: "/admin/quiz-manage",           icon: "Edit" },
+    { id: 8, name: "积分商店管理",    code: "shop-manage",    type: 2, path: "/admin/system/shop-manage",    icon: "Setting" },
   ],
   VISITOR: [
     { id: 1, name: "数据看板",       code: "dashboard",      type: 2, path: "/admin/dashboard",            icon: "DataBoard" },

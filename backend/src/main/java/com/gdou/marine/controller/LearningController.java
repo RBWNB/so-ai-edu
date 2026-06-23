@@ -2,10 +2,12 @@ package com.gdou.marine.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.gdou.marine.entity.ConversationMessage;
+import com.gdou.marine.entity.PointExchangeOrder;
 import com.gdou.marine.entity.QuizAttempt;
 import com.gdou.marine.entity.QuizQuestion;
 import com.gdou.marine.entity.UserLearningProfile;
 import com.gdou.marine.mapper.ConversationMessageMapper;
+import com.gdou.marine.mapper.PointExchangeOrderMapper;
 import com.gdou.marine.mapper.QuizAttemptMapper;
 import com.gdou.marine.mapper.QuizQuestionMapper;
 import com.gdou.marine.service.UserLearningProfileService;
@@ -44,6 +46,9 @@ public class LearningController {
     @Autowired
     private ConversationMessageMapper conversationMessageMapper;
 
+    @Autowired
+    private PointExchangeOrderMapper pointExchangeOrderMapper;
+
     /**
      * 获取学习画像概览（含错题统计）
      * 对应前端 Tab3 统计卡片 + 左侧等级 + 错题本数量
@@ -80,13 +85,15 @@ public class LearningController {
                         .divide(BigDecimal.valueOf(totalQuestions), 2, RoundingMode.HALF_UP)
                     : BigDecimal.ZERO;
 
-            // 等级算法：每答对 20 题升 1 级，最低 1 级
-            // Lv.1  (0-19 题正确)
-            // Lv.2  (20-39 题正确)
-            // Lv.N  ( (N-1)*20 ～ N*20-1 题正确)
-            int level = (int) (correctCount / 20) + 1;
+            // 双倍经验卡生效检查
+            boolean doubleXp = hasDoubleXpToday(userId);
+            long effectiveCorrect = doubleXp ? correctCount * 2 : correctCount;
 
-            // 同步回 user_learning_profile，保证后续查询一致
+            // 等级算法：每答对 20 题升 1 级，最低 1 级
+            // 双倍卡：正确数×2 计算等级
+            int level = (int) (effectiveCorrect / 20) + 1;
+
+            // 同步回 user_learning_profile（存原始数据，等级用双倍后的）
             syncProfile(userId, level, totalQuestions, correctCount, correctRate);
 
             Map<String, Object> data = new LinkedHashMap<>();
@@ -94,6 +101,8 @@ public class LearningController {
             data.put("totalQuestions", totalQuestions);
             data.put("correctCount", correctCount);
             data.put("correctRate", correctRate);
+            data.put("doubleXp", doubleXp);
+            data.put("xpExpireAt", doubleXp ? getXpExpireAt(userId) : null);
             data.put("wrongQuestionCount", wrongQuestionCount);
             // weakPoints / preferredCategories 暂从画像表读取，后续可扩展
             UserLearningProfile profile = userLearningProfileService.getOrCreateProfile(userId);
@@ -307,6 +316,71 @@ public class LearningController {
             result.put("message", "获取错题本失败：" + e.getMessage());
         }
         return result;
+    }
+
+    /**
+     * 检查双倍经验是否生效（过期时间 > 当前时间）
+     */
+    private boolean hasDoubleXpToday(Long userId) {
+        String expireAt = getXpExpireAt(userId);
+        if (expireAt == null) return false;
+        try {
+            java.time.LocalDateTime expire = java.time.LocalDateTime.parse(
+                    expireAt.replace(" ", "T"));
+            return expire.isAfter(java.time.LocalDateTime.now());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 计算双倍经验过期时间（所有卡叠加，每张 +24h，断档则重置）
+     */
+    private String getXpExpireAt(Long userId) {
+        try {
+            // 查最近 7 天内所有双倍卡订单，按时间升序
+            java.time.LocalDateTime since = java.time.LocalDateTime.now().minusDays(7);
+            List<PointExchangeOrder> orders = pointExchangeOrderMapper.selectList(
+                    new LambdaQueryWrapper<PointExchangeOrder>()
+                            .eq(PointExchangeOrder::getUserId, userId)
+                            .eq(PointExchangeOrder::getItemId, 5L)
+                            .ge(PointExchangeOrder::getCreatedAt, since)
+                            .orderByAsc(PointExchangeOrder::getCreatedAt));
+
+            if (orders.isEmpty()) return null;
+
+            // 叠加计算：每张卡 +24h，连续购买则累加，断档（>24h 间隔）则重置
+            java.time.LocalDateTime expireAt = null;
+            for (PointExchangeOrder o : orders) {
+                if (o.getCreatedAt() == null) continue;
+                if (expireAt == null || o.getCreatedAt().isAfter(expireAt)) {
+                    // 断档：从这张开始重新算
+                    expireAt = o.getCreatedAt().plusHours(24);
+                } else {
+                    // 连续：在现有基础上再 +24h
+                    expireAt = expireAt.plusHours(24);
+                }
+            }
+            return expireAt != null ? expireAt.toString().replace("T", " ") : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private PointExchangeOrder getLatestXpOrder(Long userId) {
+        try {
+            java.time.LocalDateTime since = java.time.LocalDateTime.now().minusDays(7);
+            List<PointExchangeOrder> orders = pointExchangeOrderMapper.selectList(
+                    new LambdaQueryWrapper<PointExchangeOrder>()
+                            .eq(PointExchangeOrder::getUserId, userId)
+                            .eq(PointExchangeOrder::getItemId, 5L)
+                            .ge(PointExchangeOrder::getCreatedAt, since)
+                            .orderByDesc(PointExchangeOrder::getCreatedAt)
+                            .last("LIMIT 1"));
+            return orders.isEmpty() ? null : orders.get(0);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     // ==================== 私有方法 ====================

@@ -165,6 +165,13 @@
                   ✅ GET  /learning/ai-session-count → AI 会话数
                   ✅ GET  /learning/wrong-book?pageNum=&pageSize= → 错题本详情
                 -->
+                <!-- 双倍经验倒计时横幅 -->
+                <div v-if="doubleXpActive" class="xp-banner">
+                  <span class="xp-banner-icon">⚡</span>
+                  <span>双倍经验生效中</span>
+                  <span class="xp-banner-countdown">剩余 {{ xpCountdown }}</span>
+                </div>
+
                 <!-- 数据统计卡片 -->
                 <el-row :gutter="16" class="learning-stats-row" v-loading="learningLoading">
                   <el-col :xs="12" :md="6" v-for="stat in learningStats" :key="stat.label">
@@ -716,6 +723,11 @@ const learningStats = reactive([
   { label: "错题总数", value: 0 },
 ]);
 
+// 双倍经验卡状态 ← GET /learning/profile ✅
+const doubleXpActive = ref(false);
+const xpCountdown = ref("");
+const xpExpireAt = ref(null);  // 后端返回的过期时间字符串
+
 // 错题本数量 ← GET /learning/profile.wrongQuestionCount ✅
 const wrongBookCount = ref(0);
 
@@ -736,6 +748,10 @@ const fetchLearningProfile = async () => {
     learningStats[3].value = d.wrongQuestionCount ?? 0;
     // 更新快捷入口
     wrongBookCount.value = d.wrongQuestionCount ?? 0;
+    // 双倍经验状态
+    doubleXpActive.value = d.doubleXp ?? false;
+    xpExpireAt.value = d.xpExpireAt ?? null;
+    if (doubleXpActive.value) startXpCountdown();
     // 更新左侧名片等级
     coreOverview.level = d.level ?? 1;
   } catch (err) {
@@ -776,6 +792,27 @@ const fetchAnswerHistory = async () => {
 const onAnswerPageChange = (pageNum) => {
   answerPage.pageNum = pageNum;
   fetchAnswerHistory();
+};
+
+let xpTimer = null;
+const startXpCountdown = () => {
+  clearInterval(xpTimer);
+  const expireTime = xpExpireAt.value ? new Date(xpExpireAt.value.replace(" ", "T")) : null;
+  const tick = () => {
+    const diff = expireTime ? expireTime - Date.now() : 0;
+    if (diff <= 0) {
+      doubleXpActive.value = false;
+      xpCountdown.value = "";
+      clearInterval(xpTimer);
+      return;
+    }
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    xpCountdown.value = `${h}时${m}分${s}秒`;
+  };
+  tick();
+  xpTimer = setInterval(tick, 1000);
 };
 
 const goToWrongBook = () => {
@@ -918,6 +955,21 @@ const fetchBadges = async () => {
         earnedAt: earned?.earnedAt || "",
       };
     });
+    // 追加商店隐藏勋章（不在静态定义内，从 API 补充）
+    const staticCodes = new Set(ALL_BADGE_DEFS.map(d => d.badgeCode));
+    const hiddenBadges = earnedList
+      .filter(b => !staticCodes.has(b.badgeCode))
+      .map(b => ({
+        badgeCode: b.badgeCode,
+        badgeName: b.badgeName,
+        icon: Present,         // 隐藏勋章默认图标
+        unlockCondition: "积分商店兑换获得",
+        earned: true,
+        earnedAt: b.earnedAt || "",
+      }));
+    if (hiddenBadges.length > 0) {
+      badgeList.value = [...badgeList.value, ...hiddenBadges];
+    }
     // 更新左侧名片勋章数
     coreOverview.badgeCount = earnedList.length;
     // 新获得的勋章弹窗恭喜
@@ -1433,6 +1485,39 @@ watch(activeTab, (tab) => {
 }
 
 /* ── Tab 3：我的学习 ── */
+.xp-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  margin-bottom: 20px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fff7e6, #ffe7ba);
+  border: 1px solid #ffd591;
+  color: #ad6800;
+  font-size: 15px;
+  font-weight: 600;
+  animation: xpPulse 2s ease-in-out infinite;
+}
+@keyframes xpPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(250, 140, 22, 0.3); }
+  50% { box-shadow: 0 0 16px 4px rgba(250, 140, 22, 0.15); }
+}
+.xp-banner-icon {
+  font-size: 22px;
+  animation: xpBounce 0.6s ease-in-out infinite alternate;
+}
+@keyframes xpBounce {
+  from { transform: translateY(0); }
+  to { transform: translateY(-4px); }
+}
+.xp-banner-countdown {
+  margin-left: auto;
+  font-size: 14px;
+  font-weight: 700;
+  color: #d46b08;
+}
+
 .learning-stats-row { margin-bottom: 24px; }
 .stat-card {
   padding: 24px 16px;
@@ -1458,27 +1543,112 @@ watch(activeTab, (tab) => {
 .quick-entry-title { font-size: 16px; font-weight: 600; color: #1d2129; }
 .quick-entry-desc { font-size: 13px; color: #86909c; }
 
-/* ── Tab 4：我的积分 ── */
+/* ── Tab 4：我的积分 (深海黑金风格) ── */
 .points-balance-card {
-  display: flex; align-items: center; justify-content: space-between;
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* 极深蓝灰色底，沉稳不刺眼 */
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid rgba(212, 175, 55, 0.15); /* 极弱的金边 */
   border-radius: 20px;
   padding: 32px 40px;
   margin-bottom: 28px;
-  color: #fff;
-  box-shadow: 0 12px 24px rgba(79, 172, 254, 0.3);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25);
+  transition: transform 0.4s ease, box-shadow 0.4s ease;
+  position: relative;
+  overflow: hidden;
 }
-.balance-main { display: flex; flex-direction: column; gap: 8px; }
-.balance-label { font-size: 15px; opacity: 0.9; font-weight: 500;}
-.balance-num { font-size: 46px; font-weight: 800; line-height: 1; text-shadow: 0 4px 12px rgba(0,0,0,0.1);}
-.balance-sub { font-size: 13px; opacity: 0.9; display: flex; align-items: center; gap: 10px; margin-top: 4px;}
-.balance-sub b { font-weight: 700; opacity: 1; font-size: 15px;}
-.balance-sub :deep(.el-divider--vertical) { height: 16px; border-color: rgba(255, 255, 255, 0.5); }
-.balance-actions { display: flex; flex-direction: column; gap: 12px; flex-shrink: 0; }
-.balance-actions .el-button { min-width: 130px; border-radius: 20px; font-weight: 600; }
-.balance-actions .el-button--primary { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); color: #fff; }
-.balance-actions .el-button--primary:hover { background: #fff; color: #165dff; }
-.balance-actions .el-button--default { color: #165dff; border: none; }
+
+/* 扫光特效保留，在黑底上更显高级 */
+.points-balance-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0) 100%);
+  transform: skewX(-25deg);
+  transition: all 0.75s ease;
+}
+.points-balance-card:hover::before {
+  left: 200%;
+}
+
+.points-balance-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.4);
+}
+
+.balance-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  z-index: 1;
+}
+
+.balance-label { font-size: 15px; color: rgba(255, 255, 255, 0.5); font-weight: 500;}
+
+/* 核心积分数字：铂金色渐变 */
+.balance-num {
+  font-size: 48px;
+  font-weight: 800;
+  line-height: 1;
+  background: linear-gradient(135deg, #fde08b 0%, #d4af37 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 4px 12px rgba(212, 175, 55, 0.15));
+}
+
+.balance-sub { font-size: 13px; color: rgba(255, 255, 255, 0.5); display: flex; align-items: center; gap: 10px; margin-top: 4px;}
+.balance-sub b { font-weight: 700; color: #fde08b; font-size: 15px;}
+.balance-sub :deep(.el-divider--vertical) { height: 16px; border-color: rgba(255, 255, 255, 0.15); }
+
+.balance-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+.balance-actions .el-button {
+  min-width: 120px;
+  border-radius: 20px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  height: 38px;
+}
+
+/* 去积分商店（主行动点：哑光金底黑字） */
+.balance-actions .el-button--default {
+  background: linear-gradient(135deg, #d4af37 0%, #fde08b 100%);
+  border: none;
+  color: #0f172a;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+.balance-actions .el-button--default:hover {
+  background: #fde08b;
+  box-shadow: 0 6px 16px rgba(212, 175, 55, 0.3);
+  transform: translateY(-2px);
+}
+
+/* 积分明细（次行动点：金丝线框） */
+.balance-actions .el-button--primary {
+  background: rgba(212, 175, 55, 0.05);
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  color: #d4af37;
+  box-shadow: none;
+}
+.balance-actions .el-button--primary:hover {
+  background: rgba(212, 175, 55, 0.15);
+  border-color: #fde08b;
+  color: #fde08b;
+  transform: translateY(-2px);
+}
 
 .points-sub-tabs { margin-top: 8px; }
 :deep(.points-sub-tabs .el-tabs__header) { margin-bottom: 20px; }

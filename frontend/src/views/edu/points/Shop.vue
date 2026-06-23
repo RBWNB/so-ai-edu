@@ -31,14 +31,14 @@
             <span class="item-stock unlimited" v-else>不限量</span>
           </div>
           <el-button
-            type="primary"
-            size="default"
-            class="exchange-btn"
-            :disabled="availablePoints < item.pointsPrice"
-            :loading="exchangingId === item.id"
-            @click="handleExchange(item)"
+              type="primary"
+              size="default"
+              class="exchange-btn"
+              :disabled="item.stock === 0 || availablePoints < item.pointsPrice"
+              :loading="exchangingId === item.id"
+              @click="handleExchange(item)"
           >
-            {{ availablePoints < item.pointsPrice ? '积分不足' : '立即兑换' }}
+            {{ item.stock === 0 ? '已售罄' : (availablePoints < item.pointsPrice ? '积分不足' : '立即兑换') }}
           </el-button>
         </div>
       </el-col>
@@ -117,119 +117,228 @@ onMounted(fetchData);
 
 <style scoped>
 .shop-container {
-  max-width: 960px;
+  max-width: 1000px;
   margin: 0 auto;
-  padding: 8px 0;
+  padding: 16px 0 32px;
+  color: #1d2129;
+  animation: fadeIn 0.5s ease;
 }
 
+/* ── 顶部 Header 区域 ── */
 .shop-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 16px;
+  margin-bottom: 8px;
 }
 
 .shop-title {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--theme-text-primary);
+  font-size: 24px;
+  font-weight: 800;
+  color: #1d2129;
   margin: 0;
-}
-
-.header-balance {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 18px;
-  border-radius: 24px;
-  background: var(--theme-primary-soft);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+/* 余额悬浮胶囊 */
+.header-balance {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 24px;
+  border-radius: 30px;
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 24px rgba(0, 50, 150, 0.05);
+  transition: transform 0.3s ease;
+}
+.header-balance:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(22, 93, 255, 0.1);
 }
 
 .balance-label {
-  font-size: 13px;
-  color: var(--theme-text-muted);
+  font-size: 14px;
+  font-weight: 500;
+  color: #86909c;
 }
 
+/* 渐变高亮积分数字 */
 .balance-num {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--theme-klein-blue);
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1;
+  background: linear-gradient(135deg, #165dff 0%, #00d2ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 4px rgba(0, 210, 255, 0.2));
 }
+
+/* 虚线分割线 */
+:deep(.el-divider--horizontal) {
+  margin: 20px 0 24px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.08);
+}
+
 
 .shop-grid {
-  row-gap: 16px;
+  row-gap: 20px;
   min-height: 200px;
 }
 
+/* 白透玻璃卡片 */
 .shop-card {
-  border: 1px solid var(--theme-border-light);
-  border-radius: 14px;
-  padding: 24px 20px;
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 20px;
+  padding: 28px 20px 24px;
   text-align: center;
-  background: var(--theme-card-bg);
-  transition: box-shadow 0.3s ease;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   margin-bottom: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.02);
+  transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
+/* 悬浮光晕反馈 */
 .shop-card:hover {
-  box-shadow: var(--theme-shadow);
+  transform: translateY(-6px);
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(22, 93, 255, 0.25);
+  box-shadow:
+      0 16px 32px rgba(22, 93, 255, 0.1),
+      0 4px 12px rgba(0, 210, 255, 0.05);
 }
 
+/* ── 商品图标 (模拟圆形展台) ── */
 .item-icon {
-  font-size: 40px;
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 38px;
   line-height: 1;
+  background: linear-gradient(135deg, rgba(22, 93, 255, 0.05) 0%, rgba(0, 210, 255, 0.12) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+  margin-bottom: 4px;
+  box-shadow:
+      inset 0 2px 4px rgba(255, 255, 255, 0.8),
+      0 4px 12px rgba(0, 150, 255, 0.08);
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.shop-card:hover .item-icon {
+  transform: scale(1.1) rotate(5deg);
 }
 
+/* 商品文字信息 */
 .item-name {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--theme-text-primary);
+  font-size: 17px;
+  font-weight: 700;
+  color: #1d2129;
+  letter-spacing: 0.5px;
 }
-
 .item-desc {
   font-size: 13px;
-  color: var(--theme-text-muted);
+  color: #86909c;
   line-height: 1.5;
-  min-height: 36px;
+  min-height: 39px; /* 保证两行高度对齐 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
+/* 价格与库存信息 */
 .item-meta {
   display: flex;
   align-items: center;
   gap: 12px;
   font-size: 13px;
+  margin-top: 4px;
+  margin-bottom: 6px;
 }
-
 .item-price {
-  color: var(--theme-coral);
-  font-weight: 600;
+  color: #165dff;
+  font-weight: 700;
+  font-size: 15px;
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
+  background: rgba(22, 93, 255, 0.08);
+  padding: 4px 10px;
+  border-radius: 8px;
 }
-
 .item-stock {
-  color: var(--theme-text-muted);
+  color: #86909c;
+  font-weight: 500;
 }
-
 .item-stock.unlimited {
-  color: var(--theme-success);
+  color: #00b42a;
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   兑换按钮 (液态胶囊)
+   ══════════════════════════════════════════════════════════════════════ */
 .exchange-btn {
   width: 100%;
-  margin-top: 4px;
+  height: 40px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  border: none;
+  transition: all 0.3s ease;
 }
 
+/* 可用状态：海蓝渐变 */
+.exchange-btn:not(.is-disabled) {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(79, 172, 254, 0.3);
+}
+.exchange-btn:not(.is-disabled):hover {
+  box-shadow: 0 6px 16px rgba(79, 172, 254, 0.5);
+  transform: translateY(-2px);
+}
+
+/* 禁用状态：磨砂白玻璃 */
+.exchange-btn.is-disabled {
+  background: rgba(255, 255, 255, 0.4) !important;
+  border: 1px solid rgba(0, 0, 0, 0.05) !important;
+  color: #c9cdd4 !important;
+  box-shadow: none !important;
+  cursor: not-allowed;
+}
+
+/* 进入动画 */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 响应式调整 */
 @media (max-width: 768px) {
   .shop-header {
     flex-direction: column;
     align-items: flex-start;
+    gap: 16px;
+    padding: 0 8px;
+  }
+  .header-balance {
+    width: 100%;
+    justify-content: space-between;
   }
 }
 </style>

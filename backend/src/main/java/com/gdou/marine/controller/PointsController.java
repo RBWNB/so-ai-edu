@@ -1,13 +1,21 @@
 package com.gdou.marine.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.gdou.marine.annotation.Log;
 import com.gdou.marine.entity.PointExchangeOrder;
 import com.gdou.marine.entity.PointShopItem;
 import com.gdou.marine.entity.PointTransaction;
 import com.gdou.marine.entity.UserPointAccount;
 import com.gdou.marine.mapper.PointExchangeOrderMapper;
+import com.gdou.marine.entity.UserBadge;
+import com.gdou.marine.entity.LearningTask;
+import com.gdou.marine.entity.UserTaskRecord;
+import com.gdou.marine.mapper.LearningTaskMapper;
 import com.gdou.marine.mapper.PointShopItemMapper;
 import com.gdou.marine.mapper.PointTransactionMapper;
+import com.gdou.marine.mapper.UserBadgeMapper;
+import com.gdou.marine.mapper.UserTaskRecordMapper;
+import com.gdou.marine.service.TaskProgressService;
 import com.gdou.marine.service.UserPointAccountService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +49,18 @@ public class PointsController {
 
     @Autowired
     private PointShopItemMapper pointShopItemMapper;
+
+    @Autowired
+    private UserBadgeMapper userBadgeMapper;
+
+    @Autowired
+    private UserTaskRecordMapper userTaskRecordMapper;
+
+    @Autowired
+    private TaskProgressService taskProgressService;
+
+    @Autowired
+    private LearningTaskMapper learningTaskMapper;
 
     /** 积分余额（含累计统计） */
     @GetMapping("/account")
@@ -213,6 +233,7 @@ public class PointsController {
     }
 
     /** 兑换商品 */
+    @Log(module = "积分商城", description = "兑换商品")
     @PostMapping("/exchange/{itemId}")
     public Map<String, Object> exchange(@PathVariable Long itemId, Authentication auth) {
         Map<String, Object> result = new HashMap<>();
@@ -236,6 +257,19 @@ public class PointsController {
                 result.put("success", false);
                 result.put("message", "该商品已售罄");
                 return result;
+            }
+
+            // 勋章类商品：一人只能买一次
+            if ("badge".equals(item.getItemType())) {
+                boolean exists = userBadgeMapper.selectCount(
+                        new LambdaQueryWrapper<UserBadge>()
+                                .eq(UserBadge::getUserId, userId)
+                                .eq(UserBadge::getBadgeCode, "shop_" + itemId)) > 0;
+                if (exists) {
+                    result.put("success", false);
+                    result.put("message", "已拥有该勋章，每人限购一次");
+                    return result;
+                }
             }
 
             // 扣积分（余额不足会抛异常）
@@ -266,10 +300,198 @@ public class PointsController {
             order.setCreatedAt(java.time.LocalDateTime.now());
             pointExchangeOrderMapper.insert(order);
 
+            // 执行商品效果
+            String extraMsg = applyItemEffect(userId, item);
+
             result.put("success", true);
-            result.put("message", "兑换成功！已消耗" + item.getPointsPrice() + "积分");
+            result.put("message", "兑换成功！" + extraMsg);
         } catch (Exception e) {
             log.error("兑换失败", e);
+            result.put("success", false);
+            result.put("message", e.getMessage());
+        }
+        return result;
+    }
+
+    /** 按 item_type 执行商品效果 */
+    private String applyItemEffect(Long userId, PointShopItem item) {
+        String type = item.getItemType();
+
+        // ⚡ 双倍经验卡 (id=5) — 当天答题正确数在等级计算时翻倍
+        if (Long.valueOf(5).equals(item.getId())) {
+            return "双倍经验已激活！今日答题等级经验翻倍";
+        }
+
+        // 🏅 隐藏勋章 → 直接颁发
+        if ("badge".equals(type)) {
+            boolean exists = userBadgeMapper.selectCount(
+                    new LambdaQueryWrapper<UserBadge>()
+                            .eq(UserBadge::getUserId, userId)
+                            .eq(UserBadge::getBadgeCode, "shop_" + item.getId())) > 0;
+            if (!exists) {
+                UserBadge badge = new UserBadge();
+                badge.setUserId(userId);
+                badge.setBadgeCode("shop_" + item.getId());
+                badge.setBadgeName(item.getName().replaceAll("[🏅🎫⚡💎📊🔄]", "").trim());
+                badge.setDescription(item.getDescription());
+                badge.setEarnedAt(java.time.LocalDateTime.now());
+                userBadgeMapper.insert(badge);
+                return "获得隐藏勋章「" + badge.getBadgeName() + "」";
+            }
+            return "已拥有该勋章";
+        }
+
+        // 🎫 任务快进卡 → 完成一个进行中的或未开始的任务
+        if ("coupon".equals(type)) {
+            // 1. 先找有记录但未完成的
+            UserTaskRecord rec = userTaskRecordMapper.selectOne(
+                    new LambdaQueryWrapper<UserTaskRecord>()
+                            .eq(UserTaskRecord::getUserId, userId)
+                            .eq(UserTaskRecord::getCompleted, 0)
+                            .last("LIMIT 1"));
+            // 2. 找不到 → 从未开始的任务中挑一个
+            if (rec == null) {
+                List<LearningTask> allTasks = learningTaskMapper.selectList(
+                        new LambdaQueryWrapper<LearningTask>()
+                                .eq(LearningTask::getStatus, (byte) 1));
+                Set<Long> hasRecordIds = userTaskRecordMapper.selectList(
+                        new LambdaQueryWrapper<UserTaskRecord>()
+                                .eq(UserTaskRecord::getUserId, userId))
+                        .stream().map(UserTaskRecord::getTaskId)
+                        .collect(Collectors.toSet());
+                LearningTask pick = allTasks.stream()
+                        .filter(t -> !hasRecordIds.contains(t.getId()))
+                        .findFirst().orElse(null);
+                if (pick != null) {
+                    rec = new UserTaskRecord();
+                    rec.setUserId(userId);
+                    rec.setTaskId(pick.getId());
+                    rec.setTaskDate(java.time.LocalDate.now());
+                    rec.setProgressValue(0);
+                    rec.setCompleted((byte) 0);
+                    rec.setRewardClaimed((byte) 0);
+                    rec.setCreatedAt(java.time.LocalDateTime.now());
+                }
+            }
+            if (rec != null) {
+                LearningTask task = rec.getId() != null
+                        ? learningTaskMapper.selectById(rec.getTaskId()) : null;
+                rec.setProgressValue(task != null ? task.getTargetValue() : 1);
+                rec.setCompleted((byte) 1);
+                rec.setCompletedAt(java.time.LocalDateTime.now());
+                rec.setUpdatedAt(java.time.LocalDateTime.now());
+                if (rec.getId() == null) {
+                    userTaskRecordMapper.insert(rec);
+                } else {
+                    userTaskRecordMapper.updateById(rec);
+                }
+                return "已快进完成「" + (task != null ? task.getTitle() : "未知任务") + "」，快去领取奖励！";
+            }
+            return "暂无可快进的任务，所有任务都已完成";
+        }
+
+        // 💎 盲盒 (id=1) → 随机返还 50%~200%
+        if ("virtual_item".equals(type) && Long.valueOf(1).equals(item.getId())) {
+            double rate = 0.5 + Math.random() * 1.5;
+            int refund = (int) Math.round(item.getPointsPrice() * rate);
+            userPointAccountService.earnPoints(userId, refund, "shop", item.getId(),
+                    "积分盲盒返还 (" + Math.round(rate * 100) + "%)");
+            return "盲盒返还 " + refund + " 积分（" + Math.round(rate * 100) + "%）";
+        }
+
+        // 📊 学习报告 (id=4) → 纯前端展示，后端返回提示
+        if ("virtual_item".equals(type) && Long.valueOf(4).equals(item.getId())) {
+            return "学习报告已生成，可在个人中心查看";
+        }
+
+        return "已消耗" + item.getPointsPrice() + "积分";
+    }
+
+    // ════════════════════════════════════════════════
+    // 以下为 B 端管理接口（ADMIN / MANAGER）
+    // ════════════════════════════════════════════════
+
+    /** 管理端-商品列表（含已下架） */
+    @GetMapping("/admin/items")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    public Map<String, Object> adminListItems() {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            List<PointShopItem> items = pointShopItemMapper.selectList(
+                    new LambdaQueryWrapper<PointShopItem>()
+                            .orderByAsc(PointShopItem::getId));
+            List<Map<String, Object>> list = items.stream().map(i -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", i.getId());
+                m.put("name", i.getName());
+                m.put("description", i.getDescription());
+                m.put("itemType", i.getItemType());
+                m.put("pointsPrice", i.getPointsPrice());
+                m.put("stock", i.getStock());
+                m.put("status", i.getStatus());
+                m.put("createdAt", i.getCreatedAt() != null
+                        ? i.getCreatedAt().toString().replace("T", " ") : "");
+                return m;
+            }).collect(Collectors.toList());
+            result.put("success", true);
+            result.put("data", list);
+        } catch (Exception e) {
+            log.error("管理端获取商品失败", e);
+            result.put("success", false);
+            result.put("message", e.getMessage());
+        }
+        return result;
+    }
+
+    /** 管理端-更新商品 */
+    @PutMapping("/admin/items/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    public Map<String, Object> adminUpdateItem(@PathVariable Long id,
+                                                @RequestBody Map<String, Object> body) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            PointShopItem item = pointShopItemMapper.selectById(id);
+            if (item == null) {
+                result.put("success", false);
+                result.put("message", "商品不存在");
+                return result;
+            }
+            if (body.containsKey("name")) item.setName((String) body.get("name"));
+            if (body.containsKey("description")) item.setDescription((String) body.get("description"));
+            if (body.containsKey("pointsPrice")) item.setPointsPrice((Integer) body.get("pointsPrice"));
+            if (body.containsKey("stock")) item.setStock((Integer) body.get("stock"));
+            if (body.containsKey("status")) item.setStatus(((Integer) body.get("status")).byteValue());
+            pointShopItemMapper.updateById(item);
+            result.put("success", true);
+            result.put("message", "商品已更新");
+        } catch (Exception e) {
+            log.error("管理端更新商品失败", e);
+            result.put("success", false);
+            result.put("message", e.getMessage());
+        }
+        return result;
+    }
+
+    /** 管理端-新增商品 */
+    @PostMapping("/admin/items")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    public Map<String, Object> adminAddItem(@RequestBody Map<String, Object> body) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            PointShopItem item = new PointShopItem();
+            item.setName((String) body.get("name"));
+            item.setDescription((String) body.getOrDefault("description", ""));
+            item.setItemType((String) body.getOrDefault("itemType", "virtual_item"));
+            item.setPointsPrice((Integer) body.get("pointsPrice"));
+            item.setStock((Integer) body.getOrDefault("stock", null));
+            item.setStatus(((Integer) body.getOrDefault("status", 1)).byteValue());
+            item.setCreatedAt(java.time.LocalDateTime.now());
+            pointShopItemMapper.insert(item);
+            result.put("success", true);
+            result.put("message", "商品已添加");
+            result.put("data", Map.of("id", item.getId()));
+        } catch (Exception e) {
+            log.error("管理端新增商品失败", e);
             result.put("success", false);
             result.put("message", e.getMessage());
         }

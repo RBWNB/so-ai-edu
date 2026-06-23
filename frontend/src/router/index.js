@@ -78,6 +78,12 @@ const router = createRouter({
           meta: { title: "操作日志", roles: ["ADMIN"] },
           component: () => import("@/views/admin/system/OperationLog.vue"),
         },
+        {
+          path: "system/shop-manage",
+          name: "AdminShopManage",
+          meta: { title: "积分商店管理", roles: ["ADMIN", "MANAGER"] },
+          component: () => import("@/views/admin/system/ShopManage.vue"),
+        },
       ],
     },
     // C端 — 教育互动平台
