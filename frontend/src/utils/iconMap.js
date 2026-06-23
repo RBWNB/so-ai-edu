@@ -19,6 +19,7 @@ import {
   TrendCharts,
   Position,
   Odometer,
+  Edit,
 } from "@element-plus/icons-vue";
 
 export const iconMap = {
@@ -42,4 +43,5 @@ export const iconMap = {
   TrendCharts,
   Position,
   Odometer,
+  Edit,
 };

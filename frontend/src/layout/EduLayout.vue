@@ -77,32 +77,84 @@
               @click="openRagChat"
           />
 
-          <!-- 已登录：头像 + 下拉菜单 -->
+          <!-- 已登录：头像 + 下拉菜单（自定义 hover 控制，告别 el-popover） -->
           <template v-if="authStore.isLoggedIn">
-            <el-dropdown @command="handleUserCommand" popper-class="glass-dropdown">
-              <div class="user-trigger">
-                <div class="header-avatar-frame" :class="headerFrameClass">
-                  <el-avatar :size="28" :src="userAvatar">
+            <div
+              class="user-dropdown-wrapper"
+              @mouseenter="onUserMenuEnter"
+              @mouseleave="onUserMenuLeave"
+            >
+              <!-- 触发区：小头像 + 名 + 箭头 -->
+              <div class="user-trigger" :class="{ 'is-hovering': menuVisible }">
+                <div
+                  class="header-avatar-frame"
+                  :class="[
+                    'frame-' + (authStore.avatarFrame || 'default'),
+                    { 'is-hidden': menuVisible }
+                  ]"
+                >
+                  <el-avatar :size="28" :src="userAvatar"
+                             class="nav-small-avatar"
+                             :class="{ 'is-hidden': menuVisible }"
+                  >
                     <el-icon><User /></el-icon>
                   </el-avatar>
                 </div>
                 <span class="username">{{ authStore.username }}</span>
                 <el-icon class="arrow-icon"><ArrowDown /></el-icon>
               </div>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="profile">
-                    <el-icon><User /></el-icon>个人中心
-                  </el-dropdown-item>
-                  <el-dropdown-item v-if="isAdmin" command="admin" divided>
-                    <el-icon><Setting /></el-icon>进入后台
-                  </el-dropdown-item>
-                  <el-dropdown-item command="logout" :divided="!isAdmin">
-                    <el-icon><SwitchButton /></el-icon>退出登录
-                  </el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+
+              <!-- 下拉菜单面板 -->
+              <Transition name="hologram-menu">
+                <div v-if="menuVisible" class="user-popover-panel">
+                  <div class="popover-content">
+                    <div class="popover-avatar-wrapper">
+                      <div
+                          class="popover-avatar-frame"
+                          :class="'frame-' + (authStore.avatarFrame || 'default')"
+                      >
+                        <el-avatar :size="76" :src="userAvatar" class="popover-avatar">
+                          <el-icon :size="36"><User /></el-icon>
+                        </el-avatar>
+                      </div>
+                    </div>
+
+                    <div class="popover-body">
+                      <div class="popover-user-info">
+                        <div class="pop-username">{{ authStore.username }}</div>
+                        <div class="pop-role">
+                          <el-tag size="small" class="custom-tag">{{ isAdmin ? '系统管理员' : '深海探索者' }}</el-tag>
+                        </div>
+                      </div>
+
+                      <div class="popover-stats">
+                        <div class="stat-item">
+                          <div class="stat-val">Lv.{{ userInfo.level || 1 }}</div>
+                          <div class="stat-label">当前等级</div>
+                        </div>
+                        <div class="stat-item">
+                          <div class="stat-val">{{ userInfo.availablePoints || 0 }}</div>
+                          <div class="stat-label">可用积分</div>
+                        </div>
+                      </div>
+
+                      <div class="popover-menu">
+                        <div class="menu-item" @click="handleUserCommand('profile')">
+                          <el-icon><User /></el-icon><span>个人中心</span>
+                        </div>
+                        <div v-if="isAdmin" class="menu-item" @click="handleUserCommand('admin')">
+                          <el-icon><Setting /></el-icon><span>进入后台</span>
+                        </div>
+                        <div class="menu-divider"></div>
+                        <div class="menu-item logout" @click="handleUserCommand('logout')">
+                          <el-icon><SwitchButton /></el-icon><span>退出登录</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Transition>
+            </div>
           </template>
 
           <!-- 未登录：登录按钮 -->
@@ -798,14 +850,6 @@ const isAdmin = computed(() => {
   return roles.some((r) => ["ADMIN", "MANAGER"].includes(r));
 });
 
-/* 头像框类名（响应式，实时跟随 Pinia 状态） */
-const headerFrameClass = computed(() => 'frame-' + (authStore.avatarFrame || 'default'));
-
-// 监听头像框变化 -> 同步到 localStorage + 强制触发模板更新
-watch(() => authStore.avatarFrame, (val) => {
-  localStorage.setItem('marine_avatar_frame', val || 'default');
-}, { immediate: false });
-
 /* 头像 */
 const userAvatar = computed(() => {
   const url = authStore.avatarUrl;
@@ -819,8 +863,47 @@ const goLogin = () => {
   $router.push({ path: "/login", query: { redirect: route.fullPath } });
 };
 
-/* 用户下拉菜单 */
+/* 用户下拉菜单 — 自定义 hover 控制 */
+const menuVisible = ref(false);
+let menuLeaveTimer = null;
+
+const userInfo = reactive({
+  level: 1,
+  availablePoints: 0,
+});
+
+const fetchUserInfoBrief = async () => {
+  try {
+    const { getLearningProfile } = await import("@/api/learning");
+    const { getPointsAccount } = await import("@/api/points");
+    const [lRes, pRes] = await Promise.all([
+      getLearningProfile().catch(() => null),
+      getPointsAccount().catch(() => null),
+    ]);
+    if (lRes?.data?.data) {
+      userInfo.level = lRes.data.data.level ?? 1;
+    }
+    if (pRes?.data?.data) {
+      userInfo.availablePoints = pRes.data.data.availablePoints ?? 0;
+    }
+  } catch { /* 静默 */ }
+};
+
+const onUserMenuEnter = () => {
+  clearTimeout(menuLeaveTimer);
+  fetchUserInfoBrief();
+  menuVisible.value = true;
+};
+
+const onUserMenuLeave = () => {
+  menuLeaveTimer = setTimeout(() => {
+    menuVisible.value = false;
+  }, 200);
+};
+
+/* 用户下拉菜单命令 */
 const handleUserCommand = (command) => {
+  menuVisible.value = false;
   if (command === "profile") {
     $router.push("/profile");
   } else if (command === "admin") {
@@ -885,6 +968,7 @@ const handleUserCommand = (command) => {
   height: 100%;
   gap: 24px;
   position: relative;
+  overflow: visible; /* 关键：子元素面板可溢出导航栏不被裁剪 */
   /* 视觉样式：从 .edu-header 迁移至此 */
   max-width: 1000px;
   margin: 0 auto;
@@ -1053,6 +1137,11 @@ const handleUserCommand = (command) => {
   display: flex;
   align-items: center;
 }
+/* 下拉菜单容器 */
+.user-dropdown-wrapper {
+  position: relative;
+}
+
 .user-trigger {
   display: flex;
   align-items: center;
@@ -1062,17 +1151,77 @@ const handleUserCommand = (command) => {
   border-radius: 10px;
   transition: background 0.25s;
 }
-.user-trigger:hover {
+.user-trigger:hover,
+.user-trigger.is-hovering {
   background: rgba(255, 255, 255, 0.06);
 }
+
+/* 小头像 & 头像框：面板弹出瞬间隐身 */
+.nav-small-avatar,
+.header-avatar-frame {
+  transition: all 0.3s ease;
+}
+.nav-small-avatar.is-hidden,
+.header-avatar-frame.is-hidden {
+  opacity: 0;
+  transform: scale(0.1);
+  pointer-events: none;
+}
+
+/* hover 时，用户名和箭头淡出 */
 .username {
   font-size: 14px;
   font-weight: 500;
   color: rgba(235, 245, 255, 0.85);
+  transition: opacity 0.25s ease, transform 0.25s ease;
 }
+.user-trigger.is-hovering .username {
+  opacity: 0;
+  transform: translateX(-8px);
+}
+
 .arrow-icon {
   color: rgba(255, 255, 255, 0.5);
   font-size: 12px;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.user-trigger.is-hovering .arrow-icon {
+  opacity: 0;
+  transform: translateX(-4px);
+}
+
+.user-popover-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: calc(27px - 140px);
+  width: 280px;
+  z-index: 9999;
+  background: rgba(10, 18, 38, 0.85);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  border: 1px solid rgba(0, 210, 255, 0.2);
+  border-radius: 24px;
+  box-shadow:
+      0 24px 48px rgba(0, 0, 0, 0.6),
+      inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  overflow: visible;
+  transform-origin: center top;
+}
+
+/* Vue Transition — 面板进出动画 */
+.hologram-menu-enter-active {
+  animation: popoverIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.hologram-menu-leave-active {
+  animation: popoverOut 0.25s ease;
+}
+@keyframes popoverIn {
+  0%   { opacity: 0; transform: scale(0.75) translateY(-16px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes popoverOut {
+  0%   { opacity: 1; transform: scale(1) translateY(0); }
+  100% { opacity: 0; transform: scale(0.85) translateY(-8px); }
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -1161,54 +1310,133 @@ const handleUserCommand = (command) => {
 </style>
 
 <style>
-/*Element Plus 下拉菜单全局玻璃化 (配合 popper-class)*/
-.glass-dropdown {
-  background: rgba(10, 20, 42, 0.85) !important;
-  backdrop-filter: blur(24px) saturate(150%) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(150%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-  border-radius: 16px !important;
-  box-shadow:
-      0 12px 32px rgba(0, 0, 0, 0.4),
-      inset 0 1px 1px rgba(255, 255, 255, 0.1) !important;
-  padding: 6px !important;
+/* ═══ 下拉面板内容样式 ═══ */
+.popover-content {
+  padding: 0 20px 20px;
+  text-align: center;
 }
 
-.glass-dropdown .el-dropdown-menu {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
+/* 头像向上溢出并带有弹簧放大动画 */
+.popover-avatar-wrapper {
+  margin-top: -46px; /* 向上溢出面板一半 */
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: center;
 }
 
-.glass-dropdown .el-dropdown-menu__item {
-  color: rgba(235, 245, 255, 0.85) !important;
-  border-radius: 10px;
-  margin: 2px 4px;
-  font-weight: 500;
-  transition: all 0.25s ease;
+.popover-avatar {
+  border: 4px solid rgba(10, 18, 38, 0.9);
+  box-shadow: 0 8px 24px rgba(0, 210, 255, 0.4);
+  animation: avatarGrow 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
-.glass-dropdown .el-dropdown-menu__item:hover {
-  background: rgba(0, 210, 255, 0.15) !important;
+@keyframes avatarGrow {
+  0%   { transform: translateY(-30px) scale(0.42); opacity: 0; }
+  100% { transform: translateY(0)    scale(1);    opacity: 1; }
+}
+
+/* 核心特效：菜单主体从头像后方伸展出来 */
+.popover-body {
+  opacity: 0;
+  /* 初始向上收缩并稍微缩小 */
+  transform: translateY(-40px) scale(0.9);
+  /* 延迟 0.1s 播放，形成交错感 */
+  animation: menuExpand 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s forwards;
+  transform-origin: top center;
+}
+
+@keyframes menuExpand {
+  0% { opacity: 0; transform: translateY(-40px) scale(0.9); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.pop-username {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 6px;
+  text-shadow: 0 2px 8px rgba(0, 210, 255, 0.3);
+}
+
+.pop-role { margin-bottom: 20px; }
+.custom-tag {
+  background: rgba(0, 210, 255, 0.1) !important;
+  border: 1px solid rgba(0, 210, 255, 0.3) !important;
   color: #00d2ff !important;
-  box-shadow: 0 2px 8px rgba(0, 210, 255, 0.15);
-  transform: translateX(2px);
+  border-radius: 12px;
+  padding: 0 14px;
 }
 
-.glass-dropdown .el-dropdown-menu__item--divided {
-  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
-  margin-top: 4px;
-}
-.glass-dropdown .el-dropdown-menu__item--divided::before {
-  display: none !important;
+/* 资产数据区 */
+.popover-stats {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  background: rgba(0, 210, 255, 0.05);
+  border: 1px solid rgba(0, 210, 255, 0.1);
+  border-radius: 16px;
+  padding: 16px 12px;
+  margin-bottom: 20px;
 }
 
-.glass-dropdown .el-popper__arrow::before {
-  background: rgba(10, 20, 42, 0.95) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+.stat-item { flex: 1; }
+.stat-val {
+  font-size: 20px;
+  font-weight: 800;
+  color: #00d2ff;
+  line-height: 1.2;
+  margin-bottom: 4px;
+  text-shadow: 0 0 10px rgba(0, 210, 255, 0.4);
+}
+.stat-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
 }
 
-/* ═══ 顶部导航栏头像框 ═══ */
+/* 交互菜单区 */
+.popover-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  color: rgba(235, 245, 255, 0.85);
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.menu-item:hover {
+  background: rgba(0, 210, 255, 0.15);
+  color: #00d2ff;
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(0, 210, 255, 0.1);
+}
+
+.menu-item.logout:hover {
+  background: rgba(255, 63, 63, 0.15);
+  color: #ff3f3f;
+  box-shadow: 0 4px 12px rgba(255, 63, 63, 0.1);
+}
+
+.menu-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 4px 12px;
+}
+
+</style>
+
+<style>
+/* ═══ 头像框样式 ═══ */
 .header-avatar-frame {
   display: inline-flex;
   border-radius: 50%;
@@ -1300,4 +1528,33 @@ const handleUserCommand = (command) => {
   box-shadow: 0 0 12px rgba(108, 60, 199, 0.5);
 }
 .header-avatar-frame.frame-royal .el-avatar { border: 2px solid #fff; }
+
+.popover-avatar-frame {
+  padding: 4px;
+  border-radius: 50%;
+  display: inline-flex;
+}
+.popover-avatar-frame .popover-avatar {
+  border: 3px solid rgba(10, 18, 38, 0.9);
+}
+
+/* 面板头像框渐变（复用导航栏同款配色） */
+.popover-avatar-frame.frame-default { background: #dcdfe6; }
+.popover-avatar-frame.frame-gold {
+  background: linear-gradient(135deg, #f6d365, #fda085);
+  box-shadow: 0 0 12px rgba(246, 211, 101, 0.5);
+}
+.popover-avatar-frame.frame-ocean {
+  background: linear-gradient(135deg, #00d2ff, #165dff);
+  box-shadow: 0 0 12px rgba(0, 210, 255, 0.5);
+}
+.popover-avatar-frame.frame-rainbow {
+  background: linear-gradient(90deg, #ff6b6b, #feca57, #48dbfb, #ff9ff3);
+  background-size: 200% 100%;
+  animation: header-rainbow-spin 3s linear infinite;
+}
+.popover-avatar-frame.frame-flame {
+  background: linear-gradient(135deg, #ff4500, #ff8c00, #ffd700);
+  box-shadow: 0 0 12px rgba(255, 69, 0, 0.5);
+}
 </style>
