@@ -1,5 +1,6 @@
 package com.gdou.marine.service.impl;
 
+import com.gdou.marine.dto.ChatSessionDTO;
 import com.gdou.marine.entity.AiCallLog;
 import com.gdou.marine.entity.ConversationMessage;
 import com.gdou.marine.mapper.AiCallLogMapper;
@@ -198,7 +199,13 @@ public class RagQaServiceImpl implements RagQaService {
 
         return emitter;
     }
-
+    @Override
+    public List<ChatSessionDTO> getSessionList(Long userId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("必须登录才能查看历史会话");
+        }
+        return conversationMessageMapper.selectSessionList(userId);
+    }
     // 历史查询
 
     @Override

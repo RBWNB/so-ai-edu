@@ -124,8 +124,22 @@ public class RagController {
         return new Result(deleted, deleted ? "delete success" : "document not found");
     }
 
-    // 辅助方法
+    @Log(module = "RAG智能问答", description = "获取历史会话列表")
+    @GetMapping("/rag/sessions")
+    public Result getSessionList() {
+        try {
+            Long userId = getCurrentUserId();
+            if (userId == null) {
+                return new Result(false, "未登录，无法获取会话列表");
+            }
+            // 返回格式：[{sessionId: "rag_xxx", startTime: "2026...", title: "什么是红树林？"}, ...]
+            return new Result(true, "success", ragQaService.getSessionList(userId));
+        } catch (Exception e) {
+            return new Result(false, e.getMessage());
+        }
+    }
 
+    // 辅助方法
     private Long getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || authentication.getPrincipal() == null) {

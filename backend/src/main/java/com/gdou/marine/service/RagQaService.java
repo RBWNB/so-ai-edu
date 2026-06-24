@@ -1,5 +1,6 @@
 package com.gdou.marine.service;
 
+import com.gdou.marine.dto.ChatSessionDTO;
 import com.gdou.marine.entity.ConversationMessage;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -16,6 +17,8 @@ public interface RagQaService {
     String ask(String question, String sessionId, Long userId);
 
     SseEmitter askStream(String question, String sessionId, Long userId);
+
+    List<ChatSessionDTO> getSessionList(Long userId);
 
     List<ConversationMessage> getHistory(String sessionId);
 }

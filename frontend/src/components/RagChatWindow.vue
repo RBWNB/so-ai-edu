@@ -7,12 +7,32 @@
           <div class="panel-title">
             <el-icon :size="18"><ChatDotRound /></el-icon>
             <span>海洋知识智能问答</span>
-            <el-tag size="small" type="success" effect="dark">知识库增强</el-tag>
           </div>
           <div class="panel-actions">
+            <el-button link :title="showHistoryList ? '返回聊天' : '历史会话'" @click="toggleHistory">
+              <el-icon><List /></el-icon>
+            </el-button>
+
+            <el-button link title="开启新对话" @click="startNewChat">
+              <el-icon><Plus/></el-icon>
+            </el-button>
             <el-button link :icon="isMaximized ? CopyDocument : FullScreen" @click="isMaximized = !isMaximized" />
             <el-button link :icon="Minus" @click="minimize" />
             <el-button link :icon="Close" @click="close" />
+          </div>
+        </div>
+
+        <div v-show="showHistoryList" class="history-inner-view">
+          <div v-if="sessionList.length === 0" class="empty-history">暂无历史对话</div>
+
+          <div
+              v-for="item in sessionList"
+              :key="item.sessionId"
+              class="session-item"
+              @click="switchSession(item.sessionId)"
+          >
+            <div class="session-title">{{ item.title || '新对话' }}</div>
+            <div class="session-time">{{ item.startTime?.replace('T', ' ') }}</div>
           </div>
         </div>
 
@@ -114,8 +134,10 @@ import {
   Promotion,
   UserFilled,
   VideoPause,
+  Plus,
+  List,
 } from "@element-plus/icons-vue";
-import { askRag, askRagStream, getRagHistory } from "@/api/rag";
+import { askRag, askRagStream, getRagHistory, getRagSessions } from "@/api/rag";
 
 marked.setOptions({
   breaks: true,
@@ -140,6 +162,8 @@ const inputText = ref("");
 const streaming = ref(false);
 const msgListRef = ref(null);
 let controller = null;
+const showHistoryList = ref(false); // 控制历史记录面板的切换
+const sessionList = ref([]);
 
 // 从 localStorage 获取或生成 sessionId
 const getSessionId = () => {
@@ -158,6 +182,25 @@ const suggestQuestions = [
   "如何保护海洋生物多样性？",
 ];
 
+// 点击历史按钮时的切换逻辑
+const toggleHistory = async () => {
+  showHistoryList.value = !showHistoryList.value;
+  if (showHistoryList.value) {
+    try {
+      const res = await getRagSessions();
+      const data = res?.data?.data || res?.data;
+      if (Array.isArray(data)) {
+        sessionList.value = data;
+      }
+    } catch (err) {
+      ElMessage.error("获取历史记录失败");
+    }
+  } else {
+    // 关闭列表时重新滚动到底部
+    scrollToBottom();
+  }
+};
+
 // ========== 窗口控制 ==========
 const open = () => {
   visible.value = true;
@@ -173,8 +216,16 @@ const minimize = () => {
 const close = () => {
   visible.value = false;
   emit("update:modelValue", false);
-  messages.value = [];
-  localStorage.removeItem(STORAGE_KEY);
+  //  不再清空 messages 和 localStorage，实现点击不清空聊天记录
+  //messages.value = [];
+  //localStorage.removeItem(STORAGE_KEY);
+};
+
+const startNewChat = () => {
+  messages.value = []; // 清空界面消息
+  localStorage.removeItem(STORAGE_KEY); // 清除旧的 SessionID
+  getSessionId(); // 立即生成一个全新的 SessionID
+  showHistoryList.value = false;
 };
 
 // 简易拖拽
@@ -223,7 +274,6 @@ const loadHistory = async () => {
     const res = await getRagHistory(sid);
     const data = res?.data?.data || res?.data;
     if (Array.isArray(data) && data.length > 0) {
-      // ★ loadHistory 的做法：全新数组 + 每个对象预先算好 displayHtml
       messages.value = data.map((m) => ({
         id: m.id,
         role: m.role,
@@ -239,17 +289,7 @@ const loadHistory = async () => {
 };
 
 /**
- * ★ 流式 Markdown 规范化
- *
- * 【根因说明】
- * SSE 流式返回的 markdown 可能缺少换行符与标题空格，例如：
- *   "###问题解答...内容。### 参考依据..."
- * CommonMark 规范要求：
- *   1. ### 必须在行首（前面是换行或字符串开头）
- *   2. ### 后面必须有空格（"###text" 不是标题，"### text" 才是）
- * 缺失换行/空格时，marked 无法识别标题/列表等语法，会原样输出纯文本。
- *
- * 本函数在 marked.parse() 之前做无损规范化，对已规范的文本是幂等的。
+ * 流式 Markdown 规范化
  */
 const normalizeMarkdown = (text) => {
   if (!text) return "";
@@ -269,7 +309,7 @@ const normalizeMarkdown = (text) => {
 };
 
 /**
- * ★ 统一 Markdown 解析函数
+ *  统一 Markdown 解析函数
  * 先规范化再解析。增加 console.error 以便排查静默失败。
  */
 const safeParseMarkdown = (text) => {
@@ -337,10 +377,6 @@ const handleSend = async () => {
       }
       const finalHtml = safeParseMarkdown(current.content);
 
-      // ★★★ 核心修复 ★★★
-      // 采用与 loadHistory 完全一致的策略：全量替换整个 messages 数组。
-      // 这会让 Vue 的 v-for 拿到一个全新的数组引用，触发完整的 diff + patch，
-      // 所有 v-html 指令都会从零初始化，彻底规避增量更新时的缓存/复用问题。
       messages.value = messages.value.map((m) => {
         if (m.id !== aiMsgId) return m;
         return {
@@ -364,7 +400,7 @@ const handleSend = async () => {
       const current = messages.value[idx];
 
       if (gotStreamChunk) {
-        // ★ 已收到部分内容：全量替换数组
+        //  已收到部分内容：全量替换数组
         const finalHtml = safeParseMarkdown(current.content);
         messages.value = messages.value.map((m) => {
           if (m.id !== aiMsgId) return m;
@@ -427,6 +463,13 @@ defineExpose({ open, close });
 onMounted(() => {
   // 如果需要在挂载时加载历史
 });
+
+const switchSession = (oldSessionId) => {
+  localStorage.setItem(STORAGE_KEY, oldSessionId);
+  messages.value = [];
+  loadHistory();
+  showHistoryList.value = false;
+}
 </script>
 
 <style scoped>
@@ -642,6 +685,66 @@ onMounted(() => {
 .msg-row.user .msg-role-label {
   text-align: right;
   color: #86909c;
+}
+
+/* ======= 视图切换布局 ======= */
+.chat-inner-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  animation: fadeIn 0.3s ease;
+}
+
+.history-inner-view {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 24px;
+  background: transparent;
+  animation: fadeIn 0.3s ease;
+  /* 滚动条美化 */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,0.1) transparent;
+}
+
+/* ======= 会话卡片样式 ======= */
+.empty-history {
+  text-align: center;
+  color: #86909c;
+  margin-top: 80px;
+  font-size: 14px;
+}
+
+.session-item {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+  border-radius: 14px;
+  margin-bottom: 12px;
+}
+
+.session-item:hover {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(22, 93, 255, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 50, 150, 0.06);
+}
+
+.session-title {
+  font-size: 14px;
+  color: #1d2129;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-time {
+  font-size: 12px;
+  color: #86909c;
+  margin-top: 6px;
 }
 
 /* Markdown 优化 (适应亮色主题) */

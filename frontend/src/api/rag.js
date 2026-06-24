@@ -26,6 +26,11 @@ export const askRag = (data) => api.post("/rag/ask", data);
 export const getRagHistory = (sessionId) =>
   api.get(`/rag/history/${sessionId}`);
 
+/*
+*  获取用户的历史会话列表
+*/
+export const getRagSessions = () => api.get('/rag/sessions');
+
 /**
  * SSE 流式 RAG 问答
  * @param {Object} options
