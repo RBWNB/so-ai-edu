@@ -29,6 +29,21 @@ public class VisualController {
     @Autowired
     private EcosystemServiceImpl ecosystemService;
 
+    @Autowired
+    private com.gdou.marine.mapper.KbDocumentMapper kbDocumentMapper;
+
+    @Autowired
+    private com.gdou.marine.mapper.QuizAttemptMapper quizAttemptMapper;
+
+    @Autowired
+    private com.gdou.marine.mapper.SysUserMapper appUserMapper;
+
+    @Autowired
+    private com.gdou.marine.mapper.AiCallLogMapper aiCallLogMapper;
+
+    @Autowired
+    private com.gdou.marine.mapper.ConversationMessageMapper conversationMessageMapper;
+
     // ==================== 综合看板 ====================
 
     @GetMapping("/summary")
@@ -183,6 +198,123 @@ public class VisualController {
         }
         return result;
     }
+// ==================== B端运营大盘数据 (Dashboard) ====================
+
+    /**
+     *  顶部 KPI 卡片汇总数据
+     */
+    @GetMapping("/admin/dashboard-kpi")
+    public Map<String, Object> getAdminDashboardKpi() {
+        Map<String, Object> result = new LinkedHashMap<>();
+
+        // 总用户数
+        long userCount = appUserMapper.selectCount(null);
+        // 总答题人次
+        long quizAttempts = quizAttemptMapper.selectCount(null);
+        // 知识库总文档数
+        long kbCount = kbDocumentMapper.selectCount(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.gdou.marine.entity.KbDocument>()
+                        .eq(com.gdou.marine.entity.KbDocument::getStatus, 1)
+        );
+        // AI 调用总数
+        long aiCallCount = aiCallLogMapper.selectCount(null);
+
+        // 也可以保留之前的物种和生态数据
+        long speciesCount = speciesService.lambdaQuery().eq(com.gdou.marine.entity.Species::getStatus, 1).count();
+        long ecoCount = ecosystemService.lambdaQuery().eq(com.gdou.marine.entity.Ecosystem::getStatus, 1).count();
+
+        result.put("userCount", userCount);
+        result.put("quizAttempts", quizAttempts);
+        result.put("kbCount", kbCount);
+        result.put("aiCallCount", aiCallCount);
+        result.put("speciesCount", speciesCount);
+        result.put("ecosystemCount", ecoCount);
+
+        return result;
+    }
+
+    /**
+     * AI 问答词云热力图数据
+     */
+    @GetMapping("/admin/ai-word-cloud")
+    public Map<String, Object> getAiWordCloud() {
+        // 1. 只查询用户的提问 (role = 'user')
+        List<com.gdou.marine.entity.ConversationMessage> messages = conversationMessageMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.gdou.marine.entity.ConversationMessage>()
+                        .eq(com.gdou.marine.entity.ConversationMessage::getRole, "user")
+        );
+
+        // 2. 统计提问频率 (去除常见标点符号，避免相似提问被拆分)
+        Map<String, Long> freqMap = messages.stream()
+                .map(com.gdou.marine.entity.ConversationMessage::getContent)
+                .filter(org.springframework.util.StringUtils::hasText)
+                .map(text -> text.replaceAll("[。？！，、\\?\\!\\.\\,\\s]", "")) // 剔除标点
+                .collect(java.util.stream.Collectors.groupingBy(text -> text, java.util.stream.Collectors.counting()));
+
+        // 3. 转换为 ECharts 需要的 [{name: 'xxx', value: 10}] 格式
+        List<Map<String, Object>> wordCloudData = freqMap.entrySet().stream()
+                .map(e -> {
+                    Map<String, Object> map = new java.util.HashMap<>();
+                    String text = e.getKey();
+                    // 如果句子太长，截断它以保证词云的美观性
+                    if (text.length() > 12) {
+                        text = text.substring(0, 12) + "..";
+                    }
+                    map.put("name", text);
+                    map.put("value", e.getValue());
+                    return map;
+                })
+                // 按热度降序，最多取前 50 个热词/热句
+                .sorted((a, b) -> Long.compare((Long) b.get("value"), (Long) a.get("value")))
+                .limit(50)
+                .collect(java.util.stream.Collectors.toList());
+
+        Map<String, Object> result = new java.util.HashMap<>();
+        result.put("success", true);
+        result.put("data", wordCloudData);
+        return result;
+    }
+
+    /**
+     *  近7天活跃度趋势 (答题数)
+     */
+    @GetMapping("/admin/activity-trend")
+    public Map<String, Object> getActivityTrend() {
+        // 取过去7天的数据
+        java.time.LocalDateTime sevenDaysAgo = java.time.LocalDateTime.now().minusDays(6).with(java.time.LocalTime.MIN);
+
+        List<com.gdou.marine.entity.QuizAttempt> attempts = quizAttemptMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.gdou.marine.entity.QuizAttempt>()
+                        .ge(com.gdou.marine.entity.QuizAttempt::getAttemptedAt, sevenDaysAgo)
+        );
+
+        // 初始化近7天的日期列表 (格式: MM-dd)
+        List<String> dateLabels = new ArrayList<>();
+        Map<String, Long> dailyCounts = new LinkedHashMap<>();
+
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("MM-dd");
+        for (int i = 6; i >= 0; i--) {
+            String d = java.time.LocalDate.now().minusDays(i).format(fmt);
+            dateLabels.add(d);
+            dailyCounts.put(d, 0L); // 默认补0
+        }
+
+        // 填充真实数据
+        for (com.gdou.marine.entity.QuizAttempt att : attempts) {
+            if (att.getAttemptedAt() != null) {
+                String d = att.getAttemptedAt().format(fmt);
+                if (dailyCounts.containsKey(d)) {
+                    dailyCounts.put(d, dailyCounts.get(d) + 1);
+                }
+            }
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("dates", dateLabels);
+        result.put("quizData", new ArrayList<>(dailyCounts.values()));
+        return result;
+    }
+
 
     // ==================== 数据导出 ====================
 
