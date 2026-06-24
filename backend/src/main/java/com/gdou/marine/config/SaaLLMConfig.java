@@ -57,7 +57,6 @@ public class SaaLLMConfig {
     @Primary
     @Bean
     public EmbeddingModel embeddingModel() {
-        System.err.println(">>> Creating DashScopeOpenAiEmbeddingModel bean, model=" + embeddingModel);
         return new DashScopeOpenAiEmbeddingModel(apiKey, embeddingModel, null);
     }
 
