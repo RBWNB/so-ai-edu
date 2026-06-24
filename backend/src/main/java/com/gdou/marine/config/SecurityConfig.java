@@ -66,6 +66,12 @@ public class SecurityConfig {
                         // C-end exam (any authenticated user)
                         .requestMatchers("/exam/**").authenticated()
 
+                        // C-end bookmark (any authenticated user)
+                        .requestMatchers("/bookmark/**").authenticated()
+
+                        // C-end observation (any authenticated user)
+                        .requestMatchers("/observation/**").authenticated()
+
                         // Knowledge base browsing (admin/manage)
                         .requestMatchers("/kb/**").hasAnyRole("ADMIN", "MANAGER")
 

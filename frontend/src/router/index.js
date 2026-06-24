@@ -140,6 +140,12 @@ const router = createRouter({
           meta: { title: "积分商店", requiresAuth: true },
           component: () => import("@/views/edu/points/Shop.vue"),
         },
+        {
+          path: "observation/publish",
+          name: "EduObservationPublish",
+          meta: { title: "发布观察", requiresAuth: true },
+          component: () => import("@/views/edu/observation/Publish.vue"),
+        },
       ],
     },
     // 公共路由 — 无布局

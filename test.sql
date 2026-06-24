@@ -103,12 +103,43 @@ INSERT INTO point_shop_item (id, name, description, item_type, points_price, sto
                                                                                                 (7, '专属头像框·海洋之蓝', 'frame_code:ocean', 'avatar_frame', 500, 20, 1),
                                                                                                 (8, '黄金边框', 'frame_code:gold', 'avatar_frame', 200, NULL, 1),
                                                                                                 (9, '彩虹边框', 'frame_code:rainbow', 'avatar_frame', 500, NULL, 1),
-                                                                                                (10, '火焰边框', 'frame_code:flame', 'avatar_frame', 400, NULL, 1),
-                                                                                                (11, '烈焰虚线边框', 'frame_code:dashed', 'avatar_frame', 250, NULL, 1),
-                                                                                                (12, '霓虹光效边框', 'frame_code:neon', 'avatar_frame', 350, NULL, 1),
-                                                                                                (13, '极光幻彩边框', 'frame_code:aurora', 'avatar_frame', 450, NULL, 1),
-                                                                                                (14, '冰晶之辉边框', 'frame_code:crystal', 'avatar_frame', 300, NULL, 1),
-                                                                                                (15, '紫金皇冠边框', 'frame_code:royal', 'avatar_frame', 550, 50, 1);
-
+                                                                                                (10, '火焰边框', 'frame_code:flame', 'avatar_frame', 400, NULL, 1);
 ALTER TABLE app_user
     ADD COLUMN avatar_frame VARCHAR(255) DEFAULT NULL COMMENT '用户头像框资源地址/标识';
+
+-- ============================================================
+-- 物种浏览记录表 — 幂等建表脚本
+-- 用于支持「生态卫士」勋章（浏览50个物种）和每日任务「浏览物种」
+-- ============================================================
+SET @table_exists = (SELECT COUNT(*) FROM information_schema.TABLES
+                     WHERE TABLE_SCHEMA = DATABASE()
+                       AND TABLE_NAME = 'species_browse_record');
+
+SET @create_sql = IF(@table_exists = 0,
+    'CREATE TABLE species_browse_record (
+        id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+        user_id BIGINT UNSIGNED NOT NULL,
+        species_id BIGINT UNSIGNED NOT NULL,
+        browse_count INT NOT NULL DEFAULT 1 COMMENT ''累计浏览次数'',
+        last_browsed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT ''最后浏览时间'',
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT ''首次浏览时间'',
+        UNIQUE KEY uk_user_species (user_id, species_id),
+        KEY idx_browse_user (user_id),
+        CONSTRAINT fk_browse_user FOREIGN KEY (user_id) REFERENCES app_user(id),
+        CONSTRAINT fk_browse_species FOREIGN KEY (species_id) REFERENCES marine_species(id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT=''物种浏览记录''',
+    'SELECT 1');
+PREPARE stmt FROM @create_sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SELECT '✅ 物种浏览记录表迁移完成' AS status;
+
+ALTER TABLE marine_ecosystem ADD COLUMN image_url VARCHAR(500) DEFAULT NULL COMMENT '生态系统图片URL' AFTER cover_media_id;
+
+-- 修复生态系统数据的 status 字段
+-- 将所有 status 为 NULL 的生态系统数据设置为 1（正常状态）
+UPDATE marine_ecosystem SET status = 1 WHERE status IS NULL;
+
+-- 验证更新结果
+SELECT id, name, status FROM marine_ecosystem;

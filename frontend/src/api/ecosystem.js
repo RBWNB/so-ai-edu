@@ -20,3 +20,11 @@ export const deleteEcosystem = (id) =>
 
 export const suggestEcosystemByAI = (name) =>
   http.post("/ai/ecosystem/suggest", { name });
+
+export const uploadEcosystemImage = (file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return http.post("/ecosystem/upload", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};

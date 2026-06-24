@@ -101,6 +101,31 @@
         <el-form-item label="主要威胁">
           <el-input v-model="form.threats" placeholder="如：全球变暖、污染" />
         </el-form-item>
+
+        <el-divider content-position="left">影像资料</el-divider>
+        <el-form-item label="生态系统图片">
+          <div class="upload-wrapper">
+            <el-upload
+              :auto-upload="false"
+              :show-file-list="false"
+              accept="image/*"
+              @change="handleImageChange"
+            >
+              <el-button type="primary">选择图片</el-button>
+              <template #tip>
+                <span class="upload-tip">支持 JPG/PNG，建议比例 4:3</span>
+              </template>
+            </el-upload>
+            <div v-if="imagePreview" class="image-preview">
+              <el-image :src="imagePreview" fit="contain" />
+              <el-button size="small" type="danger" text @click="removeImage">移除</el-button>
+            </div>
+            <div v-else-if="form.imageUrl" class="image-preview">
+              <el-image :src="getImageUrl(form.imageUrl)" fit="contain" />
+              <el-button size="small" type="danger" text @click="removeImage">移除</el-button>
+            </div>
+          </div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
@@ -113,11 +138,13 @@
 <script setup>
 import { onMounted, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Promotion } from "@element-plus/icons-vue";
-import { getEcosystemPage, createEcosystem, updateEcosystem, deleteEcosystem, suggestEcosystemByAI } from "@/api/ecosystem";
+import { Promotion, UploadFilled } from "@element-plus/icons-vue";
+import { getEcosystemPage, createEcosystem, updateEcosystem, deleteEcosystem, suggestEcosystemByAI, uploadEcosystemImage } from "@/api/ecosystem";
 
 const loading = ref(false);
 const submitLoading = ref(false);
+const imagePreview = ref("");
+const imageFile = ref(null);
 const tableData = ref([]);
 const total = ref(0);
 const dialogVisible = ref(false);
@@ -125,7 +152,7 @@ const mode = ref("create");
 const formRef = ref();
 let suggestTimer = null;
 
-const form = reactive({ id: undefined, name: "", description: "", typicalSpecies: "", threats: "" });
+const form = reactive({ id: undefined, name: "", description: "", typicalSpecies: "", threats: "", imageUrl: "" });
 const rules = { name: [{ required: true, message: "请输入名称", trigger: "blur" }] };
 
 const queryForm = reactive({
@@ -185,6 +212,52 @@ const applySuggestion = (field, value) => {
   if (value) { form[field] = value }
 };
 
+const handleImageChange = async (uploadFile) => {
+  const file = uploadFile.raw;
+  if (!file) return;
+
+  // 本地预览
+  imagePreview.value = URL.createObjectURL(file);
+  imageFile.value = file;
+};
+
+const removeImage = () => {
+  imagePreview.value = "";
+  imageFile.value = null;
+  form.imageUrl = "";
+};
+
+const uploadImageIfNeeded = async () => {
+  if (!imageFile.value) return;
+  try {
+    const resp = await uploadEcosystemImage(imageFile.value);
+    const data = resp.data || {};
+    if (data.success && data.url) {
+      form.imageUrl = data.url;
+      imageFile.value = null;
+    } else if (resp.code === 200 && resp.data) {
+      form.imageUrl = resp.data;
+      imageFile.value = null;
+    } else {
+      ElMessage.warning(data.message || "图片上传失败，请稍后重试");
+    }
+  } catch (error) {
+    console.error('图片上传错误:', error);
+    ElMessage.warning("图片上传失败，请稍后再试");
+  }
+};
+
+const getImageUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  if (url.startsWith('/')) {
+    return `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}${url}`;
+  }
+  return `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/${url}`;
+};
+
 // 监听名称，当新增模式且名称变化时触发 AI 推荐
 watch(
     () => form.name,
@@ -232,7 +305,9 @@ const fetchList = async () => {
 
 const resetForm = () => {
   form.id = undefined;
-  form.name = form.description = form.typicalSpecies = form.threats = "";
+  form.name = form.description = form.typicalSpecies = form.threats = form.imageUrl = "";
+  imagePreview.value = "";
+  imageFile.value = null;
   clearSuggestion();
   formRef.value?.clearValidate();
 };
@@ -241,7 +316,10 @@ const openCreate = () => { mode.value = "create"; resetForm(); dialogVisible.val
 const openEdit = (row) => {
   mode.value = "edit";
   resetForm();
-  Object.assign(form, { id: row.id, name: row.name, description: row.description || "", typicalSpecies: row.typicalSpecies || "", threats: row.threats || "" });
+  Object.assign(form, { id: row.id, name: row.name, description: row.description || "", typicalSpecies: row.typicalSpecies || "", threats: row.threats || "", imageUrl: row.imageUrl || "" });
+  if (form.imageUrl) {
+    imagePreview.value = getImageUrl(form.imageUrl);
+  }
   dialogVisible.value = true;
 };
 
@@ -249,7 +327,11 @@ const handleSubmit = async () => {
   try { await formRef.value.validate() } catch { return }
   submitLoading.value = true;
   try {
-    const payload = { name: form.name.trim(), description: form.description.trim(), typicalSpecies: form.typicalSpecies.trim(), threats: form.threats.trim() };
+    if (imageFile.value) {
+      await uploadImageIfNeeded();
+    }
+
+    const payload = { name: form.name.trim(), description: form.description.trim(), typicalSpecies: form.typicalSpecies.trim(), threats: form.threats.trim(), imageUrl: form.imageUrl.trim() };
     if (mode.value === "create") {
       await createEcosystem(payload);
       ElMessage.success("创建成功");
@@ -327,6 +409,31 @@ onMounted(fetchList);
   margin-top: 16px;
   display: flex;
   justify-content: flex-end;
+}
+
+.upload-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.upload-tip {
+  font-size: 12px;
+  color: var(--theme-text-muted);
+  margin-left: 8px;
+}
+
+.image-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.image-preview .el-image {
+  max-width: 200px;
+  max-height: 120px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .suggest-panel {

@@ -28,8 +28,8 @@ INSERT INTO media_asset (id, provider, object_key, url, mime_type, original_name
 INSERT INTO marine_species (id, chinese_name, scientific_name, kingdom, phylum, class_name, family_name, conservation_status, fun_fact, cover_media_id) VALUES
     (1, '中华白海豚', 'Sousa chinensis', '动物界', '脊索动物门', '哺乳纲', '海豚科', 'VU', '中华白海豚刚出生时是深灰色的，长大后才会变成粉白色哦！', 1);
 
-INSERT INTO marine_ecosystem (id, name, description, typical_species, cover_media_id) VALUES
-    (1, '红树林生态系统', '生长在热带、亚热带海岸潮间带的木本植物群落，被称为“海岸卫士”。', '弹涂鱼、招潮蟹、黑脸琵鹭', 2);
+INSERT INTO marine_ecosystem (id, name, description, typical_species, cover_media_id, status) VALUES
+    (1, '红树林生态系统', '生长在热带、亚热带海岸潮间带的木本植物群落，被称为"海岸卫士"。', '弹涂鱼、招潮蟹、黑脸琵鹭', 2, 1);
 
 INSERT INTO species_distribution_point (species_id, latitude, longitude, location_name, sea_area) VALUES
     (1, 22.4833, 113.9167, '深圳湾大桥海域', '珠江口');

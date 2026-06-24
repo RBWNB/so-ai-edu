@@ -10,7 +10,7 @@ public class ZhipuAiConfig {
     private String apiKey = "REDACTED_ZHIPU_API_KEY";
     private String apiUrl = "https://open.bigmodel.cn/api/paas/v4";
     private String imageModel = "glm-4v-flash";
-    private String textModel = "GLM-4.6V-Flash";
+    private String textModel = "glm-4-flash";
 
     public String getApiKey() {
         return apiKey;

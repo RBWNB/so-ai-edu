@@ -4,12 +4,14 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.gdou.marine.entity.*;
 import com.gdou.marine.mapper.*;
 import com.gdou.marine.service.BadgeAwardService;
+import com.gdou.marine.service.SpeciesBrowseRecordService;
 import com.gdou.marine.service.UserLearningProfileService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -30,17 +32,23 @@ public class BadgeAwardServiceImpl implements BadgeAwardService {
     private final UserLearningProfileService profileService;
     private final ConversationMessageMapper conversationMessageMapper;
     private final UserBookmarkMapper userBookmarkMapper;
+    private final SpeciesBrowseRecordService browseRecordService;
+    private final PointTransactionMapper pointTransactionMapper;
 
     public BadgeAwardServiceImpl(UserBadgeMapper userBadgeMapper,
                                  QuizAttemptMapper quizAttemptMapper,
                                  UserLearningProfileService profileService,
                                  ConversationMessageMapper conversationMessageMapper,
-                                 UserBookmarkMapper userBookmarkMapper) {
+                                 UserBookmarkMapper userBookmarkMapper,
+                                 SpeciesBrowseRecordService browseRecordService,
+                                 PointTransactionMapper pointTransactionMapper) {
         this.userBadgeMapper = userBadgeMapper;
         this.quizAttemptMapper = quizAttemptMapper;
         this.profileService = profileService;
         this.conversationMessageMapper = conversationMessageMapper;
         this.userBookmarkMapper = userBookmarkMapper;
+        this.browseRecordService = browseRecordService;
+        this.pointTransactionMapper = pointTransactionMapper;
     }
 
     @Override
@@ -52,8 +60,8 @@ public class BadgeAwardServiceImpl implements BadgeAwardService {
 
         // 已获得徽章 code 集合
         Set<String> earnedCodes = userBadgeMapper.selectList(
-                new LambdaQueryWrapper<UserBadge>()
-                        .eq(UserBadge::getUserId, userId))
+                        new LambdaQueryWrapper<UserBadge>()
+                                .eq(UserBadge::getUserId, userId))
                 .stream()
                 .map(UserBadge::getBadgeCode)
                 .collect(Collectors.toSet());
@@ -135,10 +143,34 @@ public class BadgeAwardServiceImpl implements BadgeAwardService {
                         .eq(UserBookmark::getUserId, userId)) >= 30;
     }
 
-    /** 连续签到7天：point_transaction 中近7天每天都有签到记录 */
+    /** 连续签到7天：point_transaction 中找连续 7 天有签到记录 */
     private boolean checkPersistence(Long userId) {
-        // 检查是否有连续7天签到：简化方案——查最近7天是否每天都有 point_transaction biz_type='task' 的签到
-        // TODO: 需要 PointTransactionMapper 注入，当前简化为 false
+        if (userId == null) return false;
+
+        List<PointTransaction> records = pointTransactionMapper.selectList(
+                new LambdaQueryWrapper<PointTransaction>()
+                        .eq(PointTransaction::getUserId, userId)
+                        .eq(PointTransaction::getBizType, "task")
+                        .like(PointTransaction::getDescription, "签到")
+                        .orderByAsc(PointTransaction::getCreatedAt));
+
+        List<LocalDate> sortedDates = records.stream()
+                .map(r -> r.getCreatedAt().toLocalDate())
+                .distinct()
+                .sorted()
+                .toList();
+
+        if (sortedDates.size() < 7) return false;
+
+        int streak = 1;
+        for (int i = 1; i < sortedDates.size(); i++) {
+            if (sortedDates.get(i - 1).plusDays(1).equals(sortedDates.get(i))) {
+                streak++;
+                if (streak >= 7) return true;
+            } else {
+                streak = 1;
+            }
+        }
         return false;
     }
 
@@ -161,10 +193,9 @@ public class BadgeAwardServiceImpl implements BadgeAwardService {
         return false;
     }
 
-    /** 浏览50个物种：目前无浏览记录表，预留 */
+    /** 浏览50个物种：基于 species_browse_record 去重统计 */
     private boolean checkEcoGuardian(Long userId) {
-        // TODO: 需要物种浏览记录表，当前返回 false
-        return false;
+        return browseRecordService.countDistinctSpecies(userId) >= 50;
     }
 
     // ==================== 颁发逻辑 ====================

@@ -77,19 +77,19 @@
             <div class="stat-item">
               <div class="stat-label">可用积分</div>
               <!-- DB: user_point_account.available_points -->
-              <!-- API: TODO GET /points/account -->
+              <!-- API: GET /points/account ✅ -->
               <div class="stat-value text-primary">{{ coreOverview.availablePoints }}</div>
             </div>
             <div class="stat-item">
               <div class="stat-label">学习等级</div>
               <!-- DB: user_learning_profile.level -->
-              <!-- API: TODO GET /learning/profile -->
+              <!-- API: GET /learning/profile ✅ -->
               <div class="stat-value text-primary">Lv.{{ coreOverview.level }}</div>
             </div>
             <div class="stat-item">
               <div class="stat-label">已获勋章</div>
               <!-- DB: user_badge COUNT WHERE user_id = ? -->
-              <!-- API: TODO GET /badge/list -->
+              <!-- API: GET /achievement/badges ✅ -->
               <div class="stat-value text-primary">{{ coreOverview.badgeCount }} 枚</div>
             </div>
           </div>
@@ -399,10 +399,10 @@
                   - user_bookmark (user_id, target_type, target_id, created_at)
                     target_type ∈ ('species', 'ecosystem', 'kb_document', 'quiz_question')
                     JOIN marine_species / marine_ecosystem / kb_document / quiz_question 获取详情
-                  待建 API：
-                  - GET    /bookmark/list?type=&page=  → 收藏分页
-                  - POST   /bookmark                   → 添加收藏
-                  - DELETE /bookmark/{targetType}/{targetId} → 取消收藏
+                  API 状态：
+                  ✅ GET    /bookmark/list            → 收藏列表（按类型分组）
+                  ✅ POST   /bookmark/{type}/{id}     → 添加收藏
+                  ✅ DELETE /bookmark/{type}/{id}     → 取消收藏
                 -->
                 <el-tabs v-model="favSubTab" class="fav-sub-tabs">
                   <!-- target_type 对应 DB user_bookmark.target_type 枚举值 -->
@@ -417,7 +417,7 @@
                     <el-col :xs="24" :sm="12" :md="8" v-for="item in currentFavList" :key="item.bookmarkId">
                       <div class="fav-card">
                         <div class="fav-thumb">
-                          <img :src="item.thumbnail" :alt="item.title" />
+                          <img :src="getFavImageUrl(item.thumbnail)" :alt="item.title" @error="handleFavImgError" />
                         </div>
                         <div class="fav-info">
                           <div class="fav-title">{{ item.title }}</div>
@@ -435,17 +435,7 @@
                         </el-button>
                       </div>
                     </el-col>
-                  </el-row>
-                  <div class="pagination-wrapper">
-                    <el-pagination
-                      v-model:current-page="favPage.pageNum"
-                      :page-size="favPage.pageSize"
-                      :total="favPage.total"
-                      layout="prev, pager, next"
-                      background
-                      size="small"
-                    />
-                  </div>
+                </el-row>
                 </template>
                 <el-empty v-else description="暂无收藏内容" :image-size="120" />
               </div>
@@ -461,10 +451,9 @@
                                        photo_media_id, ai_identified, ai_confidence, status)
                     JOIN marine_species ON species_id → chinese_name
                     关联 media_asset    ON photo_media_id → url
-                  待建 API：
-                  - GET  /observation/my?page=  → 我的观察分页
-                  - POST /observation            → 发布观察
-                  - GET  /observation/{id}       → 观察详情
+                  API 状态：
+                  ✅ GET  /observation/list → 我的观察列表
+                  ✅ POST /observation       → 发布观察
                 -->
                 <div class="obs-header">
                   <el-button type="primary" @click="publishObservation">
@@ -475,12 +464,34 @@
                 <template v-if="observationList.length">
                   <div class="obs-list">
                     <div class="obs-item" v-for="obs in observationList" :key="obs.id">
-                      <div class="obs-image">
+                      <div class="obs-image" @click="viewObservation(obs)">
                         <!-- DB: media_asset.url (via photo_media_id) -->
-                        <img :src="obs.photoUrl" :alt="obs.title" />
+                        <img v-if="obs.photoUrl" :src="obs.photoUrl" :alt="obs.title" />
+                        <div v-else class="obs-no-image">
+                          <el-icon :size="32"><Picture /></el-icon>
+                          <span>暂无图片</span>
+                        </div>
                       </div>
                       <div class="obs-content">
-                        <div class="obs-title">{{ obs.title }}</div>
+                        <div class="obs-title-row">
+                          <div class="obs-title" @click="viewObservation(obs)">{{ obs.title }}</div>
+                          <div class="obs-actions">
+                            <el-button size="small" text type="primary" @click="viewObservation(obs)">
+                              <el-icon :size="14"><View /></el-icon> 详情
+                            </el-button>
+                            <el-button size="small" text type="warning" @click="editObservation(obs)">
+                              <el-icon :size="14"><Edit /></el-icon> 编辑
+                            </el-button>
+                            <el-popconfirm title="确定删除此观察记录？" confirmButtonText="确定" cancelButtonText="取消"
+                                              width="220" @confirm="removeObservation(obs)">
+                              <template #reference>
+                                <el-button size="small" text type="danger">
+                                  <el-icon :size="14"><Delete /></el-icon> 删除
+                                </el-button>
+                              </template>
+                            </el-popconfirm>
+                          </div>
+                        </div>
                         <div class="obs-meta">
                           <el-icon :size="14"><Location /></el-icon>
                           <!-- DB: user_observation.location_name -->
@@ -493,7 +504,7 @@
                         <div class="obs-tags">
                           <!-- DB: user_observation.ai_identified / ai_confidence
                                关联 marine_species.chinese_name -->
-                          <el-tag size="small" effect="plain" class="custom-tag">
+                          <el-tag v-if="obs.aiSpeciesName" size="small" effect="plain" class="custom-tag">
                             AI识别：{{ obs.aiSpeciesName }} ({{ obs.aiConfidence }}%)
                           </el-tag>
                           <!-- DB: user_observation.status: 0=隐藏 1=公开 2=审核中 -->
@@ -560,26 +571,164 @@
       <el-button type="primary" :loading="frameSaving" @click="saveFrame">保存</el-button>
     </template>
   </el-dialog>
+
+  <!-- ═══ 观察记录详情弹窗 ═══ -->
+  <el-dialog v-model="obsDetailVisible" title="观察记录详情" width="600px" class="obs-detail-dialog">
+    <div v-loading="obsDetailLoading" class="obs-detail-body">
+      <template v-if="obsDetail.id">
+        <!-- 图片区域 -->
+        <div class="detail-image" v-if="obsDetail.photoUrl">
+          <img :src="obsDetail.photoUrl" :alt="obsDetail.title" />
+        </div>
+        <div v-else class="detail-no-image">
+          <el-icon :size="48"><Picture /></el-icon>
+          <span>暂无图片</span>
+        </div>
+
+        <!-- 信息区域 -->
+        <el-descriptions :column="1" border size="default" class="detail-desc">
+          <el-descriptions-item label="标题">{{ obsDetail.title }}</el-descriptions-item>
+          <el-descriptions-item label="描述">{{ obsDetail.description || '暂无描述' }}</el-descriptions-item>
+          <el-descriptions-item label="物种">
+            {{ obsDetail.speciesName || '未指定' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="地点">
+            <span>{{ obsDetail.locationName }}</span>
+            <span v-if="obsDetail.latitude && obsDetail.longitude">
+              ({{ obsDetail.latitude }}, {{ obsDetail.longitude }})
+            </span>
+          </el-descriptions-item>
+          <el-descriptions-item label="观察时间">{{ obsDetail.observedAt }}</el-descriptions-item>
+          <el-descriptions-item label="状态">
+            <el-tag size="small" :class="obsStatusClass(obsDetail.status)">
+              {{ obsStatusLabel(obsDetail.status) }}
+            </el-tag>
+          </el-descriptions-item>
+        </el-descriptions>
+      </template>
+    </div>
+    <template #footer>
+      <el-button @click="obsDetailVisible = false">关闭</el-button>
+    </template>
+  </el-dialog>
+
+  <!-- ═══ 观察记录编辑弹窗 ═══ -->
+  <el-dialog v-model="obsEditVisible" title="编辑观察记录" width="620px"
+             :close-on-click-modal="false" class="obs-edit-dialog">
+    <el-form ref="obsEditFormRef" :model="obsEditForm" :rules="obsEditRules"
+             label-width="90px" label-position="top" v-loading="obsEditSaving">
+      <el-form-item label="标题" prop="title">
+        <el-input v-model="obsEditForm.title" placeholder="给你的观察取个名字" maxlength="50" show-word-limit />
+      </el-form-item>
+      <el-form-item label="描述" prop="description">
+        <el-input v-model="obsEditForm.description" type="textarea" :rows="3"
+                  placeholder="描述你观察到的内容..." maxlength="500" show-word-limit />
+      </el-form-item>
+      <el-row :gutter="16">
+        <el-col :span="12">
+          <el-form-item label="观察地点" prop="locationName">
+            <el-input v-model="obsEditForm.locationName" placeholder="如：深圳湾公园" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="观察时间" prop="observedAt">
+            <el-date-picker
+              v-model="obsEditForm.observedAt"
+              type="datetime"
+              placeholder="选择观察时间"
+              format="YYYY-MM-DD HH:mm"
+              value-format="YYYY-MM-DD HH:mm:ss"
+              style="width: 100%"
+            />
+          </el-form-item>
+        </el-col>
+      </el-row>
+      <el-row :gutter="16">
+        <el-col :span="12">
+          <el-form-item label="纬度">
+            <el-input v-model.number="obsEditForm.latitude" placeholder="如：22.5264" type="number" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="经度">
+            <el-input v-model.number="obsEditForm.longitude" placeholder="如：113.9558" type="number" />
+          </el-form-item>
+        </el-col>
+      </el-row>
+      <el-form-item label="物种（可选）">
+        <el-select
+          v-model="obsEditForm.speciesId"
+          placeholder="搜索选择物种"
+          filterable remote
+          :remote-method="editSearchSpecies"
+          :loading="editSpeciesLoading"
+          clearable
+          style="width: 100%"
+        >
+          <el-option v-for="s in editSpeciesOptions" :key="s.id" :label="s.chineseName" :value="s.id" />
+        </el-select>
+      </el-form-item>
+
+      <!-- 照片编辑区域 -->
+      <el-form-item label="照片">
+        <div class="edit-photo-area">
+          <!-- 已有照片预览 -->
+          <div v-if="obsEditForm.photoUrl || obsEditPhotoPreview" class="current-photo-preview">
+            <img :src="obsEditPhotoPreview || obsEditForm.photoUrl" alt="观察照片" />
+            <div class="photo-mask">
+              <el-button type="danger" size="small" circle @click="removeEditPhoto">
+                <el-icon><Delete /></el-icon>
+              </el-button>
+            </div>
+          </div>
+          <!-- 上传新照片（无照片或已删除时显示） -->
+          <el-upload
+            v-else
+            action="#"
+            :auto-upload="false"
+            :show-file-list="false"
+            :on-change="handleEditPhotoChange"
+            accept="image/*"
+            class="edit-photo-upload"
+            v-loading="obsEditPhotoUploading"
+          >
+            <div class="upload-trigger">
+              <el-icon :size="28"><Plus /></el-icon>
+              <span>上传照片</span>
+            </div>
+          </el-upload>
+          <div v-if="obsEditPhotoUploading" class="upload-tip">正在上传到云端...</div>
+        </div>
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="obsEditVisible = false">取消</el-button>
+      <el-button type="primary" :loading="obsEditSaving" @click="submitEditObservation">保存修改</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRouter, useRoute } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import {
   Camera, Picture, Check, Reading, ChatDotRound, Lock,
   Medal, TrophyBase, StarFilled, Present,
-  Location, Clock, Plus
+  Location, Clock, Plus, View, Edit, Delete, WarningFilled
 } from "@element-plus/icons-vue";
 import { getUserProfile, updatePasswordApi, updateUserProfile, uploadAvatarApi, updateAvatarFrameApi } from "@/api/sysUser";
 import { getLearningProfile, getAnswerHistory, getAiSessionCount } from "@/api/learning";
 import { getPointsAccount, getPointsTransactions, getExchangeOrders, getOwnedFrames } from "@/api/points";
 import { getBadges, getDailyTasks, claimTaskReward, dailyCheckin } from "@/api/achievement";
+import { removeBookmark as removeBookmarkApi, getBookmarkList } from "@/api/bookmark";
+import { getObservationList, getObservationDetail, updateObservation, deleteObservation } from "@/api/observation";
 import { useAuthStore } from "@/store/auth";
 
 const authStore = useAuthStore();
 const router = useRouter();
-const activeTab = ref("basic");
+const route = useRoute();
+const activeTab = ref(route.query.tab || "basic");
 
 // ═══ 角色映射（app_role.role_code → 中文名） ═══
 const ROLE_MAP = { ADMIN: "系统管理员", MANAGER: "管理人员", VISITOR: "普通用户" };
@@ -749,12 +898,12 @@ const submitPassword = async () => {
 // ═══ 左侧名片：核心数据概览 ═══
 // DB: user_point_account + user_learning_profile + user_badge
 const coreOverview = reactive({
-  // user_point_account.available_points ← TODO: GET /points/account 待建
-  availablePoints: 2580,
+  // user_point_account.available_points ← GET /points/account ✅
+  availablePoints: 0,
   // user_learning_profile.level ← GET /learning/profile ✅
   level: 1,
-  // COUNT(user_badge) ← TODO: GET /badge/list 待建
-  badgeCount: 8,
+  // COUNT(user_badge) ← GET /achievement/badges ✅
+  badgeCount: 0,
 });
 
 // ═══ Tab 3：我的学习 ═══
@@ -1159,108 +1308,103 @@ const goDoTask = async (task) => {
 
 // ═══ Tab 6：我的收藏 ═══
 // DB: user_bookmark (target_type, target_id) JOIN 对应业务表
+// API: GET /bookmark/list ✅  DELETE /bookmark/{type}/{id} ✅  POST /bookmark/{type}/{id} ✅
 const favSubTab = ref("species");
-const favPage = reactive({ pageNum: 1, pageSize: 9, total: 15 });
+const favLoading = ref(false);
+const favDataMap = reactive({
+  species: [],
+  ecosystem: [],
+  kb_document: [],
+  quiz_question: [],
+});
 
-const favDataMap = {
-  // target_type = 'species' → JOIN marine_species (chinese_name, image_url)
-  species: [
-    { bookmarkId: 1, title: "中华白海豚", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-20", targetType: "species", targetId: 1 },
-    { bookmarkId: 2, title: "蓝鲸", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-18", targetType: "species", targetId: 2 },
-    { bookmarkId: 3, title: "珊瑚", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-15", targetType: "species", targetId: 3 },
-    { bookmarkId: 4, title: "绿海龟", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-12", targetType: "species", targetId: 4 },
-    { bookmarkId: 5, title: "座头鲸", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-10", targetType: "species", targetId: 5 },
-    { bookmarkId: 6, title: "企鹅", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-08", targetType: "species", targetId: 6 },
-  ],
-  // target_type = 'ecosystem' → JOIN marine_ecosystem (name, cover_media_id)
-  ecosystem: [
-    { bookmarkId: 7, title: "珊瑚礁生态系统", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-16", targetType: "ecosystem", targetId: 1 },
-    { bookmarkId: 8, title: "红树林湿地", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-05", targetType: "ecosystem", targetId: 2 },
-  ],
-  // target_type = 'kb_document' → JOIN kb_document (title)
-  kb_document: [
-    { bookmarkId: 9, title: "海洋酸化对生物的影响", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-19", targetType: "kb_document", targetId: 1 },
-    { bookmarkId: 10, title: "食物链与能量流动", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-14", targetType: "kb_document", targetId: 2 },
-    { bookmarkId: 11, title: "生物多样性保护策略", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-11", targetType: "kb_document", targetId: 3 },
-  ],
-  // target_type = 'quiz_question' → JOIN quiz_question (stem)
-  quiz_question: [
-    { bookmarkId: 12, title: "哺乳动物分类题", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-17", targetType: "quiz_question", targetId: 1 },
-    { bookmarkId: 13, title: "生态系统综合题", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-13", targetType: "quiz_question", targetId: 2 },
-    { bookmarkId: 14, title: "物种识别挑战题", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-09", targetType: "quiz_question", targetId: 3 },
-    { bookmarkId: 15, title: "海洋生物专项练习", thumbnail: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", createdAt: "2026-06-07", targetType: "quiz_question", targetId: 4 },
-  ],
+/** 处理收藏列表中图片URL（兼容七牛云完整URL和本地相对路径） */
+const getFavImageUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  if (url.startsWith('/uploads/')) return `/api${url}`;
+  if (url.startsWith('/')) return `/api/uploads${url}`;
+  return `/api/uploads/${url}`;
+};
+
+/** 收藏图片加载失败时隐藏 */
+const handleFavImgError = (e) => {
+  e.target.style.display = 'none';
+};
+
+const fetchBookmarks = async () => {
+  favLoading.value = true;
+  try {
+    const res = await getBookmarkList();
+    if (res.data.success) {
+      const d = res.data.data;
+      favDataMap.species = d.species ?? [];
+      favDataMap.ecosystem = d.ecosystem ?? [];
+      favDataMap.kb_document = d.kb_document ?? [];
+      favDataMap.quiz_question = d.quiz_question ?? [];
+    }
+  } catch (err) {
+    console.error("获取收藏列表失败", err);
+  } finally {
+    favLoading.value = false;
+  }
 };
 
 const currentFavList = computed(() => {
   return favDataMap[favSubTab.value] || [];
 });
 
-const removeBookmark = (item) => {
-  // TODO: DELETE /bookmark/{item.targetType}/{item.targetId}
+const removeBookmark = async (item) => {
+  // DELETE /bookmark/{targetType}/{targetId} ✅
   ElMessageBox.confirm(`确定取消收藏「${item.title}」？`, "提示", {
     confirmButtonText: "确定",
     cancelButtonText: "取消",
     type: "warning",
-  }).then(() => {
-    ElMessage.success("已取消收藏");
+  }).then(async () => {
+    try {
+      const res = await removeBookmarkApi(item.targetType, item.targetId);
+      if (res.data.success) {
+        ElMessage.success("已取消收藏");
+        // 从本地列表移除
+        const list = favDataMap[favSubTab.value];
+        if (list) {
+          const idx = list.findIndex(f => f.targetType === item.targetType && f.targetId === item.targetId);
+          if (idx !== -1) list.splice(idx, 1);
+        }
+      } else {
+        ElMessage.warning(res.data.message || "取消收藏失败");
+      }
+    } catch (err) {
+      ElMessage.error("取消收藏失败");
+    }
   }).catch(() => {});
 };
 
 // ═══ Tab 7：我的观察 ═══
 // DB: user_observation (title, location_name, observed_at, photo_media_id,
 //     ai_identified, ai_confidence, status)
-//     JOIN marine_species ON species_id → chinese_name
-//     JOIN media_asset ON photo_media_id → url
-// Seed Data: user_id=2, species_id=1(中华白海豚), ai_identified=1, ai_confidence=98.50
-const obsPage = reactive({ pageNum: 1, pageSize: 6, total: 8 });
+// API: GET /observation/list ✅  POST /observation ✅  GET /observation/{id} ✅
+//      PUT /observation/{id} ✅  DELETE /observation/{id} ✅
+const obsLoading = ref(false);
+const obsPage = reactive({ pageNum: 1, pageSize: 6, total: 0 });
 
-const observationList = ref([
-  {
-    id: 1,
-    title: "深圳湾偶遇粉红小精灵！",            // user_observation.title
-    photoUrl: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg", // media_asset.url
-    locationName: "深圳湾公园",                  // user_observation.location_name
-    observedAt: "2026-06-19 15:30",             // user_observation.observed_at
-    aiSpeciesName: "中华白海豚",                  // marine_species.chinese_name (via species_id=1)
-    aiConfidence: 98.50,                         // user_observation.ai_confidence
-    status: 1,                                   // user_observation.status: 1=公开
-    speciesId: 1,                                // user_observation.species_id
-  },
-  {
-    id: 2,
-    title: "红树林湿地候鸟种群记录",
-    photoUrl: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg",
-    locationName: "海南·东寨港",
-    observedAt: "2026-06-18 09:15",
-    aiSpeciesName: "黑脸琵鹭",
-    aiConfidence: 92.30,
-    status: 1,
-    speciesId: null,
-  },
-  {
-    id: 3,
-    title: "近海水母爆发记录",
-    photoUrl: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg",
-    locationName: "青岛·石老人海域",
-    observedAt: "2026-06-16 11:42",
-    aiSpeciesName: "海月水母",
-    aiConfidence: 85.10,
-    status: 2,                                   // user_observation.status: 2=审核中
-    speciesId: null,
-  },
-  {
-    id: 4,
-    title: "海龟产卵地调查",
-    photoUrl: "https://cube.elemecdn.com/6/94/4d3ea53c084bad6931a56d5158a48jpeg.jpeg",
-    locationName: "广东·惠东海龟湾",
-    observedAt: "2026-06-14 07:00",
-    aiSpeciesName: "绿海龟",
-    aiConfidence: 96.80,
-    status: 1,
-    speciesId: null,
-  },
-]);
+const observationList = ref([]);
+
+const fetchObservations = async () => {
+  obsLoading.value = true;
+  try {
+    const res = await getObservationList();
+    if (res.data.success) {
+      observationList.value = res.data.data ?? [];
+      obsPage.total = observationList.value.length;
+    }
+  } catch (err) {
+    console.error("获取观察记录失败", err);
+    observationList.value = [];
+  } finally {
+    obsLoading.value = false;
+  }
+};
 
 // user_observation.status 映射
 const obsStatusClass = (status) => {
@@ -1276,16 +1420,248 @@ const obsStatusLabel = (status) => {
   return "已隐藏";
 };
 
+// ═══ 详情弹窗 ═══
+const obsDetailVisible = ref(false);
+const obsDetailLoading = ref(false);
+const obsDetail = reactive({
+  id: null, title: "", description: "", locationName: "",
+  observedAt: "", latitude: null, longitude: null,
+  speciesName: "", speciesId: null, photoUrl: "",
+  photoMediaId: null, status: null, createdAt: ""
+});
+
+const viewObservation = async (obs) => {
+  obsDetailVisible.value = true;
+  obsDetailLoading.value = true;
+  try {
+    const res = await getObservationDetail(obs.id);
+    if (res.data.success) {
+      Object.assign(obsDetail, res.data.data);
+    } else {
+      ElMessage.warning(res.data.message || "获取详情失败");
+    }
+  } catch (err) {
+    ElMessage.error("获取观察详情失败");
+  } finally {
+    obsDetailLoading.value = false;
+  }
+};
+
+// ═══ 编辑弹窗 ═══
+const obsEditVisible = ref(false);
+const obsEditSaving = ref(false);
+const obsEditFormRef = ref(null);
+const editSpeciesLoading = ref(false);
+const editSpeciesOptions = ref([]);
+
+const obsEditForm = reactive({
+  id: null, title: "", description: "", locationName: "",
+  observedAt: "", latitude: null, longitude: null, speciesId: null, photoMediaId: null, photoUrl: "",
+});
+
+// 编辑弹窗照片相关状态
+const obsEditPhotoPreview = ref("");
+const obsEditPhotoUploading = ref(false);
+const obsEditNewPhotoFile = ref(null);
+const obsEditNewMediaId = ref(null);
+
+const obsEditRules = {
+  title: [{ required: true, message: "请输入标题", trigger: "blur" }],
+  locationName: [{ required: true, message: "请输入观察地点", trigger: "blur" }],
+  observedAt: [{ required: true, message: "请选择观察时间", trigger: "change" }],
+};
+
+const editObservation = async (obs) => {
+  // 先拉取完整数据（列表可能字段不全），加载完再打开弹窗
+  obsEditSaving.value = true;
+  // 重置照片相关状态
+  obsEditPhotoPreview.value = "";
+  obsEditNewPhotoFile.value = null;
+  obsEditNewMediaId.value = null;
+  try {
+    const res = await getObservationDetail(obs.id);
+    if (res.data.success) {
+      const d = res.data.data;
+      // 重置表单并填充数据
+      Object.assign(obsEditForm, {
+        id: d.id,
+        title: d.title || "",
+        description: d.description || "",
+        locationName: d.locationName || "",
+        observedAt: d.observedAt || "",
+        latitude: d.latitude ?? null,
+        longitude: d.longitude ?? null,
+        speciesId: d.speciesId ?? null,
+        photoMediaId: d.photoMediaId ?? null,
+        photoUrl: d.photoUrl || "",
+      });
+      // 回显物种名到搜索选项中
+      if (d.speciesName && !editSpeciesOptions.value.some(s => s.id === d.speciesId)) {
+        editSpeciesOptions.value.push({ id: d.speciesId, chineseName: d.speciesName });
+      }
+      // 数据就绪后再打开弹窗
+      obsEditVisible.value = true;
+    } else {
+      ElMessage.warning(res.data.message || "获取数据失败");
+    }
+  } catch (err) {
+    ElMessage.error("获取数据失败");
+  } finally {
+    obsEditSaving.value = false;
+  }
+};
+
+const editSearchSpecies = async (query) => {
+  if (!query) { editSpeciesOptions.value = []; return; }
+  editSpeciesLoading.value = true;
+  try {
+    const { suggestSpecies } = await import("@/api/species");
+    const res = await suggestSpecies(query);
+    const list = res.data?.data ?? res.data ?? [];
+    editSpeciesOptions.value = Array.isArray(list) ? list : [];
+  } catch {
+    editSpeciesOptions.value = [];
+  } finally {
+    editSpeciesLoading.value = false;
+  }
+};
+
+const submitEditObservation = async () => {
+  if (!obsEditFormRef.value) return;
+  await obsEditFormRef.value.validate(async (valid) => {
+    if (!valid) return;
+    // 如果正在上传照片，提示等待
+    if (obsEditNewPhotoFile.value && !obsEditNewMediaId.value) {
+      ElMessage.warning("图片正在上传中，请稍候...");
+      return;
+    }
+    obsEditSaving.value = true;
+    try {
+      const payload = {
+        title: obsEditForm.title,
+        description: obsEditForm.description,
+        locationName: obsEditForm.locationName,
+        observedAt: obsEditForm.observedAt,
+        latitude: obsEditForm.latitude,
+        longitude: obsEditForm.longitude,
+        speciesId: obsEditForm.speciesId,
+        // 如果有新上传的照片使用新的 mediaId，否则保持原有的
+        photoMediaId: obsEditNewMediaId.value || obsEditForm.photoMediaId || null,
+      };
+      const res = await updateObservation(obsEditForm.id, payload);
+      if (res.data.success) {
+        ElMessage.success(res.data.message || "更新成功，将重新审核");
+        obsEditVisible.value = false;
+        fetchObservations(); // 刷新列表
+      } else {
+        ElMessage.warning(res.data.message || "更新失败");
+      }
+    } catch (err) {
+      ElMessage.error("更新失败，请重试");
+    } finally {
+      obsEditSaving.value = false;
+    }
+  });
+};
+
+/** 编辑弹窗 - 处理照片选择 */
+const handleEditPhotoChange = async (uploadFile) => {
+  const file = uploadFile.raw;
+  if (!file) return;
+
+  // 文件大小限制 10MB
+  if (file.size / 1024 / 1024 > 10) {
+    ElMessage.error("图片大小不能超过 10MB");
+    return;
+  }
+
+  // 本地预览
+  obsEditNewPhotoFile.value = file;
+  obsEditPhotoPreview.value = URL.createObjectURL(file);
+
+  // 上传到云端
+  obsEditPhotoUploading.value = true;
+  try {
+    const { uploadObservationPhoto } = await import("@/api/observation");
+    const res = await uploadObservationPhoto(file);
+    if (res.data.success) {
+      obsEditNewMediaId.value = res.data.data.mediaId;
+      ElMessage.success("图片上传成功");
+    } else {
+      ElMessage.warning(res.data.message || "图片上传失败");
+      // 上传失败则回滚
+      obsEditNewPhotoFile.value = null;
+      obsEditPhotoPreview.value = "";
+      obsEditNewMediaId.value = null;
+    }
+  } catch (err) {
+    ElMessage.error("图片上传失败，请重试");
+    obsEditNewPhotoFile.value = null;
+    obsEditPhotoPreview.value = "";
+    obsEditNewMediaId.value = null;
+  } finally {
+    obsEditPhotoUploading.value = false;
+  }
+};
+
+/** 编辑弹窗 - 移除照片 */
+const removeEditPhoto = () => {
+  obsEditForm.photoUrl = "";
+  obsEditForm.photoMediaId = null;
+  obsEditPhotoPreview.value = "";
+  obsEditNewPhotoFile.value = null;
+  obsEditNewMediaId.value = null;
+};
+
+// ═══ 删除 ═══
+const removeObservation = async (obs) => {
+  try {
+    const res = await deleteObservation(obs.id);
+    if (res.data.success) {
+      ElMessage.success("删除成功");
+      // 从本地列表移除
+      const idx = observationList.value.findIndex(o => o.id === obs.id);
+      if (idx !== -1) observationList.value.splice(idx, 1);
+      obsPage.total = observationList.value.length;
+    } else {
+      ElMessage.warning(res.data.message || "删除失败");
+    }
+  } catch (err) {
+    ElMessage.error("删除失败，请重试");
+  }
+};
+
 const publishObservation = () => {
-  // TODO: 路由 → /observation/publish
+  // 路由 → /observation/publish ✅
   // POST /observation body: { title, description, species_id, latitude, longitude, location_name, observed_at, photo_media_id }
-  ElMessage.info("打开发布观察（待对接路由）");
+  router.push("/observation/publish");
 };
 
 // ═══ 初始化 ═══
 onMounted(() => {
   fetchProfile();
   fetchLearningData();
+  // 预加载左侧名片核心数据（积分余额 + 勋章数量）
+  fetchPointsAccount();
+  fetchBadges();
+  // 根据路由参数 tab 加载对应 Tab 数据（如从发布观察页返回时定位到"我的观察"）
+  const initTab = route.query.tab;
+  if (initTab === "observation") {
+    fetchObservations();
+    dataFetchedFlags.observation = true;
+  } else if (initTab === "learning") {
+    fetchLearningData();
+    dataFetchedFlags.learning = true;
+  } else if (initTab === "points") {
+    fetchPointsData();
+    dataFetchedFlags.points = true;
+  } else if (initTab === "achievement") {
+    fetchAchievementData();
+    dataFetchedFlags.achievement = true;
+  } else if (initTab === "favorites") {
+    fetchBookmarks();
+    dataFetchedFlags.bookmark = true;
+  }
 });
 
 /** 加载 Tab3 所有数据 */
@@ -1309,7 +1685,7 @@ const fetchAchievementData = () => {
 };
 
 // 切换 Tab 拉取数据
-const dataFetchedFlags = { learning: false, points: false, achievement: false };
+const dataFetchedFlags = { learning: false, points: false, achievement: false, bookmark: false, observation: false };
 watch(activeTab, (tab) => {
   if (tab === "learning") {
     fetchLearningData();
@@ -1322,6 +1698,14 @@ watch(activeTab, (tab) => {
   if (tab === "achievement") {
     fetchAchievementData();
     dataFetchedFlags.achievement = true;
+  }
+  if (tab === "favorites") {
+    fetchBookmarks();
+    dataFetchedFlags.bookmark = true;
+  }
+  if (tab === "observation") {
+    fetchObservations();
+    dataFetchedFlags.observation = true;
   }
 });
 </script>
@@ -1890,14 +2274,106 @@ watch(activeTab, (tab) => {
   display: flex; gap: 20px;
   padding: 16px;
 }
-.obs-image { width: 160px; height: 110px; border-radius: 10px; overflow: hidden; flex-shrink: 0; background: #f2f3f5; }
+.obs-image { width: 160px; height: 110px; border-radius: 10px; overflow: hidden; flex-shrink: 0; background: #f2f3f5; cursor: pointer; }
 .obs-image img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s;}
+.obs-no-image { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #86909c; font-size: 13px; gap: 4px; background: #f2f3f5; }
 .obs-item:hover .obs-image img { transform: scale(1.05);}
 .obs-content { flex: 1; display: flex; flex-direction: column; justify-content: space-between; padding: 4px 0;}
-.obs-title { font-size: 16px; font-weight: 700; color: #1d2129; margin-bottom: 8px; }
+.obs-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.obs-title { font-size: 16px; font-weight: 700; color: #1d2129; cursor: pointer; transition: color 0.2s; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.obs-title:hover { color: #165dff; }
+.obs-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.obs-actions .el-button { font-size: 12px; }
+
+/* 删除确认气泡弹窗按钮对齐优化 */
+:global(.obs-list .el-popconfirm) { --el-popconfirm-padding: 14px 16px 10px; }
+:global(.obs-list .el-popconfirm__action) {
+  display: flex !important;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px !important;
+}
+:global(.obs-list .el-popconfirm__action .el-button) {
+  padding: 5px 16px !important;
+}
 .obs-meta { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #86909c; margin-bottom: 12px; }
 .obs-meta .el-divider--vertical { height: 12px; margin: 0 6px; border-color: rgba(0,0,0,0.1);}
 .obs-tags { display: flex; gap: 10px; }
+
+/* ── 观察详情弹窗 ── */
+.obs-detail-dialog :deep(.el-dialog__body) { padding: 16px 24px 8px; }
+.obs-detail-body { min-height: 80px; }
+.detail-image { width: 100%; max-height: 320px; border-radius: 12px; overflow: hidden; margin-bottom: 20px; background: #f2f3f5; }
+.detail-image img { width: 100%; height: auto; max-height: 320px; object-fit: cover; display: block; }
+.detail-no-image { width: 100%; height: 160px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #c0c4cc; font-size: 14px; gap: 8px; background: #fafafa; border-radius: 12px; margin-bottom: 20px; }
+.detail-desc :deep(.el-descriptions__label) { width: 90px; font-weight: 600; color: #606266; }
+
+/* ── 观察编辑弹窗 ── */
+.obs-edit-dialog :deep(.el-dialog__body) { padding: 16px 24px 8px; }
+
+/* 编辑弹窗照片区域 */
+.edit-photo-area { width: 100%; }
+.current-photo-preview {
+  position: relative;
+  width: 100%;
+  max-width: 280px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid #e4e7ed;
+}
+.current-photo-preview img {
+  width: 100%;
+  height: auto;
+  display: block;
+  max-height: 200px;
+  object-fit: cover;
+}
+.current-photo-preview .photo-mask {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  gap: 8px;
+}
+.current-photo-preview:hover .photo-mask { opacity: 1; }
+.edit-photo-upload { width: 100%; }
+.edit-photo-upload :deep(.el-upload) {
+  width: 100%;
+  max-width: 280px;
+}
+.upload-trigger {
+  width: 160px;
+  height: 120px;
+  border: 2px dashed #dcdfe6;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #86909c;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: #fafafa;
+}
+.upload-trigger:hover {
+  border-color: #165dff;
+  color: #165dff;
+  background: rgba(22, 93, 255, 0.04);
+}
+.upload-trigger span {
+  font-size: 13px;
+  font-weight: 500;
+}
 
 /* 动画 Keyframes */
 @keyframes fadeIn {

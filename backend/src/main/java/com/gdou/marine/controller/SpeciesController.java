@@ -4,13 +4,20 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.gdou.marine.annotation.Log;
 import com.gdou.marine.entity.Species;
+import com.gdou.marine.entity.UserBookmark;
+import com.gdou.marine.mapper.UserBookmarkMapper;
+import com.gdou.marine.service.SpeciesBrowseRecordService;
+import com.gdou.marine.service.TaskProgressService;
 import com.gdou.marine.service.impl.SpeciesServiceImpl;
+import com.gdou.marine.utils.QiniuUtils;
 import com.gdou.marine.utils.UploadPathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -34,6 +41,15 @@ public class SpeciesController {
 
     @Autowired
     private SpeciesServiceImpl speciesService;
+
+    @Autowired
+    private SpeciesBrowseRecordService browseRecordService;
+
+    @Autowired
+    private TaskProgressService taskProgressService;
+
+    @Autowired
+    private UserBookmarkMapper userBookmarkMapper;
 
     @Value("${upload.dir:uploads}")
     private String uploadDir;
@@ -103,7 +119,40 @@ public class SpeciesController {
 
     @GetMapping("/{id}")
     public Species getSpeciesById(@PathVariable Long id) {
-        return speciesService.getById(id);
+        Species species = speciesService.getById(id);
+
+        // 记录浏览行为（仅登录用户）
+        Long userId = getCurrentUserIdSafe();
+        if (userId != null && species != null) {
+            browseRecordService.recordBrowse(userId, id);
+            // 推进每日任务「浏览物种」进度
+            taskProgressService.incrementProgress(userId, "read_species");
+        }
+
+        return species;
+    }
+
+    /**
+     * 安全获取当前登录用户ID，未登录返回null
+     */
+    private Long getCurrentUserIdSafe() {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication == null || !authentication.isAuthenticated()
+                    || authentication.getPrincipal() == null
+                    || "anonymousUser".equals(authentication.getPrincipal())) {
+                return null;
+            }
+            Object principal = authentication.getPrincipal();
+            if (principal instanceof Long l) return l;
+            if (principal instanceof Integer i) return i.longValue();
+            if (principal instanceof String s) {
+                try { return Long.parseLong(s); } catch (NumberFormatException ignored) { return null; }
+            }
+            return null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**
@@ -174,6 +223,12 @@ public class SpeciesController {
         Species species = speciesService.getById(id);
         String name = species != null ? species.getChineseName() : ("ID=" + id);
         speciesService.removeById(id);
+
+        // 级联删除该物种的所有收藏记录
+        userBookmarkMapper.delete(new LambdaQueryWrapper<UserBookmark>()
+                .eq(UserBookmark::getTargetType, "species")
+                .eq(UserBookmark::getTargetId, id));
+
         return Map.of("message", "删除成功");
     }
 
@@ -194,22 +249,18 @@ public class SpeciesController {
             if (originalName != null && originalName.contains(".")) {
                 ext = originalName.substring(originalName.lastIndexOf("."));
             }
-            String filename = UUID.randomUUID().toString().replace("-", "") + ext;
-
+            // 生成唯一文件名: species/日期/uuid.ext
             String datePath = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
-            String relativePath = "species/" + datePath;
-            Path fullDir = UploadPathUtils.resolvePathFromProjectRoot(
-                    Paths.get(uploadDir, relativePath).toString());
-            Files.createDirectories(fullDir);
+            String fileName = "species/" + datePath + "/" + UUID.randomUUID().toString().replace("-", "") + ext;
 
-            Path targetPath = fullDir.resolve(filename);
-            file.transferTo(targetPath.toFile());
+            // 上传到七牛云
+            byte[] bytes = file.getBytes();
+            String url = QiniuUtils.upload2Qiniu(bytes, fileName);
 
-            String url = "/uploads/" + relativePath + "/" + filename;
             result.put("success", true);
             result.put("url", url);
             result.put("message", "上传成功");
-        } catch (IOException e) {
+        } catch (Exception e) {
             log.error("图片上传失败", e);
             result.put("success", false);
             result.put("message", "上传失败：" + e.getMessage());

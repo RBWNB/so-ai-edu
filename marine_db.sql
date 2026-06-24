@@ -462,5 +462,18 @@ CREATE TABLE user_badge (
                             CONSTRAINT fk_badge_user FOREIGN KEY (user_id) REFERENCES app_user(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户徽章';
 
+-- 33.物种浏览记录
+CREATE TABLE species_browse_record (
+                                       id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+                                       user_id BIGINT UNSIGNED NOT NULL,
+                                       species_id BIGINT UNSIGNED NOT NULL,
+                                       browse_count INT NOT NULL DEFAULT 1 COMMENT '累计浏览次数',
+                                       last_browsed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最后浏览时间',
+                                       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '首次浏览时间',
+                                       UNIQUE KEY uk_user_species (user_id, species_id),
+                                       KEY idx_browse_user (user_id),
+                                       CONSTRAINT fk_browse_user FOREIGN KEY (user_id) REFERENCES app_user(id),
+                                       CONSTRAINT fk_browse_species FOREIGN KEY (species_id) REFERENCES marine_species(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='物种浏览记录';
 
 SET FOREIGN_KEY_CHECKS = 1;

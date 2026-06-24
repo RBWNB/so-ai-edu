@@ -41,6 +41,10 @@ public class Ecosystem implements Serializable {
     @TableField("cover_media_id")
     private Long coverMediaId;
 
+    /** 过渡方案：直连图片URL，后续迁移到 media_asset 表 */
+    @TableField("image_url")
+    private String imageUrl;
+
     @TableField("status")
     private Byte status;
 
