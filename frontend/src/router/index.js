@@ -84,6 +84,12 @@ const router = createRouter({
           meta: { title: "积分商店管理", roles: ["ADMIN", "MANAGER"] },
           component: () => import("@/views/admin/system/ShopManage.vue"),
         },
+        {
+          path: "observation",
+          name: "AdminObservationReview",
+          meta: { title: "观察审核", roles: ["ADMIN", "MANAGER"] },
+          component: () => import("@/views/admin/observation/Index.vue"),
+        },
       ],
     },
     // C端 — 教育互动平台
@@ -112,8 +118,8 @@ const router = createRouter({
         },
         {
           path: "map-explore",
-          name: "EduMapExplore",
-          meta: { title: "探索地图", requiresAuth: true },
+          name: "EduObservationCommunity",
+          meta: { title: "观察社区", requiresAuth: true },
           component: () => import("@/views/edu/map-explore/Index.vue"),
         },
         {

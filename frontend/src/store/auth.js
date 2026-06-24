@@ -38,6 +38,7 @@ export const STATIC_MENUS = {
     { id: 9,  name: "角色管理",        code: "sys-roles",      type: 2, path: "/admin/system/roles",          icon: "Avatar" },
     { id: 10, name: "操作日志",        code: "operation-log",  type: 2, path: "/admin/system/operation-log",  icon: "Document" },
     { id: 11, name: "积分商店管理",    code: "shop-manage",    type: 2, path: "/admin/system/shop-manage",    icon: "Setting" },
+    { id: 12, name: "观察审核",        code: "observation",    type: 2, path: "/admin/observation",           icon: "Camera" },
   ],
   MANAGER: [
     { id: 1, name: "数据看板",       code: "dashboard",      type: 2, path: "/admin/dashboard",            icon: "DataBoard" },

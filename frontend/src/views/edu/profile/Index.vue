@@ -410,12 +410,17 @@
                   <el-tab-pane label="生态系统" name="ecosystem" />
                   <el-tab-pane label="知识库" name="kb_document" />
                   <el-tab-pane label="题目" name="quiz_question" />
+                  <el-tab-pane label="观察帖子" name="user_observation" />
                 </el-tabs>
 
                 <template v-if="currentFavList.length">
                   <el-row :gutter="16" class="fav-grid">
                     <el-col :xs="24" :sm="12" :md="8" v-for="item in currentFavList" :key="item.bookmarkId">
-                      <div class="fav-card">
+                      <div
+                        class="fav-card"
+                        :class="{ 'fav-card-clickable': favSubTab === 'user_observation' }"
+                        @click="favSubTab === 'user_observation' && goToObservation(item)"
+                      >
                         <div class="fav-thumb">
                           <img :src="getFavImageUrl(item.thumbnail)" :alt="item.title" @error="handleFavImgError" />
                         </div>
@@ -429,7 +434,7 @@
                           size="small"
                           type="danger"
                           text
-                          @click="removeBookmark(item)"
+                          @click.stop="removeBookmark(item)"
                         >
                           取消收藏
                         </el-button>
@@ -1316,6 +1321,7 @@ const favDataMap = reactive({
   ecosystem: [],
   kb_document: [],
   quiz_question: [],
+  user_observation: [],
 });
 
 /** 处理收藏列表中图片URL（兼容七牛云完整URL和本地相对路径） */
@@ -1342,6 +1348,7 @@ const fetchBookmarks = async () => {
       favDataMap.ecosystem = d.ecosystem ?? [];
       favDataMap.kb_document = d.kb_document ?? [];
       favDataMap.quiz_question = d.quiz_question ?? [];
+      favDataMap.user_observation = d.user_observation ?? [];
     }
   } catch (err) {
     console.error("获取收藏列表失败", err);
@@ -1353,6 +1360,11 @@ const fetchBookmarks = async () => {
 const currentFavList = computed(() => {
   return favDataMap[favSubTab.value] || [];
 });
+
+/** 点击收藏的观察帖子 → 跳到观察社区 */
+const goToObservation = (item) => {
+  router.push({ path: "/map-explore", query: { detail: item.targetId } });
+};
 
 const removeBookmark = async (item) => {
   // DELETE /bookmark/{targetType}/{targetId} ✅
@@ -2266,6 +2278,8 @@ watch(activeTab, (tab) => {
 .fav-time { font-size: 12px; color: #86909c; margin-top: 6px; }
 .fav-remove-btn { position: absolute; top: 10px; right: 10px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(4px); border-radius: 8px; padding: 4px 10px; font-size: 12px; opacity: 0; transition: opacity 0.3s;}
 .fav-card:hover .fav-remove-btn { opacity: 1; }
+.fav-card-clickable { cursor: pointer; }
+.fav-card-clickable:hover { border-color: #409eff; }
 
 /* ── Tab 7：我的观察 ── */
 .obs-header { display: flex; justify-content: flex-end; margin-bottom: 20px; }
@@ -2660,14 +2674,23 @@ watch(activeTab, (tab) => {
   100% { background-position: 0% 50%; }
 }
 
-/* 冰晶之辉 — 冰蓝通透质感 */
+/* 赛博光轮 — 青紫脉冲 */
 .frame-crystal {
-  background: linear-gradient(135deg, #e0eafc, #cfdef3, #b8c6db);
+  background: linear-gradient(135deg, #00f5ff, #ff00e5);
   box-shadow:
-    0 0 12px rgba(176, 196, 222, 0.6),
-    inset 0 0 8px rgba(255, 255, 255, 0.6);
+    0 0 16px rgba(0, 245, 255, 0.5),
+    0 0 32px rgba(255, 0, 229, 0.3),
+    inset 0 0 8px rgba(255, 255, 255, 0.4);
+  animation: crystal-breath 2s ease-in-out infinite;
 }
-.frame-crystal .user-avatar { border: 3px solid rgba(255,255,255,0.95); border-radius: 50%; }
+.frame-crystal .user-avatar {
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+}
+@keyframes crystal-breath {
+  0%, 100% { box-shadow: 0 0 16px rgba(0, 245, 255, 0.5), 0 0 32px rgba(255, 0, 229, 0.3); }
+  50% { box-shadow: 0 0 28px rgba(0, 245, 255, 0.8), 0 0 56px rgba(255, 0, 229, 0.5); }
+}
 
 /* 紫金皇冠 — 深紫 + 金线点缀 */
 .frame-royal {

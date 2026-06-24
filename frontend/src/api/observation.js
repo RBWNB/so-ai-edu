@@ -35,3 +35,13 @@ export const uploadObservationPhoto = (file) => {
         },
     });
 };
+
+// ═══ 观察社区（所有用户可见的观察）═══
+
+// 获取社区观察列表（分页）
+export const getCommunityObservations = (params) =>
+    http.get("/observation/community", { params });
+
+// 获取社区观察详情
+export const getCommunityObservationDetail = (id) =>
+    http.get(`/observation/community/${id}`);

@@ -97,6 +97,12 @@ public class UserObservation implements Serializable {
     private Byte status;
 
     /**
+     * 审核备注（下架原因等）
+     */
+    @TableField("audit_remark")
+    private String auditRemark;
+
+    /**
      * 创建时间
      */
     @TableField(value = "created_at", fill = FieldFill.INSERT)

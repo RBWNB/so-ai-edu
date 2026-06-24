@@ -476,10 +476,20 @@ onMounted(fetchData);
 }
 
 .shop-frame-preview.frame-crystal {
-  background: linear-gradient(135deg, #e0eafc, #cfdef3, #b8c6db);
-  box-shadow: 0 0 10px rgba(176, 196, 222, 0.5), inset 0 0 6px rgba(255,255,255,0.5);
+  background: linear-gradient(135deg, #00f5ff, #ff00e5);
+  box-shadow: 0 0 12px rgba(0, 245, 255, 0.45), 0 0 24px rgba(255, 0, 229, 0.25);
+  animation: shop-cr-breath 2s ease-in-out infinite;
 }
-.shop-frame-preview.frame-crystal .el-avatar { border: 2px solid rgba(255,255,255,0.95); }
+.shop-frame-preview.frame-crystal .el-avatar {
+  position: relative;
+  z-index: 1;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+}
+@keyframes shop-cr-breath {
+  0%, 100% { box-shadow: 0 0 12px rgba(0, 245, 255, 0.45), 0 0 24px rgba(255, 0, 229, 0.25); }
+  50% { box-shadow: 0 0 20px rgba(0, 245, 255, 0.7), 0 0 40px rgba(255, 0, 229, 0.45); }
+}
 
 .shop-frame-preview.frame-royal {
   background: linear-gradient(135deg, #6c3cc7, #9b59b6, #f1c40f);

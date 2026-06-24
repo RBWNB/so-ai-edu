@@ -55,7 +55,7 @@
           <router-link to="/home"          class="nav-item" active-class="nav-active">首页</router-link>
           <router-link to="/encyclopedia"  class="nav-item" active-class="nav-active">海洋百科</router-link>
           <router-link to="/ai-assistant"  class="nav-item" active-class="nav-active">AI 导师</router-link>
-          <router-link to="/map-explore"   class="nav-item" active-class="nav-active">探索地图</router-link>
+          <router-link to="/map-explore"   class="nav-item" active-class="nav-active">观察社区</router-link>
           <router-link to="/quiz"          class="nav-item" active-class="nav-active">答题闯关</router-link>
 
           <!-- 管理员可见：进入B端 -->
@@ -1518,10 +1518,20 @@ const handleUserCommand = (command) => {
 }
 
 .header-avatar-frame.frame-crystal {
-  background: linear-gradient(135deg, #e0eafc, #cfdef3, #b8c6db);
-  box-shadow: 0 0 8px rgba(176, 196, 222, 0.5), inset 0 0 4px rgba(255,255,255,0.5);
+  background: linear-gradient(135deg, #00f5ff, #ff00e5);
+  box-shadow: 0 0 10px rgba(0, 245, 255, 0.4), 0 0 20px rgba(255, 0, 229, 0.2);
+  animation: h-cr-breath 2s ease-in-out infinite;
 }
-.header-avatar-frame.frame-crystal .el-avatar { border: 2px solid rgba(255,255,255,0.95); }
+.header-avatar-frame.frame-crystal .el-avatar {
+  position: relative;
+  z-index: 1;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+}
+@keyframes h-cr-breath {
+  0%, 100% { box-shadow: 0 0 10px rgba(0, 245, 255, 0.4), 0 0 20px rgba(255, 0, 229, 0.2); }
+  50% { box-shadow: 0 0 18px rgba(0, 245, 255, 0.65), 0 0 36px rgba(255, 0, 229, 0.4); }
+}
 
 .header-avatar-frame.frame-royal {
   background: linear-gradient(135deg, #6c3cc7, #9b59b6, #f1c40f);
@@ -1556,5 +1566,42 @@ const handleUserCommand = (command) => {
 .popover-avatar-frame.frame-flame {
   background: linear-gradient(135deg, #ff4500, #ff8c00, #ffd700);
   box-shadow: 0 0 12px rgba(255, 69, 0, 0.5);
+}
+
+/* ═══ 下拉菜单大个头像框（新增款式） ═══ */
+.popover-avatar-frame.frame-dashed {
+  background: repeating-conic-gradient(#fd7000 0deg 18deg, transparent 18deg 36deg);
+  box-shadow: 0 0 12px rgba(237, 35, 76, 0.45);
+  animation: header-dash-glow 2s ease-in-out infinite;
+}
+.popover-avatar-frame.frame-neon {
+  background: linear-gradient(135deg, #00fff5, #ff00e4);
+  box-shadow: 0 0 14px rgba(0, 255, 245, 0.6), 0 0 28px rgba(255, 0, 228, 0.35);
+  animation: header-neon-pulse 3s ease-in-out infinite;
+}
+.popover-avatar-frame.frame-aurora {
+  background: linear-gradient(135deg, #00f260, #0575e6, #a855f7);
+  background-size: 200% 200%;
+  animation: header-aurora-shift 4s ease infinite;
+  box-shadow: 0 0 16px rgba(5, 117, 230, 0.45);
+}
+.popover-avatar-frame.frame-crystal {
+  background: linear-gradient(135deg, #00f5ff, #ff00e5);
+  box-shadow: 0 0 14px rgba(0, 245, 255, 0.45), 0 0 28px rgba(255, 0, 229, 0.25);
+  animation: p-cr-breath 2s ease-in-out infinite;
+}
+.popover-avatar-frame.frame-crystal .popover-avatar {
+  position: relative;
+  z-index: 1;
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+}
+@keyframes p-cr-breath {
+  0%, 100% { box-shadow: 0 0 14px rgba(0, 245, 255, 0.45), 0 0 28px rgba(255, 0, 229, 0.25); }
+  50% { box-shadow: 0 0 24px rgba(0, 245, 255, 0.7), 0 0 48px rgba(255, 0, 229, 0.45); }
+}
+.popover-avatar-frame.frame-royal {
+  background: linear-gradient(135deg, #6c3cc7, #9b59b6, #f1c40f);
+  box-shadow: 0 0 16px rgba(108, 60, 199, 0.55);
 }
 </style>

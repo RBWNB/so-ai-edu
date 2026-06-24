@@ -31,6 +31,9 @@ public class UserBookmarkController {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private com.gdou.marine.mapper.MediaAssetMapper mediaAssetMapper;
+
     /**
      * 取消收藏
      * DELETE /bookmark/{targetType}/{targetId}
@@ -225,6 +228,47 @@ public class UserBookmarkController {
                 }
             }
             data.put("quiz_question", quizList);
+
+            // user_observation 类型 → JOIN user_observation 和 media_asset
+            List<Map<String, Object>> obsList = new ArrayList<>();
+            if (grouped.containsKey("user_observation")) {
+                List<Long> ids = grouped.get("user_observation").stream()
+                        .map(UserBookmark::getTargetId).collect(Collectors.toList());
+                if (!ids.isEmpty()) {
+                    String inClause = ids.stream().map(String::valueOf).collect(Collectors.joining(","));
+                    String sql = "SELECT id, title, photo_media_id FROM user_observation WHERE id IN (" + inClause + ")";
+                    List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql);
+                    // 收集 media_id 查照片URL
+                    Map<Long, String> mediaUrlMap = new HashMap<>();
+                    List<Long> mids = rows.stream()
+                            .filter(r -> r.get("photo_media_id") != null)
+                            .map(r -> ((Number) r.get("photo_media_id")).longValue())
+                            .distinct().collect(Collectors.toList());
+                    if (!mids.isEmpty()) {
+                        String mInClause = mids.stream().map(String::valueOf).collect(Collectors.joining(","));
+                        List<Map<String, Object>> mediaRows = jdbcTemplate.queryForList(
+                                "SELECT id, url FROM media_asset WHERE id IN (" + mInClause + ")");
+                        for (Map<String, Object> mr : mediaRows) {
+                            mediaUrlMap.put(((Number) mr.get("id")).longValue(), (String) mr.get("url"));
+                        }
+                    }
+
+                    Map<Long, Map<String, Object>> rowMap = new HashMap<>();
+                    for (Map<String, Object> row : rows) {
+                        Long oid = ((Number) row.get("id")).longValue();
+                        String url = row.get("photo_media_id") != null
+                                ? mediaUrlMap.getOrDefault(((Number) row.get("photo_media_id")).longValue(), "") : "";
+                        row.put("thumbnail", url);
+                        row.put("title", row.getOrDefault("title", "未知观察"));
+                        rowMap.put(oid, row);
+                    }
+                    for (UserBookmark bm : grouped.get("user_observation")) {
+                        Map<String, Object> item = buildItem(bm, rowMap.get(bm.getTargetId()));
+                        obsList.add(item);
+                    }
+                }
+            }
+            data.put("user_observation", obsList);
 
             result.put("success", true);
             result.put("data", data);
