@@ -1,38 +1,65 @@
 <template>
   <div class="dashboard-page" v-loading="loading">
-    <!-- 汇总卡片 -->
     <el-row :gutter="16" class="summary-row">
-      <el-col :xs="12" :sm="8" v-for="card in summaryCards" :key="card.label">
+      <el-col :xs="12" :sm="12" :lg="6" v-for="card in kpiCards" :key="card.label">
         <el-card shadow="hover" class="summary-card">
           <div class="summary-icon" :class="card.color">
             <el-icon><component :is="card.icon" /></el-icon>
           </div>
           <div class="summary-content">
-            <div class="summary-value">{{ card.value }}</div>
+            <div class="summary-value">
+              {{ card.value }}
+            </div>
             <div class="summary-label">{{ card.label }}</div>
           </div>
         </el-card>
       </el-col>
     </el-row>
 
-    <!-- 图表区域 -->
+    <el-row :gutter="16" style="margin-bottom:16px">
+      <el-col :xs="24" :lg="16">
+        <el-card>
+          <template #header>
+            <div class="card-title-row">
+              <span class="card-title">近7天活跃答题人次趋势</span>
+              <el-button v-if="canExport" size="small" @click="exportChartPDF('trend', '活跃趋势')">导出报表</el-button>
+            </div>
+          </template>
+          <div ref="trendRef" class="chart-box"></div>
+        </el-card>
+      </el-col>
+
+      <el-col :xs="24" :lg="8">
+        <el-card>
+          <template #header>
+            <div class="card-title-row">
+              <span class="card-title">用户热点提问词云</span>
+              <el-button v-if="canExport" size="small" @click="exportChartPDF('ai', '用户热点提问词云')">导出报表</el-button>
+            </div>
+          </template>
+          <div ref="aiSceneRef" class="chart-box"></div>
+        </el-card>
+      </el-col>
+    </el-row>
+
     <el-row :gutter="16">
       <el-col :xs="24" :lg="12">
         <el-card>
           <template #header>
             <div class="card-title-row">
-              <span class="card-title">保护等级分布</span>
+              <span class="card-title">物种保护等级分布</span>
               <el-button v-if="canExport" size="small" @click="exportChartPDF('pie', '保护等级分布')">导出报表</el-button>
             </div>
           </template>
           <div ref="pieRef" class="chart-box"></div>
         </el-card>
       </el-col>
+
       <el-col :xs="24" :lg="12">
         <el-card>
           <template #header>
             <div class="card-title-row">
-              <span class="card-title">分类单元（门）</span>
+              <span class="card-title">物种分类单元</span>
               <div style="display:flex;gap:8px;align-items:center">
                 <el-select v-model="taxonomyLevel" size="small" style="width:100px" @change="loadTaxonomy">
                   <el-option label="门" value="phylum" />
@@ -47,38 +74,27 @@
         </el-card>
       </el-col>
     </el-row>
-
-    <el-row :gutter="16" style="margin-top:16px">
-      <el-col :xs="24" :lg="12">
-        <el-card>
-          <template #header>
-            <div class="card-title-row">
-              <span class="card-title">生态系统统计</span>
-              <el-button v-if="canExport" size="small" @click="exportChartPDF('eco', '生态系统统计')">导出报表</el-button>
-            </div>
-          </template>
-          <div ref="ecoRef" class="chart-box"></div>
-        </el-card>
-      </el-col>
-    </el-row>
   </div>
 </template>
 
 <script setup>
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
-import { Collection, Histogram } from "@element-plus/icons-vue";
+import { User, Cpu, Document, EditPen } from "@element-plus/icons-vue";
 import * as echarts from "echarts";
 import dayjs from "dayjs";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { useAuthStore } from "@/store/auth";
+import 'echarts-wordcloud';
+
 import {
-  getDashboardSummary,
-  getEcosystemStats,
+  getAdminDashboardKpi,
+  getAiWordCloud,
+  getActivityTrend,
   getSpeciesProtectionStats,
   getSpeciesRawList,
-  getSpeciesTaxonomyStats,
+  getSpeciesTaxonomyStats
 } from "@/api/visual";
 
 const authStore = useAuthStore();
@@ -88,18 +104,29 @@ const canExport = computed(() => {
 });
 
 const loading = ref(true);
-const summaryCards = reactive([
-  { label: "物种总数", value: 0, key: "speciesCount", icon: markRaw(Collection), color: "blue" },
-  { label: "生态系统", value: 0, key: "ecosystemCount", icon: markRaw(Histogram), color: "teal" },
+
+// 顶部 KPI 数据模型
+const kpiCards = reactive([
+  { label: "平台总用户", value: 0, key: "userCount", icon: markRaw(User), color: "blue" },
+  { label: "累计答题人次", value: 0, key: "quizAttempts", icon: markRaw(EditPen), color: "teal" },
+  { label: "知识库文档", value: 0, key: "kbCount", icon: markRaw(Document), color: "orange" },
+  { label: "AI 调用总数", value: 0, key: "aiCallCount", icon: markRaw(Cpu), color: "purple" }
 ]);
 
 const taxonomyLevel = ref("phylum");
 
+// 图表 DOM 引用
+const trendRef = ref(null);
+const aiSceneRef = ref(null);
 const pieRef = ref(null);
 const taxRef = ref(null);
-const ecoRef = ref(null);
 
-let pieChart, taxChart, ecoChart;
+// 图表实例
+let trendChart, aiSceneChart, pieChart, taxChart;
+
+const GALLERY_PALETTE = ["#165DFF", "#36CFC9", "#FF7D00", "#52C41A", "#722ED1", "#F53F3F"];
+
+// ============ 数据处理工具 ============
 
 const extractList = (payload) => {
   const candidates = [payload, payload?.data, payload?.result, payload?.page, payload?.records, payload?.rows, payload?.list];
@@ -122,20 +149,256 @@ const aggregateByField = (rows, field) => {
   return Object.entries(map).map(([name, value]) => ({ name, value }));
 };
 
-// ============ 加载数据 ============
+// ============ 加载与渲染数据 ============
 
-const loadSummary = async () => {
+//  加载 KPI 大盘数据
+const loadKpi = async () => {
   try {
-    const resp = await getDashboardSummary();
-    const d = resp.data;
+    const resp = await getAdminDashboardKpi();
+    const d = resp.data || resp;
     if (d) {
-      summaryCards.forEach(c => { c.value = d[c.key] ?? 0 });
+      kpiCards.forEach(c => { c.value = d[c.key] || 0 });
     }
-  } catch { /* ignore */ }
+  } catch (e) {
+    console.error("加载 KPI 失败", e);
+  }
 };
 
-const GALLERY_PALETTE = ["#165DFF", "#36CFC9", "#FF7D00", "#52C41A", "#4080FF"];
+// 加载近7天活跃趋势 (折线图)
+const loadTrend = async () => {
+  try {
+    const resp = await getActivityTrend();
+    const d = resp.data || resp;
+    if (!d || !d.dates) return;
 
+    if (!trendRef.value) return;
+    if (!trendChart) trendChart = echarts.init(trendRef.value);
+
+    trendChart.setOption({
+      color: ["#165DFF"],
+      tooltip: { trigger: "axis" },
+      grid: { left: "3%", right: "4%", bottom: "3%", containLabel: true },
+      xAxis: {
+        type: "category",
+        boundaryGap: false,
+        data: d.dates,
+        axisLine: { lineStyle: { color: "#E5E6EB" } },
+        axisLabel: { color: "#4E5969" },
+      },
+      yAxis: {
+        type: "value",
+        splitLine: { lineStyle: { type: "dashed", color: "#E5E6EB" } },
+        axisLabel: { color: "#4E5969" },
+      },
+      series: [
+        {
+          name: "答题人次",
+          type: "line",
+          smooth: true,
+          symbolSize: 8,
+          areaStyle: {
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: "rgba(22, 93, 255, 0.2)" },
+              { offset: 1, color: "rgba(22, 93, 255, 0)" },
+            ]),
+          },
+          data: d.quizData,
+        },
+      ],
+    });
+  } catch (e) {
+    console.error("加载活跃趋势失败", e);
+  }
+};
+
+// ============ 词云关键词提取 ============
+
+// 中文停用词 / 无意义问句词（命中后整句过滤）
+const STOP_QUESTIONS = [
+  "你好", "在吗", "你是谁", "hello", "hi", "你是什么",
+  "你是基于", "大模型", "输出", "流式", "你啊",
+];
+
+// 中文停用词（用于拆分短语后排除）
+const STOP_WORDS = new Set([
+  "什么", "怎么", "为什么", "如何", "吗", "呢", "吧", "的", "了", "是", "在",
+  "有", "和", "与", "或", "可以", "能", "要", "会", "这个", "那个", "哪些",
+  "哪种", "请问", "我想", "帮我", "告诉我", "解释", "说明", "描述", "介绍",
+  "一下", "一个", "一些", "关于", "比如", "例如", "谢谢", "请",
+  "能不能", "是否", "怎样", "什么样", "问题", "问一下",
+  "来讲", "来说", "讲一下", "说一下", "聊一下", "聊聊",
+  "我想问", "我要问", "我想知道", "我想了解", "知不知道",
+  "属于", "具有", "还有", "其他", "它的", "他们的",
+  "不", "都", "就", "也", "还", "只", "很", "太", "更", "最",
+  "啊", "嘛", "哦", "噢", "嗯", "哈", "呀", "哇",
+  "这", "那", "哪", "谁", "啥", "咋",
+  "用", "做", "去", "来", "看", "说", "问", "给", "让", "叫",
+  "应该", "需要", "必须", "一定", "可能", "大概",
+  "知道", "了解", "认识", "觉得", "认为", "希望", "想要",
+  "比较", "非常", "特别", "十分", "相当", "挺",
+  "属于哪", "有哪些", "叫什么", "长什么",
+]);
+
+// 海洋领域关键词库（按长度降序保证长词优先匹配）
+const MARINE_KEYWORDS = [
+  // === 具体物种 ===
+  "中华白海豚", "白海豚", "海豚", "蓝鲸", "虎鲸", "座头鲸", "抹香鲸", "灰鲸",
+  "鲸鲨", "大白鲨", "锤头鲨", "虎鲨", "蝠鲼", "魔鬼鱼", "鳐鱼",
+  "绿海龟", "玳瑁", "棱皮龟", "蠵龟", "丽龟", "海龟",
+  "海马", "海龙", "海蛇", "海狮", "海豹", "海牛", "儒艮",
+  "红珊瑚", "珊瑚", "海葵", "海星", "海胆", "海参", "水母",
+  "章鱼", "乌贼", "鱿鱼", "鹦鹉螺", "砗磲", "牡蛎", "扇贝",
+  "招潮蟹", "寄居蟹", "龙虾", "对虾", "磷虾",
+  "海草", "海藻", "巨藻", "马尾藻", "红树林", "红树",
+  // === 保护相关 ===
+  "保护等级", "自然保护区", "保护现状", "保护动物", "栖息地", "保护区",
+  "濒危", "极危", "易危", "近危", "无危",
+  // === 生物学 ===
+  "生物多样性", "海洋生态", "生态系统", "食物链", "食物网",
+  "学名", "习性", "分布", "食性", "形态", "特征",
+  "寿命", "繁殖", "迁徙", "洄游", "产卵",
+  // === 生态 ===
+  "珊瑚礁", "海草床", "潮间带", "深海", "热液喷口",
+  "全球变暖", "海洋酸化", "过度捕捞", "塑料污染",
+  // === 地理 ===
+  "珠江口", "北部湾", "南海", "东海", "黄海", "渤海",
+  "西沙", "南沙", "中沙", "东沙", "太平洋", "印度洋",
+  // === 分类 ===
+  "脊索动物", "软体动物", "节肢动物", "腔肠动物",
+  "哺乳", "爬行", "两栖", "鱼类",
+  // === 平台 ===
+  "观察", "识别", "答题", "百科", "收集", "拍照识别",
+].sort((a, b) => b.length - a.length); // 长词优先，避免"海豚"吃掉"中华白海豚"
+
+/**
+ * 判断是否为纯中文/中英混合的有效短语
+ */
+const isValidPhrase = (s) => /^[一-鿿_a-zA-Z0-9]{2,8}$/.test(s);
+
+/**
+ * 从完整提问文本中提取关键词列表
+ */
+const extractKeywords = (text) => {
+  const found = [];
+  let remaining = text;
+
+  // 1. 按长度降序匹配领域关键词库（长词优先）
+  for (const kw of MARINE_KEYWORDS) {
+    const idx = remaining.indexOf(kw);
+    if (idx !== -1) {
+      found.push(kw);
+      // 用占位符替换，防止短词重复匹配（如"海豚"二次匹配"中华白海豚"）
+      remaining = remaining.slice(0, idx) + "▨".repeat(kw.length) + remaining.slice(idx + kw.length);
+    }
+  }
+
+  // 2. 剩余文本切分后提取 2-8 字有效短语作为补充
+  const fragments = remaining.split(/[▨，,。！？、\s%]+/).filter(s => s.length >= 2 && s.length <= 8);
+  for (const frag of fragments) {
+    if (isValidPhrase(frag) && !STOP_WORDS.has(frag)) {
+      found.push(frag);
+    }
+  }
+
+  return found;
+};
+
+/**
+ * 过滤无效提问 + 关键词提取 + 聚合
+ * 输入：后端返回的 [{name: "完整提问", value: 次数}, ...]
+ * 输出：词云可用数据 [{name: "关键词", value: 热度}, ...]
+ */
+const buildWordCloudData = (rawData) => {
+  // Step 1: 过滤明显的无效提问
+  const validItems = rawData.filter(item => {
+    const name = item.name || "";
+    const hitStop = STOP_QUESTIONS.some(kw => name.includes(kw));
+    return !hitStop && name.length >= 4;
+  });
+
+  // Step 2: 逐条提取关键词，权重 = 原文出现次数
+  const kwCountMap = {};
+  for (const item of validItems) {
+    const keywords = extractKeywords(item.name);
+    if (keywords.length === 0) continue;
+    const weight = item.value || 1;
+    for (const kw of keywords) {
+      kwCountMap[kw] = (kwCountMap[kw] || 0) + weight;
+    }
+  }
+
+  // Step 3: 转换为 ECharts 词云格式并排���
+  const result = Object.entries(kwCountMap)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+
+  return result;
+};
+
+// ============ 加载 AI 提问词云 (Word Cloud) ============
+
+const loadAiScene = async () => {
+  try {
+    const resp = await getAiWordCloud();
+    // 安全剥离数据层
+    const rawData = extractList(resp?.data?.data || resp?.data || resp);
+    // 关键词提取 + 聚合
+    const data = buildWordCloudData(rawData);
+
+    if (!aiSceneRef.value) return;
+    if (!aiSceneChart) aiSceneChart = echarts.init(aiSceneRef.value);
+
+    aiSceneChart.setOption({
+      tooltip: {
+        show: true,
+        backgroundColor: "rgba(255, 255, 255, 0.9)",
+        borderColor: "#165DFF",
+        formatter: "{b}<br/>热度: {c} 次",
+      },
+      series: [{
+        type: "wordCloud",
+        shape: "circle",
+        keepAspect: false,
+        left: "center",
+        top: "center",
+        width: "95%",
+        height: "95%",
+        sizeRange: [14, 60],
+        rotationRange: [0, 0],
+        rotationStep: 0,
+        gridSize: 6,
+        drawOutOfBound: false,
+        layoutAnimation: true,
+        textStyle: {
+
+          color() {
+            const colors = [
+              "#165DFF", "#36CFC9", "#722ED1", "#14C9C9",'#13C2C2', '#08979C', '#531DAB',
+              "#4080FF", "#0E42D2", "#8D4EDA",'#0E42D2', '#2F54EB', '#1D39C4',
+            ];
+            return colors[Math.floor(Math.random() * colors.length)];
+          },
+        },
+        emphasis: {
+          focus: "self",
+          textStyle: {
+            textShadowBlur: 8 ,
+            textShadowColor: "rgba(22, 93, 255, 0.3)",
+            color: "#165DFF",
+            fontWeight: "bolder",
+          },
+        },
+        data: data.length > 0 ? data : [
+          { name: "暂无提问", value: 100 },
+        ],
+      }],
+    });
+  } catch (e) {
+    console.error("加载词云数据失败", e);
+  }
+};
+
+// 保留原有的百科物种饼图渲染逻辑
 const renderPie = (refEl, chartRef, data) => {
   if (!refEl.value) return;
   if (!chartRef) chartRef = echarts.init(refEl.value);
@@ -156,10 +419,10 @@ const loadProtection = async () => {
   let data;
   try {
     const resp = await getSpeciesProtectionStats();
-    data = extractList(resp?.data);
+    data = extractList(resp?.data || resp);
   } catch {
     const sp = await getSpeciesRawList();
-    data = aggregateByField(extractList(sp?.data), "conservationStatus");
+    data = aggregateByField(extractList(sp?.data || sp), "conservationStatus");
   }
   pieChart = renderPie(pieRef, pieChart, data);
 };
@@ -168,56 +431,36 @@ const loadTaxonomy = async () => {
   let data;
   try {
     const resp = await getSpeciesTaxonomyStats(taxonomyLevel.value);
-    data = extractList(resp?.data);
+    data = extractList(resp?.data || resp);
   } catch { data = [] }
   taxChart = renderPie(taxRef, taxChart, data);
 };
 
-const loadEcosystemStats = async () => {
-  let data;
-  try {
-    const resp = await getEcosystemStats();
-    data = extractList(resp?.data);
-  } catch { data = [] }
 
-  if (!ecoRef.value) return;
-  if (!ecoChart) ecoChart = echarts.init(ecoRef.value);
-  const names = data.map(d => d.name || "未知");
-  ecoChart.setOption({
-    color: GALLERY_PALETTE,
-    tooltip: { trigger: "axis" },
-    legend: { bottom: 0, textStyle: { color: "#595959" } },
-    grid: { left: 50, right: 20, top: 20, bottom: 50 },
-    xAxis: {
-      type: "category", data: names,
-      axisLabel: { rotate: 30, color: "#595959" },
-      axisLine: { lineStyle: { color: "#D9E6FF" } },
-      axisTick: { show: false },
-    },
-    yAxis: {
-      type: "value", minInterval: 1,
-      axisLabel: { color: "#595959" },
-      splitLine: { lineStyle: { color: "#EEF3FB" } },
-    },
-    series: [
-      { name: "典型物种", type: "bar", data: data.map(d => (d.typicalSpecies || "").split(/[,，]/).filter(Boolean).length || 0) },
-    ],
-  });
-};
-
-// ============ 导出 PDF ============
+// ============ 导出 PDF (复用原有逻辑，增加图表映射) ============
 
 const exportChartPDF = async (chartKey, title) => {
-  const chartRefs = { pie: pieRef, tax: taxRef, eco: ecoRef };
+  const chartRefs = {
+    pie: pieRef,
+    tax: taxRef,
+    trend: trendRef,
+    ai: aiSceneRef
+  };
   const ref = chartRefs[chartKey];
-  if (!ref?.value) { ElMessage.warning("图表未加载完成"); return }
+  if (!ref?.value) { ElMessage.warning("图表未加载完成"); return; }
+
   try {
     const cardEl = ref.value.closest(".el-card");
-    if (!cardEl) { ElMessage.warning("未找到图表容器"); return }
+    if (!cardEl) { ElMessage.warning("未找到图表容器"); return; }
+
+    // 隐藏按钮和下拉框避免导出到截图里
     const btns = cardEl.querySelectorAll(".el-button--small, .el-select");
     btns.forEach(b => { b.style.visibility = "hidden" });
+
     const canvas = await html2canvas(cardEl, { backgroundColor: "#fff", scale: 2, useCORS: true });
-    btns.forEach(b => { b.style.visibility = "" });
+
+    btns.forEach(b => { b.style.visibility = "" }); // 恢复显示
+
     const imgData = canvas.toDataURL("image/png");
     const pdf = new jsPDF("landscape", "mm", "a4");
     const pdfW = pdf.internal.pageSize.getWidth();
@@ -227,8 +470,9 @@ const exportChartPDF = async (chartKey, title) => {
     const ratio = Math.min(pdfW / imgW, pdfH / imgH) * 0.95;
     const offsetX = (pdfW - imgW * ratio) / 2;
     const offsetY = (pdfH - imgH * ratio) / 2;
+
     pdf.addImage(imgData, "PNG", offsetX, offsetY, imgW * ratio, imgH * ratio);
-    pdf.save(`${title}_${dayjs().format("YYYY-MM-DD")}.pdf`);
+    pdf.save(`${title}_${dayjs().format("YYYYMMDD")}.pdf`);
     ElMessage.success("报表已导出");
   } catch (e) {
     ElMessage.error("导出失败");
@@ -236,18 +480,25 @@ const exportChartPDF = async (chartKey, title) => {
   }
 };
 
-// ============ 生命周期 ============
+// ============ 生命周期与自适应 ============
 
 const handleResize = () => {
-  [pieChart, taxChart, ecoChart].forEach(c => c?.resize());
+  [trendChart, aiSceneChart, pieChart, taxChart].forEach(c => c?.resize());
 };
 
 const initCharts = async () => {
   loading.value = true;
   try {
-    await Promise.all([loadSummary(), loadProtection(), loadTaxonomy(), loadEcosystemStats()]);
+    // 并发请求所有数据
+    await Promise.all([
+      loadKpi(),
+      loadTrend(),
+      loadAiScene(),
+      loadProtection(),
+      loadTaxonomy()
+    ]);
     await nextTick();
-    [pieChart, taxChart, ecoChart].forEach(c => c?.resize());
+    handleResize();
   } catch (e) {
     console.error(e);
     ElMessage.error("加载看板数据失败");
@@ -263,7 +514,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("resize", handleResize);
-  [pieChart, taxChart, ecoChart].forEach(c => c?.dispose());
+  [trendChart, aiSceneChart, pieChart, taxChart].forEach(c => c?.dispose());
 });
 </script>
 
@@ -282,6 +533,7 @@ onBeforeUnmount(() => {
   gap: 16px;
   cursor: default;
   min-height: 96px;
+  border-radius: 8px;
 }
 
 .summary-card :deep(.el-card__body) {
@@ -289,6 +541,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 16px;
+  padding: 20px;
 }
 
 .summary-icon {
@@ -298,17 +551,15 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   color: #fff;
-  font-size: 25px;
+  font-size: 26px;
   flex: 0 0 auto;
 }
 
-.summary-icon.blue {
-  background: var(--theme-primary);
-}
-
-.summary-icon.teal {
-  background: var(--theme-secondary);
-}
+/* 颜色配置，匹配科技教育风 */
+.summary-icon.blue { background: linear-gradient(135deg, #4080FF, #165DFF); }
+.summary-icon.teal { background: linear-gradient(135deg, #36CFC9, #14C9C9); }
+.summary-icon.orange { background: linear-gradient(135deg, #FF9A2E, #FF7D00); }
+.summary-icon.purple { background: linear-gradient(135deg, #8D4EDA, #722ED1); }
 
 .summary-content {
   min-width: 0;
@@ -317,14 +568,14 @@ onBeforeUnmount(() => {
 .summary-value {
   font-size: 28px;
   font-weight: 700;
-  color: var(--theme-text-primary);
+  color: var(--el-text-color-primary);
   line-height: 1.2;
 }
 
 .summary-label {
   font-size: 14px;
-  color: var(--theme-text-secondary);
-  margin-top: 4px;
+  color: var(--el-text-color-secondary);
+  margin-top: 6px;
 }
 
 .card-title-row {
@@ -334,13 +585,12 @@ onBeforeUnmount(() => {
 }
 
 .card-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
-  color: var(--theme-text-primary);
+  color: var(--el-text-color-primary);
 }
 
 .chart-box {
-  height: 360px;
+  height: 320px;
 }
-
 </style>

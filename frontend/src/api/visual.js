@@ -27,3 +27,14 @@ export const getSpeciesRawList = (params) => http.get("/species", { params });
 export const getSpeciesCountStats = (level) =>
     http.get("/visual/species-count-stats", { params: { level } });
 
+/** 获取顶部 KPI 核心指标 */
+export const getAdminDashboardKpi = () =>
+    http.get("/visual/admin/dashboard-kpi");
+
+/** 获取 AI 问答词云数据 */
+export const getAiWordCloud = () =>
+    http.get("/visual/admin/ai-word-cloud");
+
+/** 获取近7天活跃度(答题)趋势 */
+export const getActivityTrend = () =>
+    http.get("/visual/admin/activity-trend");
