@@ -2,19 +2,39 @@
   <div class="community-page">
     <!-- ═══ 页面头部 ═══ -->
     <div class="community-header">
-      <div class="header-left">
-        <h2 class="page-title">🌊 观察社区</h2>
-        <span class="page-subtitle">分享你的海洋观察发现</span>
+      <div class="header-top-row">
+        <h2 class="page-title">
+          <span class="title-icon">🌊</span>
+          观察社区
+        </h2>
+        <div class="search-box">
+          <el-input
+            v-model="searchKeyword"
+            placeholder="搜索帖子标题..."
+            clearable
+            prefix-icon="Search"
+            @keyup.enter="handleSearch"
+            @clear="handleSearch"
+            class="search-input"
+          />
+          <el-button type="primary" class="search-btn" @click="handleSearch">
+            <el-icon><Search /></el-icon>
+            搜索
+          </el-button>
+        </div>
       </div>
-      <div class="header-right">
-        <button class="sort-toggle" @click="switchSort(sortMode === 'latest' ? 'hot' : 'latest')">
-          <el-icon :size="15"><component :is="sortMode === 'latest' ? Clock : Lightning" /></el-icon>
-          {{ sortMode === 'latest' ? '最新' : '最热' }}
-        </button>
-        <span class="stat-badge">共 {{ totalCount }} 条</span>
-        <el-button type="primary" class="publish-btn" @click="goPublish">
-          <el-icon><Plus /></el-icon> 发布
-        </el-button>
+      <div class="header-bottom-row">
+        <span class="page-subtitle">分享你的海洋观察发现</span>
+        <div class="header-tools">
+          <button class="sort-toggle" @click="switchSort(sortMode === 'latest' ? 'hot' : 'latest')">
+            <el-icon :size="15"><component :is="sortMode === 'latest' ? Clock : Lightning" /></el-icon>
+            {{ sortMode === 'latest' ? '最新' : '最热' }}
+          </button>
+          <span class="stat-badge">共 {{ totalCount }} 条</span>
+          <el-button type="primary" class="publish-btn" @click="goPublish">
+            <el-icon><Plus /></el-icon> 发布
+          </el-button>
+        </div>
       </div>
     </div>
 
@@ -318,7 +338,7 @@ import { ElMessage } from "element-plus";
 import {
   Plus, User, Clock, Location, Calendar,
   CircleCheck, ChatDotSquare, Star,
-  Picture, Lightning
+  Picture, Lightning, Search
 } from "@element-plus/icons-vue";
 import { getCommunityObservations, getCommunityObservationDetail } from "@/api/observation";
 import { getComments, getReplies, createComment, deleteComment as deleteCommentApi } from "@/api/comment";
@@ -339,6 +359,12 @@ const pageNum = ref(1);
 const pageSize = ref(24);
 const totalCount = ref(0);
 const sortMode = ref("latest"); // latest | hot
+const searchKeyword = ref('');
+
+const handleSearch = () => {
+  pageNum.value = 1;
+  loadPosts();
+};
 
 const switchSort = (mode) => {
   if (sortMode.value === mode) return;
@@ -370,6 +396,7 @@ const loadPosts = async () => {
       pageNum: pageNum.value,
       pageSize: pageSize.value,
       sort: sortMode.value,
+      keyword: searchKeyword.value.trim() || undefined,
     });
     if (res.data.success) {
       const d = res.data.data;
@@ -677,42 +704,115 @@ onMounted(async () => {
 
 /* ═══ 头部 ═══ */
 .community-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-bottom: 20px;
   padding: 0 4px;
-  flex-wrap: wrap;
-  gap: 10px;
 }
-.header-left {
+
+.header-top-row {
   display: flex;
-  align-items: baseline;
-  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
 }
+
 .page-title {
-  font-size: 22px;
-  font-weight: 600;
-  color: #f0f4ff;
+  font-size: 24px;
+  font-weight: 800;
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #48cae4, #0077b6, #023e8a);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  white-space: nowrap;
+  letter-spacing: 1px;
 }
+
+.title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: rgba(0, 180, 216, 0.12);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(72, 202, 228, 0.25);
+  font-size: 20px;
+  -webkit-text-fill-color: initial;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.search-box .search-input {
+  width: 240px;
+}
+
+.search-btn {
+  border-radius: 20px !important;
+  padding: 8px 20px !important;
+  background: linear-gradient(135deg, #0077b6, #00b4d8) !important;
+  border: none !important;
+  font-weight: 600;
+}
+
+.search-btn:hover {
+  background: linear-gradient(135deg, #005f8a, #0096c7) !important;
+}
+
+:deep(.search-input .el-input__wrapper) {
+  background: rgba(255,255,255,0.92) !important;
+  border: 1px solid rgba(0, 119, 182, 0.2) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 1px 4px rgba(0, 119, 182, 0.06) !important;
+}
+
+:deep(.search-input .el-input__inner) {
+  color: #1e293b;
+}
+
+:deep(.search-input .el-input__inner::placeholder) {
+  color: #94a3b8;
+}
+
+:deep(.search-input .el-input__prefix .el-icon) {
+  color: #94a3b8;
+}
+
+.header-bottom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .page-subtitle {
   font-size: 13px;
-  color: rgba(255,255,255,0.55);
+  color: #64748b;
 }
-.header-right {
+
+.header-tools {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
 }
+
 .stat-badge {
   font-size: 13px;
-  color: rgba(255,255,255,0.6);
-  background: rgba(255,255,255,0.07);
+  color: #334155;
+  background: rgba(255,255,255,0.85);
   padding: 4px 12px;
   border-radius: 20px;
   white-space: nowrap;
+  border: 1px solid rgba(0,0,0,0.06);
 }
 .publish-btn { border-radius: 20px; }
 
@@ -722,19 +822,19 @@ onMounted(async () => {
   align-items: center;
   gap: 5px;
   padding: 6px 16px;
-  border: 1px solid rgba(255,255,255,0.15);
+  border: 1px solid rgba(0,0,0,0.10);
   border-radius: 20px;
-  background: rgba(255,255,255,0.06);
-  color: rgba(255,255,255,0.6);
+  background: rgba(255,255,255,0.85);
+  color: #334155;
   font-size: 13px;
   cursor: pointer;
   transition: all 0.25s;
   white-space: nowrap;
 }
 .sort-toggle:hover {
-  background: rgba(255,255,255,0.1);
-  color: rgba(255,255,255,0.85);
-  border-color: rgba(255,255,255,0.25);
+  background: #ffffff;
+  color: #1e293b;
+  border-color: rgba(0,119,182,0.3);
 }
 
 /* ═══ 加载骨架 ═══ */
@@ -744,10 +844,10 @@ onMounted(async () => {
   gap: 16px;
 }
 .skeleton-card {
-  background: rgba(255,255,255,0.04);
+  background: #ffffff;
   border-radius: 12px;
   padding: 16px;
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid rgba(0,0,0,0.06);
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1191,8 +1291,28 @@ onMounted(async () => {
 @media (max-width: 768px) {
   .community-page { padding: 12px 8px; }
   .post-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
-  .sort-tabs { order: -1; width:100%; }
-  .header-right { width:100%; justify-content:space-between; }
+  .header-top-row {
+    flex-wrap: wrap;
+  }
+  .search-box {
+    width: 100%;
+  }
+  .search-box .search-input {
+    flex: 1;
+  }
+  .search-btn {
+    white-space: nowrap;
+  }
+  .header-bottom-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .page-subtitle { display: none; }
+  .header-tools {
+    justify-content: space-between;
+    width: 100%;
+  }
   .detail-dialog :deep(.el-dialog__body) { padding: 16px; }
 }
 </style>

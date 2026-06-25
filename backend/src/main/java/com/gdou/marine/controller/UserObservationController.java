@@ -480,19 +480,32 @@ public class UserObservationController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
             @RequestParam(defaultValue = "latest") String sort,
+            @RequestParam(required = false) String keyword,
             Authentication auth) {
         Map<String, Object> result = new HashMap<>();
         try {
             Long currentUserId = extractUserId(auth);
 
+            // 关键词搜索条件（标题或描述模糊匹配）
+            LambdaQueryWrapper<UserObservation> baseQuery = new LambdaQueryWrapper<UserObservation>()
+                    .eq(UserObservation::getStatus, (byte) 1);
+            if (keyword != null && !keyword.trim().isEmpty()) {
+                String kw = "%" + keyword.trim() + "%";
+                baseQuery.and(w -> w.like(UserObservation::getTitle, kw)
+                        .or().like(UserObservation::getDescription, kw));
+            }
+
             // 分页查询状态为可见(1)的观察记录
             int offset = (pageNum - 1) * pageSize;
-            Long total = userObservationMapper.selectCount(
-                    new LambdaQueryWrapper<UserObservation>()
-                            .eq(UserObservation::getStatus, (byte) 1));
+            Long total = userObservationMapper.selectCount(baseQuery);
 
             LambdaQueryWrapper<UserObservation> queryWrapper = new LambdaQueryWrapper<UserObservation>()
                     .eq(UserObservation::getStatus, (byte) 1);
+            if (keyword != null && !keyword.trim().isEmpty()) {
+                String kw = "%" + keyword.trim() + "%";
+                queryWrapper.and(w -> w.like(UserObservation::getTitle, kw)
+                        .or().like(UserObservation::getDescription, kw));
+            }
             if ("hot".equalsIgnoreCase(sort)) {
                 queryWrapper.orderByDesc(UserObservation::getId);
             } else {
