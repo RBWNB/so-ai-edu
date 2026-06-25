@@ -215,7 +215,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, nextTick } from "vue";
+import { ref, reactive, onMounted, nextTick, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useAuthStore } from "@/store/auth";
 import { ElMessage } from "element-plus";
@@ -260,6 +260,7 @@ const goBack = () => {
 
 const loadDetail = async (obsId) => {
   loading.value = true;
+  window.scrollTo(0, 0);
   try {
     const res = await getCommunityObservationDetail(obsId);
     if (res.data.success) {
@@ -277,6 +278,9 @@ const loadDetail = async (obsId) => {
 
   if (data.value) {
     await loadDetailComments();
+    // 等评论区渲染完成后确保在页面顶端
+    await nextTick();
+    window.scrollTo(0, 0);
   }
 };
 
@@ -455,6 +459,19 @@ onMounted(() => {
   const obsId = route.params.id;
   if (obsId) {
     loadDetail(obsId);
+  }
+});
+
+// 路由参数变化时重新加载（解决从详情A返回再进详情B时组件复用的问题）
+watch(() => route.params.id, (newId) => {
+  if (newId) {
+    // 重置评论状态
+    detailComments.value = [];
+    detailReplying.value = null;
+    detailCommentInput.value = "";
+    Object.keys(detailReplies).forEach(k => delete detailReplies[k]);
+    Object.keys(detailRepliesShowAll).forEach(k => delete detailRepliesShowAll[k]);
+    loadDetail(newId);
   }
 });
 </script>

@@ -520,6 +520,10 @@
                           <el-tag size="small" :class="obsStatusClass(obs.status)">
                             {{ obsStatusLabel(obs.status) }}
                           </el-tag>
+                          <div v-if="obs.status === 0 && obs.auditRemark" class="obs-reject-reason">
+                            <el-icon :size="14"><WarningFilled /></el-icon>
+                            下架原因：{{ obs.auditRemark }}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -2518,7 +2522,20 @@ watch(activeTab, (tab) => {
 }
 .obs-meta { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #86909c; margin-bottom: 12px; }
 .obs-meta .el-divider--vertical { height: 12px; margin: 0 6px; border-color: rgba(0,0,0,0.1);}
-.obs-tags { display: flex; gap: 10px; }
+.obs-tags { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.obs-reject-reason {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #e6a23c;
+  background: rgba(230, 162, 60, 0.08);
+  padding: 2px 10px;
+  border-radius: 6px;
+  line-height: 1.5;
+  max-width: 100%;
+  word-break: break-word;
+}
 
 /* ── 观察详情弹窗 ── */
 .obs-detail-dialog :deep(.el-dialog__body) { padding: 16px 24px 8px; }

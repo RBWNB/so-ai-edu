@@ -45,7 +45,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/species/**", "/ecosystem/**", "/visual/**").permitAll()
 
                         // Authenticated user self-service
-                        .requestMatchers("/sys-user/profile", "/sys-user/password", "/sys-user/upload/avatar", "/sys-user/avatar-frame").authenticated()
+                        .requestMatchers("/sys-user/profile", "/sys-user/password", "/sys-user/upload/avatar", "/sys-user/avatar-frame", "/sys-user/user-title").authenticated()
 
                         // Admin-only management endpoints
                         .requestMatchers("/sys-user/**").hasRole("ADMIN")

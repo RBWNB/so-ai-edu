@@ -285,6 +285,7 @@ public class UserObservationController {
                         ? speciesNameMap.getOrDefault(obs.getSpeciesId(), "") : "");
                 item.put("createdAt", obs.getCreatedAt() != null
                         ? obs.getCreatedAt().toString().replace("T", " ") : "");
+                item.put("auditRemark", obs.getAuditRemark());
                 return item;
             }).collect(Collectors.toList());
 
@@ -358,6 +359,7 @@ public class UserObservationController {
             item.put("photoUrl", photoUrl);
             item.put("createdAt", obs.getCreatedAt() != null
                     ? obs.getCreatedAt().toString().replace("T", " ") : "");
+            item.put("auditRemark", obs.getAuditRemark());
 
             result.put("success", true);
             result.put("data", item);
