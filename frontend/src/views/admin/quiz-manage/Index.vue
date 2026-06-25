@@ -2,50 +2,58 @@
   <div class="quiz-manage-page">
     <!-- 搜索栏 -->
     <el-card shadow="never" class="search-card">
-      <el-form :model="queryForm" inline label-width="80px" @keyup.enter="handleSearch">
+      <el-form :model="queryForm" inline label-width="120px" @keyup.enter="handleSearch">
         <el-row :gutter="16">
-          <el-col :xs="12" :sm="8" :md="6">
+          <!-- 题干关键词 -->
+          <el-col :xs="24" :sm="12" :md="6">
             <el-form-item label="题干关键词">
-              <el-input v-model="queryForm.stem" placeholder="搜索题干" clearable />
+              <el-input v-model="queryForm.stem" placeholder="搜索题干" clearable style="width: 100%" />
             </el-form-item>
           </el-col>
-          <el-col :xs="12" :sm="8" :md="5">
+          <!-- 题目类型 -->
+          <el-col :xs="12" :sm="6" :md="4">
             <el-form-item label="题目类型">
-              <el-select v-model="queryForm.questionType" placeholder="全部" clearable style="width:100%">
+              <el-select v-model="queryForm.questionType" placeholder="全部" clearable style="width:100%; min-width: 100px">
                 <el-option label="单选题" value="single" />
                 <el-option label="多选题" value="multiple" />
                 <el-option label="判断题" value="judge" />
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :xs="12" :sm="8" :md="5">
+          <!-- 难度 -->
+          <el-col :xs="12" :sm="6" :md="4">
             <el-form-item label="难度">
-              <el-select v-model="queryForm.difficulty" placeholder="全部" clearable style="width:100%">
+              <el-select v-model="queryForm.difficulty" placeholder="全部" clearable style="width:100%; min-width: 80px">
                 <el-option label="简单" value="easy" />
                 <el-option label="普通" value="normal" />
                 <el-option label="困难" value="hard" />
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :xs="12" :sm="8" :md="4">
+          <!-- 出题方式 -->
+          <el-col :xs="12" :sm="6" :md="5">
             <el-form-item label="出题方式">
-              <el-select v-model="queryForm.createdByAi" placeholder="全部" clearable style="width:100%">
+              <el-select v-model="queryForm.createdByAi" placeholder="全部" clearable style="width:100%; min-width: 100px">
                 <el-option label="人工" :value="0" />
                 <el-option label="AI" :value="1" />
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :xs="12" :sm="8" :md="4">
+          <!-- 状态 -->
+          <el-col :xs="12" :sm="6" :md="5">
             <el-form-item label="状态">
-              <el-select v-model="queryForm.status" placeholder="全部" clearable style="width:100%">
+              <el-select v-model="queryForm.status" placeholder="全部" clearable style="width:100%; min-width: 80px">
                 <el-option label="启用" :value="1" />
                 <el-option label="禁用" :value="0" />
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :sm="24" :md="12" class="search-btns">
-            <el-button type="primary" @click="handleSearch">搜索</el-button>
-            <el-button @click="handleReset">重置</el-button>
+          <!-- 按钮单独占整行 -->
+          <el-col :xs="24" :sm="24" :md="24">
+            <el-form-item label=" ">
+              <el-button type="primary" @click="handleSearch">搜索</el-button>
+              <el-button @click="handleReset">重置</el-button>
+            </el-form-item>
           </el-col>
         </el-row>
       </el-form>
@@ -293,36 +301,32 @@
       destroy-on-close
     >
       <template v-if="aiDialog.step === 'config'">
-        <el-form :model="aiForm" label-width="120px">
+        <el-form :model="aiForm" label-width="140px">
           <el-form-item label="选择知识库帖子" required>
-            <el-row :gutter="8" style="width:100%">
-              <el-col :span="18">
-                <el-select
-                  v-model="aiForm.documentId"
-                  filterable
-                  remote
-                  reserve-keyword
-                  placeholder="输入关键词搜索知识库帖子"
-                  :remote-method="searchKbDocuments"
-                  :loading="kbSearchLoading"
-                  style="width:100%"
-                  @change="onKbDocumentSelect"
+            <div style="display: flex; gap: 8px; width: 100%;">
+              <el-select
+                v-model="aiForm.documentId"
+                filterable
+                remote
+                reserve-keyword
+                placeholder="输入关键词搜索知识库帖子"
+                :remote-method="searchKbDocuments"
+                :loading="kbSearchLoading"
+                style="flex: 1;"
+                @change="onKbDocumentSelect"
+              >
+                <el-option
+                  v-for="doc in kbDocumentList"
+                  :key="doc.id"
+                  :label="doc.title"
+                  :value="doc.id"
                 >
-                  <el-option
-                    v-for="doc in kbDocumentList"
-                    :key="doc.id"
-                    :label="doc.title"
-                    :value="doc.id"
-                  >
-                    <span>{{ doc.title }}</span>
-                    <span class="kb-option-desc" v-if="doc.source">（{{ doc.source }}）</span>
-                  </el-option>
-                </el-select>
-              </el-col>
-              <el-col :span="6">
-                <el-button @click="openKbBrowseDialog">浏览全部</el-button>
-              </el-col>
-            </el-row>
+                  <span>{{ doc.title }}</span>
+                  <span class="kb-option-desc" v-if="doc.source">（{{ doc.source }}）</span>
+                </el-option>
+              </el-select>
+              <el-button @click="openKbBrowseDialog">浏览全部</el-button>
+            </div>
           </el-form-item>
 
           <el-form-item v-if="selectedDocument" label="已选帖子">
