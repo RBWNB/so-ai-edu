@@ -272,9 +272,9 @@ const handleShare = async (post) => {
 
   // 2. 准备分享的数据
   const shareData = {
-    title: '海友社区 - 观察分享', // 可选：系统分享面板的标题
-    text: `快来看看 ${post.username} 的海洋观察记录：${post.title}`, // 可选：分享的正文描述
-    url: targetUrl, // 必填：要分享的链接
+    title: '海友社区 - 观察分享',
+    text: `快来看看 ${post.username} 的海洋观察记录：${post.title}`,
+    url: targetUrl,
   };
 
   // 3. 检查当前环境是否支持 Web Share API

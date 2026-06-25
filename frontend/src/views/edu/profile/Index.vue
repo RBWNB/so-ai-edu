@@ -783,7 +783,7 @@ const route = useRoute();
 const activeTab = ref(route.query.tab || "basic");
 
 // ═══ 角色映射（app_role.role_code → 中文名） ═══
-const ROLE_MAP = { ADMIN: "系统管理员", MANAGER: "管理人员", VISITOR: "普通用户" };
+const ROLE_MAP = { ADMIN: "系统管理员", MANAGER: "内容管理员", VISITOR: "普通用户" };
 const displayRoles = computed(() => {
   return authStore.roles.map(code => ROLE_MAP[code] || code);
 });
