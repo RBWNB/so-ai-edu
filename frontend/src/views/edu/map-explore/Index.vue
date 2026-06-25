@@ -61,7 +61,7 @@
           <h3 class="card-title">{{ post.title }}</h3>
           <div class="card-user">
             <div class="card-avatar-frame" :class="'frame-' + (post.avatarFrame || 'default')">
-              <el-avatar :size="28" :src="formatAvatar(post.avatarUrl)">
+              <el-avatar :size="40" :src="formatAvatar(post.avatarUrl)">
                 <el-icon :size="16"><User /></el-icon>
               </el-avatar>
             </div>
@@ -106,7 +106,7 @@
           <!-- ── 用户信息头部 ── -->
           <div class="detail-user">
             <div class="detail-avatar-frame" :class="'frame-' + (detail.data.avatarFrame || 'default')">
-              <el-avatar :size="44" :src="formatAvatar(detail.data.avatarUrl)">
+              <el-avatar :size="54" :src="formatAvatar(detail.data.avatarUrl)">
                 <el-icon :size="22"><User /></el-icon>
               </el-avatar>
             </div>
@@ -178,7 +178,7 @@
               <div class="clist">
                 <div v-for="c in detailComments" :key="c.id" class="citem">
                   <div class="c-avatar-frame" :class="'frame-' + (c.avatarFrame || 'default')">
-                    <el-avatar :size="32" :src="formatAvatar(c.avatarUrl)">
+                    <el-avatar :size="42" :src="formatAvatar(c.avatarUrl)">
                       <el-icon :size="14"><User /></el-icon>
                     </el-avatar>
                   </div>
@@ -204,7 +204,7 @@
                       <!-- 置顶回复：点赞最高（无点赞则最早） -->
                       <div class="creply top-reply">
                         <div class="c-avatar-frame mini" :class="'frame-' + (topReply(c).avatarFrame || 'default')">
-                          <el-avatar :size="24" :src="formatAvatar(topReply(c).avatarUrl)">
+                          <el-avatar :size="32" :src="formatAvatar(topReply(c).avatarUrl)">
                             <el-icon :size="12"><User /></el-icon>
                           </el-avatar>
                         </div>
@@ -230,7 +230,7 @@
                       <div v-if="detailRepliesShowAll[c.id]" class="more-replies">
                         <div v-for="r in detailReplies[c.id].slice(1)" :key="r.id" class="creply">
                           <div class="c-avatar-frame mini" :class="'frame-' + (r.avatarFrame || 'default')">
-                            <el-avatar :size="24" :src="formatAvatar(r.avatarUrl)">
+                            <el-avatar :size="32" :src="formatAvatar(r.avatarUrl)">
                               <el-icon :size="12"><User /></el-icon>
                             </el-avatar>
                           </div>
@@ -842,10 +842,12 @@ onMounted(async () => {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
+  align-self: flex-start;
 }
 .card-avatar-frame .el-avatar {
   display: block;
   border-radius: 50%;
+  box-sizing: content-box;
 }
 .card-username {
   font-size: 12px;
@@ -894,10 +896,12 @@ onMounted(async () => {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
+  align-self: flex-start;
 }
 .detail-avatar-frame .el-avatar {
   display: block;
   border-radius: 50%;
+  box-sizing: content-box;
 }
 .detail-user-info { flex:1; min-width:0; }
 .detail-user-row {
@@ -969,15 +973,17 @@ onMounted(async () => {
   transition: all 0.3s ease;
   align-items: center;
   justify-content: center;
+  align-self: flex-start;
 }
 .c-avatar-frame .el-avatar {
   display: block;
   border-radius: 50%;
+  box-sizing: content-box;
 }
 .c-avatar-frame.mini {
   padding: 2px;
 }
-.c-avatar-frame.mini .el-avatar { width:24px; height:24px; }
+.c-avatar-frame.mini .el-avatar { width:32px; height:32px; }
 .cbody { flex:1; min-width:0; }
 .cmeta { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:2px; }
 .cuser { font-size:13px; font-weight:600; color:#2c3e50; }
@@ -1049,19 +1055,103 @@ onMounted(async () => {
   background: transparent;
 }
 
-/* ═══ 头像框（匹配顶栏样式） ═══ */
-.frame-default { background: #dcdfe6; }
-.frame-gold { background: linear-gradient(135deg, #f6d365, #fda085); box-shadow: 0 0 8px rgba(246,211,101,0.5); }
-.frame-ocean { background: linear-gradient(135deg, #00d2ff, #165dff); box-shadow: 0 0 10px rgba(0,210,255,0.5); }
-.frame-rainbow { background: linear-gradient(90deg, #ff6b6b, #feca57, #48dbfb, #ff9ff3); background-size:200% 100%; }
-.frame-flame { background: linear-gradient(135deg, #ff4500, #ff8c00, #ffd700); box-shadow: 0 0 12px rgba(255,69,0,0.5); }
-.frame-dashed { background: linear-gradient(135deg, #7ec8e3, #a8edea); }
-.frame-neon { background: linear-gradient(135deg, #00fff5, #ff00e4); box-shadow: 0 0 10px rgba(0,255,245,0.55); }
-.frame-aurora { background: linear-gradient(135deg, #00f5a0, #00d9f5); box-shadow: 0 0 12px rgba(0,245,160,0.4); }
-.frame-crystal { background: linear-gradient(135deg, #e8e8e8, #ffffff); box-shadow: 0 0 12px rgba(0,0,0,0.08); }
-.frame-royal { background: linear-gradient(135deg, #7b2ff7, #b06ff2); box-shadow: 0 0 8px rgba(123,47,247,0.4); }
+/* ═══ 头像框（同步个人中心精良版） ═══ */
 
-/* 所有非默认框：头像加 2px 白边，与顶栏一致 */
+/* 默认边框 */
+.frame-default {
+  background: #dcdfe6;
+}
+
+/* 黄金边框 */
+.frame-gold {
+  background: linear-gradient(135deg, #f6d365, #fda085);
+  box-shadow: 0 0 14px rgba(246, 211, 101, 0.6);
+}
+
+/* 深海边框 */
+.frame-ocean {
+  background: linear-gradient(135deg, #00d2ff, #165dff);
+  box-shadow: 0 0 16px rgba(0, 210, 255, 0.6);
+}
+
+/* 彩虹边框 */
+.frame-rainbow {
+  background: linear-gradient(90deg, #ff6b6b, #feca57, #48dbfb, #ff9ff3);
+  background-size: 200% 100%;
+  animation: frame-rainbow-spin 3s linear infinite;
+}
+@keyframes frame-rainbow-spin {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+/* 火焰边框 */
+.frame-flame {
+  background: linear-gradient(135deg, #ff4500, #ff8c00, #ffd700);
+  box-shadow: 0 0 18px rgba(255, 69, 0, 0.6);
+}
+
+/* 烈焰虚线 — 橙红渐变 + 脉冲光晕 */
+.frame-dashed {
+  background: repeating-conic-gradient(
+    #fd7000 0deg 18deg,
+    transparent 18deg 36deg
+  );
+  box-shadow: 0 0 14px rgba(237, 35, 76, 0.5);
+  animation: frame-dash-glow 2s ease-in-out infinite;
+}
+@keyframes frame-dash-glow {
+  0%, 100% { box-shadow: 0 0 14px rgba(237, 35, 76, 0.5); }
+  50% { box-shadow: 0 0 26px rgba(237, 35, 76, 0.85); }
+}
+
+/* 霓虹光效 — 青 → 品红渐变色 + 双重光晕 */
+.frame-neon {
+  background: linear-gradient(135deg, #00fff5, #ff00e4);
+  box-shadow:
+    0 0 14px rgba(0, 255, 245, 0.7),
+    0 0 28px rgba(255, 0, 228, 0.4);
+  animation: frame-neon-pulse 3s ease-in-out infinite;
+}
+@keyframes frame-neon-pulse {
+  0%, 100% { box-shadow: 0 0 14px rgba(0, 255, 245, 0.7), 0 0 28px rgba(255, 0, 228, 0.4); }
+  50% { box-shadow: 0 0 24px rgba(0, 255, 245, 0.9), 0 0 44px rgba(255, 0, 228, 0.6); }
+}
+
+/* 极光幻彩 — 绿 → 蓝 → 紫 流动渐变 */
+.frame-aurora {
+  background: linear-gradient(135deg, #00f260, #0575e6, #a855f7);
+  background-size: 200% 200%;
+  animation: frame-aurora-shift 4s ease infinite;
+  box-shadow: 0 0 16px rgba(5, 117, 230, 0.5);
+}
+@keyframes frame-aurora-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* 赛博光轮 — 青紫脉冲 */
+.frame-crystal {
+  background: linear-gradient(135deg, #00f5ff, #ff00e5);
+  box-shadow:
+    0 0 16px rgba(0, 245, 255, 0.5),
+    0 0 32px rgba(255, 0, 229, 0.3),
+    inset 0 0 8px rgba(255, 255, 255, 0.4);
+  animation: crystal-breath 2s ease-in-out infinite;
+}
+@keyframes crystal-breath {
+  0%, 100% { box-shadow: 0 0 16px rgba(0, 245, 255, 0.5), 0 0 32px rgba(255, 0, 229, 0.3); }
+  50% { box-shadow: 0 0 28px rgba(0, 245, 255, 0.8), 0 0 56px rgba(255, 0, 229, 0.5); }
+}
+
+/* 紫金皇冠 — 深紫 + 金线点缀 */
+.frame-royal {
+  background: linear-gradient(135deg, #6c3cc7, #9b59b6, #f1c40f);
+  box-shadow: 0 0 16px rgba(108, 60, 199, 0.6);
+}
+
+/* 所有非默认框：头像加 3px 白边（box-sizing:content-box 保持内容区不缩） */
 .frame-gold .el-avatar,
 .frame-ocean .el-avatar,
 .frame-rainbow .el-avatar,
@@ -1070,15 +1160,15 @@ onMounted(async () => {
 .frame-neon .el-avatar,
 .frame-aurora .el-avatar,
 .frame-royal .el-avatar {
-  border: 2px solid #fff;
+  border: 3px solid #fff;
   border-radius: 50%;
 }
 .frame-crystal .el-avatar {
-  border: 2px solid rgba(255,255,255,0.8);
+  border: 3px solid rgba(255, 255, 255, 0.9);
   border-radius: 50%;
 }
 .frame-default .el-avatar {
-  border: 2px solid rgba(255,255,255,0.7);
+  border: 3px solid rgba(255, 255, 255, 0.7);
   border-radius: 50%;
 }
 
