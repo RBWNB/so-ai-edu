@@ -759,7 +759,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import {
@@ -1525,9 +1525,12 @@ const currentFavList = computed(() => {
   return favDataMap[favSubTab.value] || [];
 });
 
-/** 点击收藏的观察帖子 → 跳到观察社区 */
+/** 点击收藏的观察帖子 → 跳到独立详情页，保存滚动位置 */
 const goToObservation = (item) => {
-  router.push({ path: "/map-explore", query: { detail: item.targetId } });
+  sessionStorage.setItem('profile_scroll_top', window.scrollY);
+  sessionStorage.setItem('profile_tab', activeTab.value);
+  sessionStorage.setItem('profile_fav_subtab', favSubTab.value);
+  router.push({ name: 'EduObservationDetail', params: { id: item.targetId } });
 };
 
 const removeBookmark = async (item) => {
@@ -1820,23 +1823,45 @@ onMounted(() => {
   // 预加载左侧名片核心数据（积分余额 + 勋章数量）
   fetchPointsAccount();
   fetchBadges();
+  // 从 sessionStorage 恢复状态（从帖子详情页返回时）
+  const savedTab = sessionStorage.getItem('profile_tab');
+  const savedFavSubtab = sessionStorage.getItem('profile_fav_subtab');
+  if (savedTab) {
+    sessionStorage.removeItem('profile_tab');
+    activeTab.value = savedTab;
+  }
+  if (savedFavSubtab) {
+    sessionStorage.removeItem('profile_fav_subtab');
+    favSubTab.value = savedFavSubtab;
+  }
+
   // 根据路由参数 tab 加载对应 Tab 数据（如从发布观察页返回时定位到"我的观察"）
   const initTab = route.query.tab;
-  if (initTab === "observation") {
+  const effectiveTab = savedTab || initTab;
+  if (effectiveTab === "observation") {
     fetchObservations();
     dataFetchedFlags.observation = true;
-  } else if (initTab === "learning") {
+  } else if (effectiveTab === "learning") {
     fetchLearningData();
     dataFetchedFlags.learning = true;
-  } else if (initTab === "points") {
+  } else if (effectiveTab === "points") {
     fetchPointsData();
     dataFetchedFlags.points = true;
-  } else if (initTab === "achievement") {
+  } else if (effectiveTab === "achievement") {
     fetchAchievementData();
     dataFetchedFlags.achievement = true;
-  } else if (initTab === "favorites") {
+  } else if (effectiveTab === "favorites") {
     fetchBookmarks();
     dataFetchedFlags.bookmark = true;
+  }
+
+  // 从帖子详情页返回时恢复滚动位置
+  const savedScroll = sessionStorage.getItem('profile_scroll_top');
+  if (savedScroll) {
+    sessionStorage.removeItem('profile_scroll_top');
+    nextTick(() => {
+      window.scrollTo(0, parseInt(savedScroll));
+    });
   }
 });
 

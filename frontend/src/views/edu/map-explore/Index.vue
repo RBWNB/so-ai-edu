@@ -120,246 +120,35 @@
       />
     </div>
 
-    <el-dialog
-        v-model="detail.visible"
-        title=""
-        width="640px"
-        top="3vh"
-        class="detail-dialog"
-        destroy-on-close
-        :close-on-click-modal="false"
-    >
-      <div v-if="detail.loading" class="detail-loading">
-        <el-skeleton :rows="6" animated />
-      </div>
-
-      <template v-else-if="detail.data">
-        <div class="detail-scroll">
-          <div class="detail-user">
-            <div class="detail-avatar-frame" :class="'frame-' + (detail.data.avatarFrame || 'default')">
-              <el-avatar :size="54" :src="formatAvatar(detail.data.avatarUrl)">
-                <el-icon :size="22"><User /></el-icon>
-              </el-avatar>
-            </div>
-            <div class="detail-user-info">
-              <div class="detail-user-row">
-                <span class="detail-username">{{ detail.data.username }}</span>
-                <span v-if="detail.data.userTitle" class="detail-usertitle">{{ detail.data.userTitle }}</span>
-              </div>
-              <div class="detail-time"><el-icon :size="12"><Clock /></el-icon>{{ detail.data.createdAt }}</div>
-            </div>
-          </div>
-
-          <h2 class="detail-title">{{ detail.data.title }}</h2>
-          <p v-if="detail.data.description" class="detail-desc">{{ detail.data.description }}</p>
-
-          <div v-if="detail.data.photoUrl" class="detail-img-wrapper">
-            <el-image
-                :src="detail.data.photoUrl"
-                fit="contain"
-                :preview-src-list="[detail.data.photoUrl]"
-                preview-teleported
-                style="width:100%;max-height:420px;border-radius:8px"
-            />
-          </div>
-
-          <div class="detail-tags">
-            <span v-if="detail.data.speciesName" class="dtag sp">🐟 {{ detail.data.speciesName }}</span>
-            <span v-if="detail.data.locationName" class="dtag loc">📍 {{ detail.data.locationName }}</span>
-            <span v-if="detail.data.observedAt" class="dtag dt">📅 {{ detail.data.observedAt }}</span>
-          </div>
-
-          <div class="detail-actions">
-            <button class="daction-btn" :class="{ liked: detail.data.liked }" @click="toggleDetailLike">
-              <el-icon :size="18"><CircleCheck /></el-icon>
-              <span>{{ detail.data.likeCount || 0 }}</span>
-            </button>
-            <button class="daction-btn" :class="{ bookmarked: detail.data.bookmarked }" @click="toggleDetailBookmark">
-              <el-icon :size="18"><Star /></el-icon>
-              <span>{{ detail.data.bookmarked ? '已收藏' : '收藏' }}</span>
-            </button>
-          </div>
-
-          <el-divider style="border-color:#e8e8e8;margin:12px 0" />
-
-          <div class="detail-comments">
-            <div class="comment-header-bar">
-              <span class="comment-heading">评论 ({{ detail.data.commentCount || 0 }})</span>
-              <div class="comment-sort-tabs">
-                <button
-                    class="csort-btn"
-                    :class="{ active: commentSort === 'latest' }"
-                    @click="switchCommentSort('latest')"
-                >最新</button>
-                <button
-                    class="csort-btn"
-                    :class="{ active: commentSort === 'hot' }"
-                    @click="switchCommentSort('hot')"
-                >最热</button>
-              </div>
-            </div>
-
-            <div v-if="commentsLoading" class="cloading"><el-skeleton :rows="2" animated /></div>
-
-            <template v-else-if="detailComments.length">
-              <div class="clist">
-                <div v-for="c in detailComments" :key="c.id" class="citem">
-                  <div class="c-avatar-frame" :class="'frame-' + (c.avatarFrame || 'default')">
-                    <el-avatar :size="42" :src="formatAvatar(c.avatarUrl)">
-                      <el-icon :size="14"><User /></el-icon>
-                    </el-avatar>
-                  </div>
-                  <div class="cbody">
-                    <div class="cmeta">
-                      <span class="cuser">{{ c.username }}</span>
-                      <span v-if="c.title" class="ctitle">{{ c.title }}</span>
-                    </div>
-                    <div class="ctext">{{ c.content }}</div>
-                    <div class="cbar">
-                      <span class="ctime">{{ c.createdAt }}</span>
-                      <button class="cbar-btn" @click="startDetailReply(c)">
-                        {{ detailReplying?.id === c.id ? '取消' : '回复' }}
-                      </button>
-                      <button class="cbar-btn like-btn" :class="{ liked: c.liked }" @click="toggleCommentLike(c)">
-                        <el-icon :size="12"><CircleCheck /></el-icon> {{ c.likeCount || 0 }}
-                      </button>
-                      <button v-if="c.isOwner" class="cbar-btn danger" @click="deleteDetailComment(c)">删除</button>
-                    </div>
-
-                    <div v-if="c.replyCount > 0 && detailReplies[c.id]" class="creplies">
-                      <div class="creply top-reply">
-                        <div class="c-avatar-frame mini" :class="'frame-' + (topReply(c).avatarFrame || 'default')">
-                          <el-avatar :size="32" :src="formatAvatar(topReply(c).avatarUrl)">
-                            <el-icon :size="12"><User /></el-icon>
-                          </el-avatar>
-                        </div>
-                        <div class="cbody">
-                          <div class="cmeta">
-                            <span class="cuser">{{ topReply(c).username }}</span>
-                            <span v-if="topReply(c).title" class="ctitle">{{ topReply(c).title }}</span>
-                          </div>
-                          <div class="ctext">
-                            <span class="reply-to">回复 <em>@{{ c.username }}</em>：</span>
-                            {{ topReply(c).content }}
-                          </div>
-                          <div class="cbar">
-                            <span class="ctime">{{ topReply(c).createdAt }}</span>
-                            <button class="cbar-btn like-btn" :class="{ liked: topReply(c).liked }" @click="toggleCommentLike(topReply(c))">
-                              <el-icon :size="12"><CircleCheck /></el-icon> {{ topReply(c).likeCount || 0 }}
-                            </button>
-                            <button v-if="topReply(c).isOwner" class="cbar-btn danger" @click="deleteDetailReply(c, topReply(c))">删除</button>
-                          </div>
-                        </div>
-                      </div>
-                      <div v-if="detailRepliesShowAll[c.id]" class="more-replies">
-                        <div v-for="r in detailReplies[c.id].slice(1)" :key="r.id" class="creply">
-                          <div class="c-avatar-frame mini" :class="'frame-' + (r.avatarFrame || 'default')">
-                            <el-avatar :size="32" :src="formatAvatar(r.avatarUrl)">
-                              <el-icon :size="12"><User /></el-icon>
-                            </el-avatar>
-                          </div>
-                          <div class="cbody">
-                            <div class="cmeta">
-                              <span class="cuser">{{ r.username }}</span>
-                              <span v-if="r.title" class="ctitle">{{ r.title }}</span>
-                            </div>
-                            <div class="ctext">
-                              <span class="reply-to">回复 <em>@{{ c.username }}</em>：</span>
-                              {{ r.content }}
-                            </div>
-                            <div class="cbar">
-                              <span class="ctime">{{ r.createdAt }}</span>
-                              <button class="cbar-btn like-btn" :class="{ liked: r.liked }" @click="toggleCommentLike(r)">
-                                <el-icon :size="12"><CircleCheck /></el-icon> {{ r.likeCount || 0 }}
-                              </button>
-                              <button v-if="r.isOwner" class="cbar-btn danger" @click="deleteDetailReply(c, r)">删除</button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div
-                          v-if="detailReplies[c.id].length > 1"
-                          class="load-replies"
-                          @click="detailRepliesShowAll[c.id] = !detailRepliesShowAll[c.id]"
-                      >
-                        {{ detailRepliesShowAll[c.id] ? '收起回复' : `查看全部 ${c.replyCount} 条回复` }}
-                      </div>
-                    </div>
-                    <div
-                        v-else-if="c.replyCount > 0 && !detailReplies[c.id]"
-                        class="load-replies"
-                        @click="loadDetailReplies(c)"
-                    >加载 {{ c.replyCount }} 条回复</div>
-                  </div>
-                </div>
-              </div>
-            </template>
-
-            <div v-else class="no-cmt">暂无评论，来说两句吧～</div>
-
-            <div class="cinput-area">
-              <div v-if="detailReplying" class="cinput-hint">
-                回复 <strong>{{ detailReplying.username }}</strong>
-                <a class="cancel-reply" @click="cancelDetailReply">取消</a>
-              </div>
-              <div class="cinput-row">
-                <el-input
-                    v-model="detailCommentInput"
-                    type="textarea"
-                    :rows="2"
-                    :placeholder="detailReplying ? `回复 ${detailReplying.username}...` : '写下你的评论...'"
-                    maxlength="1000"
-                    show-word-limit
-                    resize="none"
-                    class="cinput"
-                />
-                <el-button
-                    type="primary"
-                    :loading="commentSubmitting"
-                    :disabled="!detailCommentInput.trim()"
-                    @click="submitDetailComment"
-                >发送</el-button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </template>
-
-      <el-empty v-else description="暂无数据" :image-size="80" />
-    </el-dialog>
-
+    <!-- 帖子详情已移至独立页面 /map-explore/detail/:id -->
     <el-backtop :right="30" :bottom="80" />
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, nextTick } from "vue";
+import { ref, computed, onMounted, nextTick } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useAuthStore } from "@/store/auth";
 import { ElMessage } from "element-plus";
 import {
-  Plus, User, Clock, Location, Calendar,
-  CircleCheck, ChatDotSquare, Star, Share,
-  Picture, Lightning, Search
+  Plus, User, Clock, CircleCheck, ChatDotSquare, Share,
+  Lightning, Search
 } from "@element-plus/icons-vue";
-import { getCommunityObservations, getCommunityObservationDetail } from "@/api/observation";
-import { getComments, getReplies, createComment, deleteComment as deleteCommentApi } from "@/api/comment";
+import { getCommunityObservations } from "@/api/observation";
 import { toggleLike as toggleLikeApi } from "@/api/like";
-import { addBookmark, removeBookmark } from "@/api/bookmark";
 
 const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
 
-//  社区列表 (单列信息流)
-
+// ===== 社区列表（单列信息流） =====
 
 const posts = ref([]);
 const loading = ref(false);
 const pageNum = ref(1);
-const pageSize = ref(10); // 信息流模式推荐一页 10 条
+const pageSize = ref(10);
 const totalCount = ref(0);
-const sortMode = ref("latest"); // latest | hot
+const sortMode = ref("latest");
 const searchKeyword = ref('');
 
 const handleSearch = () => {
@@ -389,7 +178,6 @@ const formatAvatar = (url) => {
   return `/api${url}`;
 };
 
-
 const loadPosts = async () => {
   loading.value = true;
   try {
@@ -402,7 +190,7 @@ const loadPosts = async () => {
 
     if (res.data.success) {
       const d = res.data.data;
-      posts.value = d.records || []; // 核心：此时 post.hotComment 已自带
+      posts.value = d.records || [];
       totalCount.value = d.total || 0;
     } else {
       posts.value = [];
@@ -417,11 +205,9 @@ const loadPosts = async () => {
   }
 };
 
-
-
 const goPublish = () => router.push("/observation/publish");
 
-// 外部名片流快速点赞 (使用 stop 阻止弹窗冒泡)
+// 外部名片流快速点赞
 const toggleListLike = async (post) => {
   try {
     const res = await toggleLikeApi("user_observation", post.id);
@@ -432,260 +218,50 @@ const toggleListLike = async (post) => {
   } catch (err) { console.error(err); }
 };
 
-
-const detail = reactive({
-  visible: false,
-  loading: false,
-  data: null,
-});
-
-const detailComments = ref([]);
-const commentsLoading = ref(false);
-const commentSort = ref("latest");
-const detailCommentInput = ref("");
-const commentSubmitting = ref(false);
-const detailReplying = ref(null);
-const detailReplies = reactive({});
-const detailRepliesShowAll = reactive({});
-
-const openDetail = async (post) => {
-  detail.visible = true;
-  detail.loading = true;
-  detail.data = null;
-  detailComments.value = [];
-  detailReplying.value = null;
-  detailCommentInput.value = "";
-  cancelDetailReply();
-
-  try {
-    const res = await getCommunityObservationDetail(post.id);
-    if (res.data.success) {
-      detail.data = res.data.data;
-    } else {
-      detail.data = { ...post };
-    }
-  } catch {
-    detail.data = { ...post };
-  } finally {
-    detail.loading = false;
-  }
-
-  await loadDetailComments();
+// 点击帖子 → 跳转到独立详情页面，并保存滚动位置
+const openDetail = (post) => {
+  sessionStorage.setItem('community_scroll_top', window.scrollY);
+  sessionStorage.setItem('community_page_num', String(pageNum.value));
+  sessionStorage.setItem('community_sort', sortMode.value);
+  sessionStorage.setItem('community_keyword', searchKeyword.value);
+  router.push({ name: 'EduObservationDetail', params: { id: post.id } });
 };
 
-const toggleDetailLike = async () => {
-  if (!detail.data) return;
-  try {
-    const res = await toggleLikeApi("user_observation", detail.data.id);
-    if (res.data.success) {
-      detail.data.liked = res.data.data.liked;
-      detail.data.likeCount = res.data.data.count;
-
-      const listPost = posts.value.find(p => p.id === detail.data.id);
-      if(listPost) {
-        listPost.liked = detail.data.liked;
-        listPost.likeCount = detail.data.likeCount;
-      }
-    }
-  } catch (err) { console.error(err); }
-};
-
-const toggleDetailBookmark = async () => {
-  if (!detail.data) return;
-  try {
-    if (detail.data.bookmarked) {
-      const res = await removeBookmark("user_observation", detail.data.id);
-      if (res.data.success) {
-        detail.data.bookmarked = false;
-        ElMessage.success("已取消收藏");
-      }
-    } else {
-      const res = await addBookmark("user_observation", detail.data.id);
-      if (res.data.success) {
-        detail.data.bookmarked = true;
-        ElMessage.success("收藏成功");
-      }
-    }
-  } catch (err) { console.error(err); }
-};
-
-const topReply = (comment) => {
-  const replies = detailReplies[comment.id];
-  if (!replies || replies.length === 0) return null;
-  return replies.reduce((best, r) => {
-    const bestScore = best.likeCount || 0;
-    const rScore = r.likeCount || 0;
-    if (rScore > bestScore) return r;
-    if (rScore === bestScore) return best;
-    return best;
-  });
-};
-
-const loadDetailComments = async () => {
-  if (!detail.data) return;
-  commentsLoading.value = true;
-  try {
-    const res = await getComments("user_observation", detail.data.id, {
-      params: { sort: commentSort.value },
-    });
-    if (res.data.success) {
-      detailComments.value = res.data.data || [];
-      detailComments.value.forEach((c) => {
-        if (c.replyCount > 0 && !detailReplies[c.id]) {
-          loadDetailReplies(c);
-        }
-      });
-    }
-  } catch (err) {
-    console.error("加载评论失败", err);
-    detailComments.value = [];
-  } finally {
-    commentsLoading.value = false;
-  }
-};
-
-const switchCommentSort = (mode) => {
-  if (commentSort.value === mode) return;
-  commentSort.value = mode;
-  loadDetailComments();
-  cancelDetailReply();
-};
-
-const toggleCommentLike = async (comment) => {
-  try {
-    const res = await toggleLikeApi("comment", comment.id);
-    if (res.data.success) {
-      comment.liked = res.data.data.liked;
-      comment.likeCount = res.data.data.count;
-    }
-  } catch (err) { console.error(err); }
-};
-
-const submitDetailComment = async () => {
-  const content = detailCommentInput.value.trim();
-  if (!content) return;
-
-  commentSubmitting.value = true;
-  try {
-    const data = {
-      targetType: "user_observation",
-      targetId: detail.data.id,
-      content,
-    };
-    if (detailReplying.value) {
-      data.parentId = detailReplying.value.id;
-    }
-
-    const res = await createComment(data);
-    if (res.data.success) {
-      detailCommentInput.value = "";
-      ElMessage.success("评论成功");
-      detail.data.commentCount = (detail.data.commentCount || 0) + 1;
-
-      const listPost = posts.value.find(p => p.id === detail.data.id);
-      if(listPost) listPost.commentCount = detail.data.commentCount;
-
-      cancelDetailReply();
-      await loadDetailComments();
-    } else {
-      ElMessage.warning(res.data.message || "评论失败");
-    }
-  } catch (err) {
-    ElMessage.error("评论失败");
-  } finally {
-    commentSubmitting.value = false;
-  }
-};
-
-const startDetailReply = (comment) => {
-  if (detailReplying.value?.id === comment.id) {
-    cancelDetailReply();
-    return;
-  }
-  detailReplying.value = { id: comment.id, username: comment.username };
-  loadDetailReplies(comment);
-  nextTick(() => {
-    document.querySelector(".detail-dialog .cinput textarea")?.focus();
-  });
-};
-
-const cancelDetailReply = () => {
-  detailReplying.value = null;
-};
-
-const loadDetailReplies = async (comment) => {
-  if (detailReplies[comment.id]) return;
-  try {
-    const res = await getReplies(comment.id);
-    if (res.data.success) {
-      detailReplies[comment.id] = res.data.data || [];
-      detailReplies[comment.id].sort((a, b) => (b.likeCount || 0) - (a.likeCount || 0));
-      detailRepliesShowAll[comment.id] = false;
-    }
-  } catch (err) {
-    console.error("加载回复失败", err);
-  }
-};
-
-const deleteDetailComment = async (comment) => {
-  try {
-    const res = await deleteCommentApi(comment.id);
-    if (res.data.success) {
-      ElMessage.success("已删除");
-      const idx = detailComments.value.findIndex((c) => c.id === comment.id);
-      if (idx !== -1) detailComments.value.splice(idx, 1);
-      detail.data.commentCount = Math.max(0, (detail.data.commentCount || 0) - 1);
-    }
-  } catch (err) { ElMessage.error("删除失败"); }
-};
-
-const deleteDetailReply = async (comment, reply) => {
-  try {
-    const res = await deleteCommentApi(reply.id);
-    if (res.data.success) {
-      ElMessage.success("已删除");
-      const arr = detailReplies[comment.id];
-      if (arr) {
-        const idx = arr.findIndex((r) => r.id === reply.id);
-        if (idx !== -1) arr.splice(idx, 1);
-      }
-      detail.data.commentCount = Math.max(0, (detail.data.commentCount || 0) - 1);
-    }
-  } catch (err) { ElMessage.error("删除失败"); }
-};
-
-const openDetailById = async (obsId) => {
-  const found = posts.value.find((p) => p.id === Number(obsId));
-  if (found) {
-    await openDetail(found);
-  } else {
-    detail.visible = true;
-    detail.loading = true;
-    detail.data = null;
-    try {
-      const res = await getCommunityObservationDetail(obsId);
-      if (res.data.success) {
-        detail.data = res.data.data;
-        await loadDetailComments();
-      } else {
-        ElMessage.warning("记录不存在或已下架");
-        detail.visible = false;
-      }
-    } catch (err) {
-      ElMessage.error("加载失败");
-      detail.visible = false;
-    } finally {
-      detail.loading = false;
-    }
+// 页面完全重新加载时：恢复上次浏览位置
+const restoreScroll = async () => {
+  const savedScroll = sessionStorage.getItem('community_scroll_top');
+  if (savedScroll) {
+    sessionStorage.removeItem('community_scroll_top');
+    await nextTick();
+    window.scrollTo(0, parseInt(savedScroll));
   }
 };
 
 onMounted(async () => {
+  // 恢复搜索/排序/分页状态
+  const savedPage = sessionStorage.getItem('community_page_num');
+  const savedSort = sessionStorage.getItem('community_sort');
+  const savedKeyword = sessionStorage.getItem('community_keyword');
+  if (savedPage) {
+    pageNum.value = parseInt(savedPage);
+    sessionStorage.removeItem('community_page_num');
+  }
+  if (savedSort) {
+    sortMode.value = savedSort;
+    sessionStorage.removeItem('community_sort');
+  }
+  if (savedKeyword) {
+    searchKeyword.value = savedKeyword;
+    sessionStorage.removeItem('community_keyword');
+  }
+
   await loadPosts();
+  await restoreScroll();
+
+  // 兼容旧版 detail 查询参数 → 跳转到新详情页
   const detailId = route.query.detail;
   if (detailId) {
-    await nextTick();
-    openDetailById(detailId);
+    router.replace({ name: 'EduObservationDetail', params: { id: detailId } });
   }
 });
 </script>
@@ -699,9 +275,9 @@ onMounted(async () => {
   padding: 16px 0 40px;
 }
 
-/* 将头部区域限制宽度并居中 */
+/* 将头部区域限制宽度并居中 — 与帖子列表等宽 */
 .community-header {
-  max-width: 680px;
+  max-width: 960px;
   margin: 0 auto 20px;
   padding: 0 12px;
 }
@@ -861,161 +437,7 @@ onMounted(async () => {
 /* ═══ 分页 ═══ */
 .pagination-wrapper { display: flex; justify-content: center; margin-top: 28px; }
 
-.detail-dialog :deep(.el-dialog__body) { padding: 20px 24px; max-height: 80vh; overflow-y: auto; }
-.detail-scroll { max-height: 70vh; overflow-y: auto; padding-right: 4px; }
-.detail-user { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-.detail-avatar-frame { display: inline-flex; border-radius: 50%; padding: 3px; }
-.detail-avatar-frame .el-avatar { display: block; border-radius: 50%; box-sizing: content-box; }
-.detail-user-info { flex:1; min-width:0; }
-.detail-user-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.detail-username { font-size:15px; font-weight:600; color:#1a1a2e; }
-.detail-usertitle { font-size:11px; color:#b8860b; background:rgba(255,215,0,0.15); padding:1px 8px; border-radius:10px; }
-.detail-time { display:flex; align-items:center; gap:4px; font-size:12px; color:#999; margin-top:2px; }
-.detail-title { font-size:20px; font-weight:600; color:#1a1a2e; margin:0 0 10px; }
-.detail-desc { font-size:14px; color:#444; line-height:1.7; margin:0 0 14px; white-space:pre-wrap; word-break:break-word; }
-.detail-img-wrapper { margin-bottom:12px; display:flex; justify-content:center; background:rgba(0,0,0,0.03); border-radius:8px; overflow:hidden; }
-
-/* ── 详情弹窗：标签样式 ── */
-.detail-tags { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
-.dtag { font-size:12px; padding:3px 10px; border-radius:14px; white-space:nowrap; }
-.dtag.sp { color:#1a9bc4; background:rgba(26,155,196,0.08); }
-.dtag.loc { color:#67c23a; background:rgba(103,194,58,0.08); }
-.dtag.dt { color:#999; background:rgba(0,0,0,0.04); }
-
-/* ── 详情弹窗：操作按钮(点赞/收藏) ── */
-.detail-actions { display:flex; gap:8px; }
-.daction-btn {
-  display:flex; align-items:center; gap:5px; padding:6px 16px;
-  border:1px solid #e8e8e8; border-radius:8px; background:#fafafa;
-  color:#666; font-size:13px; cursor:pointer; transition:all 0.2s;
-}
-.daction-btn:hover { background:#f0f0f0; color:#333; }
-.daction-btn.liked { color:#409eff; background:rgba(64,158,255,0.06); border-color:#409eff; }
-.daction-btn.bookmarked { color:#e6a23c; background:rgba(230,162,60,0.06); border-color:#e6a23c; }
-
-/* ═══ 评论区(弹窗内) ═══ */
-.comment-header-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-.comment-heading { font-size:15px; font-weight:600; color:#1a1a2e; }
-.comment-sort-tabs {
-  display: flex;
-  background: #f0f2f5;
-  border-radius: 6px;
-  padding: 2px;
-}
-.csort-btn {
-  padding: 3px 10px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: #999;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.csort-btn.active { background:#fff; color:#409eff; font-weight:600; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
-.csort-btn:hover { color:#666; }
-
-.cloading { padding: 16px 0; }
-.clist { display:flex; flex-direction:column; gap:14px; margin-bottom:14px; }
-.citem { display:flex; gap:10px; }
-
-.c-avatar-frame {
-  display: inline-flex;
-  border-radius: 50%;
-  padding: 3px;
-  flex-shrink: 0;
-  transition: all 0.3s ease;
-  align-items: center;
-  justify-content: center;
-  align-self: flex-start;
-}
-.c-avatar-frame .el-avatar {
-  display: block;
-  border-radius: 50%;
-  box-sizing: content-box;
-}
-.c-avatar-frame.mini {
-  padding: 2px;
-}
-.c-avatar-frame.mini .el-avatar { width:32px; height:32px; }
-.cbody { flex:1; min-width:0; }
-.cmeta { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:2px; }
-.cuser { font-size:13px; font-weight:600; color:#2c3e50; }
-.ctitle { font-size:10px; color:#b8860b; background:rgba(255,215,0,0.15); padding:0 6px; border-radius:8px; }
-.ctext { font-size:13px; color:#333; line-height:1.5; word-break:break-word; }
-.cbar { display:flex; align-items:center; gap:10px; margin-top:3px; }
-.ctime { font-size:11px; color:#bbb; }
-.cbar-btn {
-  font-size: 11px;
-  color: #999;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  transition: color 0.2s;
-}
-.cbar-btn:hover { color: #409eff; }
-.cbar-btn.danger:hover { color: #f56c6c; }
-.cbar-btn.liked { color: #409eff; }
-.cbar-btn.like-btn:hover { color: #409eff; }
-
-.reply-to { font-size:12px; color:#999; }
-.reply-to em { font-style:normal; color:#409eff; }
-
-.creplies {
-  margin-top: 10px;
-  padding-left: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.creply {
-  display: flex;
-  gap: 8px;
-  padding: 8px 10px;
-  background: rgba(0,0,0,0.02);
-  border-radius: 8px;
-}
-.creply:hover { background: rgba(0,0,0,0.035); }
-.top-reply { background: rgba(64,158,255,0.04); border:1px solid rgba(64,158,255,0.1); }
-.top-reply:hover { background: rgba(64,158,255,0.07); }
-.more-replies { display:flex; flex-direction:column; gap:8px; }
-.load-replies { font-size:12px; color:#409eff; cursor:pointer; margin-top:4px; }
-.load-replies:hover { color:#66b1ff; }
-.no-cmt { text-align:center; padding:20px 0; color:#bbb; font-size:13px; }
-
-.cinput-area { margin-top:12px; border-top:1px solid #eee; padding-top:12px; }
-.cinput-hint { font-size:12px; color:#999; margin-bottom:8px; }
-.cancel-reply { color:#409eff; cursor:pointer; margin-left:4px; font-size:12px; }
-.cancel-reply:hover { color:#66b1ff; }
-.cinput-row { display:flex; gap:10px; align-items:flex-start; }
-.cinput { flex:1; }
-.cinput :deep(.el-textarea__inner) {
-  background: #f5f7fa;
-  border: 1px solid #e4e7ed;
-  color: #333;
-  border-radius: 8px;
-  font-size: 13px;
-}
-.cinput :deep(.el-textarea__inner:focus) {
-  border-color: #409eff;
-  background: #fff;
-}
-.cinput :deep(.el-input__count) {
-  color: #bbb;
-  background: transparent;
-}
-/* 头像框 */
-
-/* 默认边框 */
+/* ===== 头像框样式 ===== */
 .frame-default {
   background: #dcdfe6;
 }
@@ -1130,26 +552,11 @@ onMounted(async () => {
 }
 
 /* ═══ 滚动条（弹窗内） ═══ */
-.detail-scroll::-webkit-scrollbar,
-.detail-dialog :deep(.el-dialog__body)::-webkit-scrollbar {
-  width: 4px;
-}
-.detail-scroll::-webkit-scrollbar-track,
-.detail-dialog :deep(.el-dialog__body)::-webkit-scrollbar-track {
-  background: transparent;
-}
-.detail-scroll::-webkit-scrollbar-thumb,
-.detail-dialog :deep(.el-dialog__body)::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.15);
-  border-radius: 4px;
-}
 
 /* ═══ 响应式 ═══ */
 @media (max-width: 768px) {
   .community-page { padding: 0 0 20px; }
   .community-header {
-    max-width: 960px; /* 从 680px 放大 */
-    margin: 0 auto 20px;
     padding: 0 12px;
   }
 
@@ -1166,6 +573,5 @@ onMounted(async () => {
   .feed-body, .feed-hot-comment { margin-left: 0; margin-top: 10px; }
   .feed-img-wrapper { max-width: 100%; }
 
-  .detail-dialog :deep(.el-dialog__body) { padding: 16px; }
 }
 </style>

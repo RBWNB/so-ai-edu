@@ -112,6 +112,12 @@ const router = createRouter({
           component: () => import("@/views/edu/map-explore/Index.vue"),
         },
         {
+          path: "map-explore/detail/:id",
+          name: "EduObservationDetail",
+          meta: { title: "帖子详情", requiresAuth: true },
+          component: () => import("@/views/edu/map-explore/PostDetail.vue"),
+        },
+        {
           path: "quiz",
           name: "EduQuiz",
           meta: { title: "答题闯关", requiresAuth: true },
