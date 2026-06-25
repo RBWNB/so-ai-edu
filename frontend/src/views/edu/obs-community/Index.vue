@@ -605,6 +605,20 @@ const fallbackToClipboard = async (text) => {
   border-radius: 50%;
 }
 
+/* ═══ 微交互动效 (Index.vue) ═══ */
+/* 点赞 - Q弹放大特效 */
+@keyframes heart-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.4); }
+  70% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+
+/* 当包含 liked 类时，内部的 el-icon 触发动画 */
+.footer-btn.liked .el-icon {
+  animation: heart-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
 /* ═══ 滚动条（弹窗内） ═══ */
 
 /* ═══ 响应式 ═══ */

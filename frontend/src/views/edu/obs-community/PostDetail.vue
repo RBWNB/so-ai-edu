@@ -796,4 +796,29 @@ onMounted(() => {
   .glass-pill { padding: 20px 16px; }
   .detail-topbar { padding: 12px 0; margin-bottom: 12px; }
 }
+
+/* ═══ 微交互动效 (详情页) ═══ */
+/* 1. 点赞 - Q弹放大特效 (同时作用于正文点赞和评论区点赞) */
+@keyframes heart-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.5); }
+  70% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+
+.daction-btn.liked .el-icon,
+.cbar-btn.liked .el-icon {
+  animation: heart-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+/* 2. 收藏 - 星星旋转点亮特效 */
+@keyframes star-spin {
+  0% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.4) rotate(144deg); }
+  100% { transform: scale(1) rotate(360deg); }
+}
+
+.daction-btn.bookmarked .el-icon {
+  animation: star-spin 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
 </style>
