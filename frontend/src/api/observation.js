@@ -45,3 +45,7 @@ export const getCommunityObservations = (params) =>
 // 获取社区观察详情
 export const getCommunityObservationDetail = (id) =>
     http.get(`/observation/community/${id}`);
+
+// 获取常用地点标签（Top 5）
+export const getCommonLocations = () =>
+    http.get("/observation/common-locations");

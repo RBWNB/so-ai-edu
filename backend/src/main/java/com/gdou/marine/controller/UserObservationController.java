@@ -756,6 +756,32 @@ public class UserObservationController {
         return result;
     }
 
+    /**
+     * 获取常用地点标签（Top 5）
+     * 从 user_observation 表中按使用频次统计 location_name
+     * GET /observation/common-locations
+     */
+    @GetMapping("/common-locations")
+    public Map<String, Object> commonLocations() {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                    "SELECT location_name, COUNT(*) AS cnt FROM user_observation " +
+                    "WHERE location_name IS NOT NULL AND location_name != '' " +
+                    "GROUP BY location_name ORDER BY cnt DESC LIMIT 5");
+            List<String> locations = rows.stream()
+                    .map(row -> (String) row.get("location_name"))
+                    .collect(Collectors.toList());
+            result.put("success", true);
+            result.put("data", locations);
+        } catch (Exception e) {
+            log.error("获取常用地点失败", e);
+            result.put("success", false);
+            result.put("message", e.getMessage());
+        }
+        return result;
+    }
+
     // ════════════════════════════════════════════════════════════════
     // 管理后台：观察审核
     // ════════════════════════════════════════════════════════════════
