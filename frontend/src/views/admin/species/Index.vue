@@ -281,6 +281,90 @@
       </template>
     </el-dialog>
 
+    <!-- 物种详情弹窗 -->
+    <el-dialog
+      v-model="detailVisible"
+      title="物种详情"
+      width="760px"
+      destroy-on-close
+      :close-on-click-modal="true"
+    >
+      <div v-loading="detailLoading" class="detail-content" v-if="detailData">
+        <div class="detail-hero">
+          <div class="hero-img-wrap">
+            <el-image
+              v-if="detailData.imageUrl"
+              :src="getImageUrl(detailData.imageUrl)"
+              fit="cover"
+              class="hero-img"
+              :preview-src-list="[getImageUrl(detailData.imageUrl)]"
+              preview-teleported
+            >
+              <template #error>
+                <div class="hero-img-placeholder">
+                  <el-icon :size="40"><Picture /></el-icon>
+                  <span>暂无图片</span>
+                </div>
+              </template>
+            </el-image>
+            <div v-else class="hero-img-placeholder">
+              <el-icon :size="40"><Picture /></el-icon>
+              <span>暂无图片</span>
+            </div>
+          </div>
+          <div class="hero-info">
+            <h2 class="hero-name">{{ detailData.chineseName || '未命名物种' }}</h2>
+            <p class="hero-latin" v-if="detailData.scientificName"><i>{{ detailData.scientificName }}</i></p>
+            <div class="hero-tags">
+              <el-tag v-if="detailData.conservationStatus" :type="statusType(detailData.conservationStatus)" effect="dark" size="small">
+                {{ detailData.conservationStatus }}
+              </el-tag>
+              <el-tag v-if="detailData.phylum" type="info" size="small">{{ detailData.phylum }}</el-tag>
+              <el-tag v-if="detailData.habitat" size="small">{{ detailData.habitat }}</el-tag>
+            </div>
+          </div>
+        </div>
+
+
+        <div class="detail-section">
+          <h4 class="section-title">分类信息</h4>
+          <div class="info-grid">
+            <div class="info-cell"><span class="info-label">界</span><span class="info-val">{{ detailData.kingdom || '-' }}</span></div>
+            <div class="info-cell"><span class="info-label">门</span><span class="info-val">{{ detailData.phylum || '-' }}</span></div>
+            <div class="info-cell"><span class="info-label">纲</span><span class="info-val">{{ detailData.className || '-' }}</span></div>
+            <div class="info-cell"><span class="info-label">目</span><span class="info-val">{{ detailData.orderName || '-' }}</span></div>
+            <div class="info-cell"><span class="info-label">科</span><span class="info-val">{{ detailData.familyName || '-' }}</span></div>
+            <div class="info-cell"><span class="info-label">属</span><span class="info-val">{{ detailData.genusName || '-' }}</span></div>
+          </div>
+          <div class="info-full"><span class="info-label">分布区域</span><span class="info-val">{{ detailData.distributionArea || '-' }}</span></div>
+          <div class="info-full"><span class="info-label">数据来源</span><span class="info-val">{{ detailData.dataSource || '-' }}</span></div>
+        </div>
+
+        <div class="detail-sections" v-if="detailData.morphologyDesc || detailData.habitDesc">
+          <div v-if="detailData.morphologyDesc" class="detail-section">
+            <h4 class="section-title">形态特征</h4>
+            <p class="section-body">{{ detailData.morphologyDesc }}</p>
+          </div>
+          <div v-if="detailData.habitDesc" class="detail-section">
+            <h4 class="section-title">生活习性</h4>
+            <p class="section-body">{{ detailData.habitDesc }}</p>
+          </div>
+        </div>
+
+        <div v-if="detailData.videoUrl" class="detail-section">
+          <h4 class="section-title">视频链接</h4>
+          <el-link :href="detailData.videoUrl" target="_blank" type="primary" :underline="false">
+            <el-icon style="margin-right:4px"><VideoPlay /></el-icon>
+            {{ detailData.videoUrl }}
+          </el-link>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="detailVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
     <!-- CSV 导入对话框 -->
     <el-dialog
       v-model="importDialogVisible"
@@ -346,14 +430,14 @@
 <script setup>
 import { onMounted, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Promotion, UploadFilled, Refresh } from "@element-plus/icons-vue";
-import { useRoute, useRouter } from "vue-router";
+import { Picture, Promotion, UploadFilled, Refresh, VideoPlay } from "@element-plus/icons-vue";
+import { useRoute } from "vue-router";
 import {
   createSpecies,
   deleteSpecies,
   getSpeciesPage,
+  getSpeciesById,
   updateSpecies,
-  updateSpeciesByBody,
   uploadSpeciesImage,
   suggestSpeciesByAI,
   importSpeciesCsv,
@@ -362,7 +446,6 @@ import {
 import { useAuthStore } from "@/store/auth"; // 引入 authStore
 const authStore = useAuthStore(); // 实例化
 
-const router = useRouter();
 const route = useRoute();
 
 const loading = ref(false);
@@ -399,6 +482,11 @@ const csvFile = ref(null);
 const csvFileList = ref([]);
 const csvUploadRef = ref(null);
 const importResult = ref(null);
+
+// 详情弹窗
+const detailVisible = ref(false);
+const detailLoading = ref(false);
+const detailData = ref(null);
 
 const statusType = (s) => {
   const map = { CR: "danger", EN: "warning", VU: "warning", NT: "info", LC: "success" };
@@ -470,7 +558,7 @@ const fetchSuggestion = async (name) => {
       let parsed;
       try {
         parsed = JSON.parse(result.data);
-      } catch {
+      } catch (e) {
         // 尝试去掉代码块标记
         const cleaned = result.data.replace(/```json\s*/g, "").replace(/```/g, "").trim();
         parsed = JSON.parse(cleaned);
@@ -482,7 +570,7 @@ const fetchSuggestion = async (name) => {
       clearSuggestion();
       ElMessage.warning("AI 推荐暂时不可用，请手动填写或稍后重试");
     }
-  } catch {
+  } catch (e) {
     clearSuggestion();
     ElMessage.error("AI 推荐失败，请检查网络后重试");
   } finally {
@@ -501,7 +589,7 @@ const applySuggestion = (field, value) => {
   }
 };
 
-    // 监听中文名变化，触发 AI 推荐（仅新增模式 + 防抖）
+// 监听中文名变化,触发 AI 推荐(仅新增模式 + 防抖)
 watch(
   () => formModel.chineseName,
   (val) => {
@@ -652,7 +740,7 @@ const openEditDialog = (row) => {
 const handleSubmit = async () => {
   try {
     await formRef.value.validate();
-  } catch {
+  } catch (e) {
     return;
   }
 
@@ -698,8 +786,25 @@ const handleDelete = async (row) => {
   }
 };
 
-const goDetail = (row) => {
-  router.push({ name: "speciesDetail", params: { id: row.id } });
+const goDetail = async (row) => {
+  if (!row || !row.id) return;
+  detailLoading.value = true;
+  detailData.value = null;
+  detailVisible.value = true;
+
+  try {
+    const res = await getSpeciesById(row.id);
+    if (res && res.data) {
+      detailData.value = res.data;
+    } else {
+      detailData.value = { ...row };
+    }
+  } catch (e) {
+    // fallback: 使用列表数据
+    detailData.value = { ...row };
+  } finally {
+    detailLoading.value = false;
+  }
 };
 
 const handleSearch = () => {
@@ -974,5 +1079,153 @@ onMounted(async () => {
 :deep(.el-dialog) {
   background: rgba(255, 255, 255, 0.12) !important;
   backdrop-filter: blur(12px) !important;
+}
+
+/* 详情弹窗 */
+.detail-content {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.detail-hero {
+  display: flex;
+  gap: 22px;
+  margin-bottom: 18px;
+  align-items: flex-start;
+}
+
+.hero-img-wrap {
+  width: 200px;
+  height: 150px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+}
+
+.hero-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.hero-img-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+}
+
+.hero-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.hero-name {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--theme-text-primary, #e8e8e8);
+  margin: 0;
+}
+
+.hero-latin {
+  font-size: 14px;
+  font-style: italic;
+  color: var(--theme-text-secondary, #a0a0a0);
+  margin: 0;
+}
+
+.hero-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.detail-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.detail-section {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e8e8e8;
+  margin: 0 0 8px;
+}
+
+.section-body {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #d0d0d0;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+/* 分类信息网格 */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px 24px;
+  margin-bottom: 10px;
+}
+
+.info-cell {
+  display: flex;
+  gap: 6px;
+}
+
+.info-full {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.info-label {
+  color: #aaa;
+  font-size: 13.5px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.info-val {
+  color: #d0d0d0;
+  font-size: 13.5px;
+}
+
+@media (max-width: 768px) {
+  .detail-hero {
+    flex-direction: column;
+  }
+  .detail-hero .hero-img-wrap {
+    margin-bottom: 14px;
+  }
+  .hero-img-wrap {
+    width: 100%;
+    height: 180px;
+  }
+  .info-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 </style>
