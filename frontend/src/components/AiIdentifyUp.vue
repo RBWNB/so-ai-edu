@@ -64,8 +64,8 @@
         </div>
         <div v-else class="match-not-found">
           <el-tag type="info" effect="plain" class="match-tag">该物种暂未收录</el-tag>
-          <el-button type="success" size="small" @click="goToAddSpecies">
-            + 新增该物种
+          <el-button type="warning" size="small" @click="goToPublish">
+            📝 发布到观察帖子
           </el-button>
         </div>
       </div>
@@ -86,6 +86,7 @@ import { Link, Loading, UploadFilled } from "@element-plus/icons-vue";
 import { useRouter } from "vue-router";
 import { identifySpecies, identifySpeciesByImage } from "@/api/ai";
 import { suggestSpecies } from "@/api/species";
+import { uploadObservationPhoto } from "@/api/observation";
 
 const router = useRouter();
 
@@ -228,8 +229,45 @@ const goToDetail = (id) => {
   router.push({ name: "speciesDetail", params: { id } });
 };
 
-const goToAddSpecies = () => {
-  router.push({ path: "/species", query: { add: "true", name: result.value?.speciesName || "" } });
+const goToPublish = async () => {
+  const info = result.value || {};
+  // 组合 AI 识别结果：物种名 + 拉丁名 + 描述
+  const descParts = [];
+  if (info.speciesName && info.speciesName !== "未知物种") {
+    descParts.push(`【AI 识别】物种：${info.speciesName}`);
+  }
+  if (info.scientificName) {
+    descParts.push(`拉丁名：${info.scientificName}`);
+  }
+  if (info.summary) {
+    descParts.push(`描述：${info.summary}`);
+  }
+  const description = descParts.join("\n");
+
+  // 先上传当前图片，获取 mediaId
+  let mediaId = '';
+  let photoUrl = '';
+  if (file.value) {
+    try {
+      ElMessage.info('正在上传图片...');
+      const res = await uploadObservationPhoto(file.value);
+      if (res.data.success) {
+        mediaId = res.data.data.mediaId || '';
+        photoUrl = res.data.data.photoUrl || '';
+      }
+    } catch (e) {
+      console.error('上传照片失败', e);
+    }
+  }
+
+  router.push({
+    path: "/observation/publish",
+    query: {
+      aiDescription: description,
+      mediaId,
+      photoUrl,
+    },
+  });
 };
 </script>
 

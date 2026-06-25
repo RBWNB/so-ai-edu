@@ -26,7 +26,6 @@
               placeholder="比如：清晨的深圳湾白鹭群"
               maxlength="50"
               show-word-limit
-              @blur="validateField('title')"
           />
         </el-form-item>
 
@@ -38,7 +37,6 @@
               placeholder="描述下你观察到的有趣细节～比如：白鹭叼着小鱼掠过水面"
               maxlength="500"
               show-word-limit
-              @blur="validateField('description')"
           />
         </el-form-item>
 
@@ -48,7 +46,6 @@
               <el-input
                   v-model="form.locationName"
                   placeholder="比如：深圳湾公园-观鸟台"
-                  @blur="validateField('locationName')"
               />
               <!-- 可选：常用地点快捷选择 -->
               <div class="common-locations" v-if="commonLocations.length">
@@ -207,13 +204,14 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRouter, useRoute } from "vue-router";
 import { ElMessage } from "element-plus";
 import { ArrowLeft, Plus, Location, ArrowDown, ArrowUp } from "@element-plus/icons-vue";
 import { suggestSpecies } from "@/api/species";
 import { createObservation, uploadObservationPhoto, getCommonLocations } from "@/api/observation";
 
 const router = useRouter();
+const route = useRoute();
 const formRef = ref(null);
 const submitting = ref(false);
 const locating = ref(false);
@@ -245,15 +243,31 @@ const rules = {
   photoFile: [{ required: true, message: "上传一张现场照片吧～", trigger: "change" }], // 新增照片必填
 };
 
-// 初始化时间：去掉秒级，更符合C端认知
+// 初始化时间
 const initCurrentTime = () => {
   const now = new Date();
   const pad = (n) => String(n).padStart(2, '0');
-  form.observedAt = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  form.observedAt = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 };
 
 onMounted(async () => {
   initCurrentTime();
+
+  // 支持从 AI 识别页跳转时预填
+  if (route.query.aiDescription) {
+    form.description = route.query.aiDescription;
+    form.title = '海洋生物观察记录';
+    // 如果 AI 页已上传图片，直接使用
+    if (route.query.mediaId) {
+      uploadedMediaId.value = route.query.mediaId;
+      form.photoFile = true; // 标记照片已就绪
+      if (route.query.photoUrl) {
+        fileList.value = [{ url: route.query.photoUrl, name: 'AI识别照片', status: 'success' }];
+      }
+    }
+    ElMessage.info('已自动填入 AI 识别结果，可补充修改后发布');
+  }
+
   // 从数据库获取用户常用地点（Top 5）
   try {
     const res = await getCommonLocations();
@@ -266,13 +280,6 @@ onMounted(async () => {
     checkFormReady();
   });
 });
-
-// 实时校验单个字段
-const validateField = (field) => {
-  formRef.value?.validateField(field, (err) => {
-    if (err) ElMessage.warning(err);
-  });
-};
 
 // 计算表单是否可提交
 const unFinishedFields = ref([]);

@@ -12,7 +12,7 @@
             v-model="searchKeyword"
             placeholder="搜索帖子标题..."
             clearable
-            prefix-icon="Search"
+            :prefix-icon="Search"
             @keyup.enter="handleSearch"
             @clear="handleSearch"
             class="search-input"
@@ -361,6 +361,33 @@ const totalCount = ref(0);
 const sortMode = ref("latest"); // latest | hot
 const searchKeyword = ref('');
 
+/** loadPosts 必须先定义，后续 handleSearch / switchSort 才能调用 */
+const loadPosts = async () => {
+  loading.value = true;
+  try {
+    const res = await getCommunityObservations({
+      pageNum: pageNum.value,
+      pageSize: pageSize.value,
+      sort: sortMode.value,
+      keyword: searchKeyword.value.trim() || undefined,
+    });
+    if (res.data.success) {
+      const d = res.data.data;
+      posts.value = d.records || [];
+      totalCount.value = d.total || 0;
+    } else {
+      posts.value = [];
+      totalCount.value = 0;
+    }
+  } catch (err) {
+    console.error("加载社区观察失败", err);
+    ElMessage.error("加载失败");
+    posts.value = [];
+  } finally {
+    loading.value = false;
+  }
+};
+
 const handleSearch = () => {
   pageNum.value = 1;
   loadPosts();
@@ -387,32 +414,6 @@ const formatAvatar = (url) => {
   if (!url) return "";
   if (url.startsWith("http") || url.startsWith("/api")) return url;
   return `/api${url}`;
-};
-
-const loadPosts = async () => {
-  loading.value = true;
-  try {
-    const res = await getCommunityObservations({
-      pageNum: pageNum.value,
-      pageSize: pageSize.value,
-      sort: sortMode.value,
-      keyword: searchKeyword.value.trim() || undefined,
-    });
-    if (res.data.success) {
-      const d = res.data.data;
-      posts.value = d.records || [];
-      totalCount.value = d.total || 0;
-    } else {
-      posts.value = [];
-      totalCount.value = 0;
-    }
-  } catch (err) {
-    console.error("加载社区观察失败", err);
-    ElMessage.error("加载失败");
-    posts.value = [];
-  } finally {
-    loading.value = false;
-  }
 };
 
 const goPublish = () => router.push("/observation/publish");
