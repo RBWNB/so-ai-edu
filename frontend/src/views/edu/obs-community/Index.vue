@@ -95,7 +95,7 @@
         </div>
 
         <div class="feed-footer">
-          <div class="footer-btn">
+          <div class="footer-btn" @click.stop="handleShare(post)">
             <el-icon><Share /></el-icon> 分享
           </div>
           <div class="footer-btn">
@@ -263,6 +263,61 @@ onMounted(async () => {
     router.replace({ name: 'EduObservationDetail', params: { id: detailId } });
   }
 });
+
+// 分享处理函数
+const handleShare = async (post) => {
+  // 1. 拼接完整的绝对路径 URL（Web Share 和剪贴板通常都需要完整的 URL）
+  // 假设你的详情页路由是 /observation/detail/:id
+  const targetUrl = `${window.location.origin}/observation/detail/${post.id}`;
+
+  // 2. 准备分享的数据
+  const shareData = {
+    title: '海友社区 - 观察分享', // 可选：系统分享面板的标题
+    text: `快来看看 ${post.username} 的海洋观察记录：${post.title}`, // 可选：分享的正文描述
+    url: targetUrl, // 必填：要分享的链接
+  };
+
+  // 3. 检查当前环境是否支持 Web Share API
+  if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+    try {
+      await navigator.share(shareData);
+      console.log('唤起系统分享成功');
+      // 注意：这里不需要弹 Toast，因为系统面板已经给了明确的反馈
+    } catch (err) {
+      // 用户主动取消分享也会触发 catch，需要排除 AbortError
+      if (err.name !== 'AbortError') {
+        console.error('系统分享出错', err);
+        fallbackToClipboard(targetUrl);
+      }
+    }
+  } else {
+    // 4. 不支持的话，自动降级为复制链接
+    fallbackToClipboard(targetUrl);
+  }
+};
+
+// 降级方案：复制到剪贴板
+const fallbackToClipboard = async (text) => {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      // 推荐的现代剪贴板 API (需 HTTPS)
+      await navigator.clipboard.writeText(text);
+      ElMessage.success('帖子链接已复制，快去分享给好友吧！');
+    } else {
+      // 更老旧环境的降级方案 (如 HTTP 开发环境)
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textArea);
+      ElMessage.success('帖子链接已复制，快去分享给好友吧！');
+    }
+  } catch (err) {
+    console.error('复制失败', err);
+    ElMessage.error('分享失败，请重试');
+  }
+};
 </script>
 
 <style scoped>
