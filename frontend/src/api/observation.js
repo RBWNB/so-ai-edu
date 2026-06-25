@@ -49,3 +49,9 @@ export const getCommunityObservationDetail = (id) =>
 // 获取常用地点标签（Top 5）
 export const getCommonLocations = () =>
     http.get("/observation/common-locations");
+
+// ═══ 用户主页（微名片）═══
+
+// 获取指定用户的公开主页信息（包含基础信息、等级、过往公开帖子）
+export const getPublicProfile = (userId) =>
+    http.get(`/observation/public-profile/${userId}`);

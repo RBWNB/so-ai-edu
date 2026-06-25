@@ -18,7 +18,7 @@
       <!-- 用户信息 + 帖子内容区块 -->
       <div class="glass-pill">
         <div class="detail-user">
-          <div class="detail-avatar-frame" :class="'frame-' + (data.avatarFrame || 'default')">
+          <div class="detail-avatar-frame clickable-avatar" :class="'frame-' + (data.avatarFrame || 'default')" @click.stop="openUserProfile(data.userId)">
             <el-avatar :size="54" :src="formatAvatar(data.avatarUrl)">
               <el-icon :size="22"><User /></el-icon>
             </el-avatar>
@@ -89,7 +89,7 @@
           <template v-else-if="detailComments.length">
             <div class="clist">
               <div v-for="c in detailComments" :key="c.id" class="citem">
-                <div class="c-avatar-frame" :class="'frame-' + (c.avatarFrame || 'default')">
+                <div class="c-avatar-frame clickable-avatar" :class="'frame-' + (c.avatarFrame || 'default')" @click.stop="openUserProfile(c.userId)">
                   <el-avatar :size="42" :src="formatAvatar(c.avatarUrl)">
                     <el-icon :size="14"><User /></el-icon>
                   </el-avatar>
@@ -212,6 +212,42 @@
 
     <el-empty v-else description="暂无数据" :image-size="80" />
   </div>
+
+  <el-dialog v-model="userProfileVisible" title="主页" width="380px" class="glass-dialog">
+    <div v-loading="userProfileLoading" class="user-pop-profile">
+      <div class="up-header">
+        <div class="detail-avatar-frame" :class="'frame-' + (userProfileData.avatarFrame || 'default')">
+          <el-avatar :size="64" :src="formatAvatar(userProfileData.avatarUrl)">
+            <el-icon :size="24"><User /></el-icon>
+          </el-avatar>
+        </div>
+        <div class="up-info">
+          <div class="up-name">
+            {{ userProfileData.username }}
+            <span class="up-level">Lv.{{ userProfileData.level }}</span>
+          </div>
+          <div v-if="userProfileData.userTitle && userProfileData.userTitle !== '__none__'" class="up-title">
+            {{ userProfileData.userTitle }}
+          </div>
+        </div>
+      </div>
+
+      <div class="up-divider">TA 的过往发帖</div>
+
+      <div class="up-post-list">
+        <div
+            v-for="post in userProfileData.posts"
+            :key="post.id"
+            class="up-post-item"
+            @click="goToUserPost(post.id)"
+        >
+          <el-icon><Reading /></el-icon>
+          <span class="up-post-title">{{ post.title }}</span>
+        </div>
+        <el-empty v-if="!userProfileData.posts.length" description="TA 还没有发布过动态" :image-size="60" />
+      </div>
+    </div>
+  </el-dialog>
 </template>
 
 <script setup>
@@ -219,13 +255,12 @@ import { ref, reactive, onMounted, nextTick, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useAuthStore } from "@/store/auth";
 import { ElMessage } from "element-plus";
-import {
-  ArrowLeft, User, Clock, CircleCheck, Star
-} from "@element-plus/icons-vue";
-import { getCommunityObservationDetail } from "@/api/observation";
+import { ArrowLeft, User, Clock, CircleCheck, Star, Reading } from "@element-plus/icons-vue";
+import {getCommunityObservationDetail, getPublicProfile} from "@/api/observation";
 import { getComments, getReplies, createComment, deleteComment as deleteCommentApi } from "@/api/comment";
 import { toggleLike as toggleLikeApi } from "@/api/like";
 import { addBookmark, removeBookmark } from "@/api/bookmark";
+
 
 const router = useRouter();
 const route = useRoute();
@@ -474,6 +509,50 @@ watch(() => route.params.id, (newId) => {
     loadDetail(newId);
   }
 });
+
+// ================= 用户微名片逻辑 =================
+const userProfileVisible = ref(false);
+const userProfileLoading = ref(false);
+const userProfileData = ref({
+  username: "",
+  avatarUrl: "",
+  avatarFrame: "default",
+  userTitle: "",
+  level: 1,
+  posts: []
+});
+
+// 打开用户主页
+const openUserProfile = async (userId) => {
+  if (!userId) return;
+  userProfileVisible.value = true;
+  userProfileLoading.value = true;
+  try {
+    const res = await getPublicProfile(userId);
+    if (res.data.success) {
+      userProfileData.value = res.data.data;
+    }
+  } catch (err) {
+    ElMessage.error("获取用户信息失败");
+  } finally {
+    userProfileLoading.value = false;
+  }
+};
+
+// 跳转到该用户的帖子
+const goToUserPost = (postId) => {
+  userProfileVisible.value = false;
+  // 跳转到对应的详情页
+  router.push(`/obs-community/detail/${postId}`);
+};
+
+// 🌟 核心修复：监听路由变化，解决从帖子A跳转到帖子B时页面数据不刷新的问题
+watch(() => route.params.id, (newId, oldId) => {
+  if (newId && newId !== oldId) {
+    loadDetail(newId);
+    window.scrollTo({ top: 0, behavior: 'smooth' }); // 回到页面顶部
+  }
+});
 </script>
 
 <style scoped>
@@ -720,6 +799,104 @@ watch(() => route.params.id, (newId) => {
 .cinput :deep(.el-input__count) {
   color: #bbb;
   background: transparent;
+}
+
+/* ================== 用户微名片样式 ================== */
+.clickable-avatar {
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+.clickable-avatar:hover {
+  transform: scale(1.08);
+}
+
+.user-pop-profile {
+  padding: 5px 0;
+}
+.up-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.up-info { flex: 1; }
+.up-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1d2129;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* 等级标签样式 */
+.up-level {
+  font-size: 12px;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(135deg, #ff7a00, #ff004d);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.up-title {
+  display: inline-block;
+  font-size: 12px;
+  color: #b8860b;
+  background: rgba(255, 215, 0, 0.15);
+  padding: 2px 10px;
+  border-radius: 12px;
+  margin-top: 6px;
+  border: 1px solid rgba(255, 215, 0, 0.3);
+}
+
+.up-divider {
+  font-size: 13px;
+  font-weight: 600;
+  color: #86909c;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+}
+.up-divider::before, .up-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.06);
+  margin: 0 10px;
+}
+
+.up-post-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 250px;
+  overflow-y: auto;
+}
+/* 隐藏滚动条让视觉更干净 */
+.up-post-list::-webkit-scrollbar { width: 4px; }
+.up-post-list::-webkit-scrollbar-thumb { background: #dcdfe6; border-radius: 2px; }
+
+.up-post-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  color: #4e5969;
+}
+.up-post-item:hover {
+  background: rgba(22, 93, 255, 0.08);
+  color: #165dff;
+  transform: translateX(4px); /* 悬浮右移效果 */
+}
+.up-post-title {
+  font-size: 14px;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 头像框 */

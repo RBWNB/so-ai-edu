@@ -819,6 +819,53 @@ public class UserObservationController {
     }
 
     /**
+     * 获取指定用户的公开主页信息（包含基础信息、等级、过往公开帖子）
+     * GET /observation/public-profile/{userId}
+     */
+    @GetMapping("/public-profile/{userId}")
+    public Map<String, Object> getPublicProfile(@PathVariable Long userId) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            // 1. 查基础信息 (app_user 表)
+            List<Map<String, Object>> users = jdbcTemplate.queryForList(
+                    "SELECT username, avatar_url, avatar_frame, user_title FROM app_user WHERE id = ?", userId);
+
+            if (users.isEmpty()) {
+                result.put("success", false);
+                result.put("message", "用户不存在");
+                return result;
+            }
+            Map<String, Object> user = users.get(0);
+
+            // 2. 查学习等级 (user_learning_profile 表)
+            List<Map<String, Object>> levels = jdbcTemplate.queryForList(
+                    "SELECT level FROM user_learning_profile WHERE user_id = ?", userId);
+            int level = levels.isEmpty() ? 1 : ((Number) levels.get(0).get("level")).intValue();
+
+            // 3. 查过往发帖 (user_observation 表) - 只查审核通过公开的(status=1)
+            List<Map<String, Object>> posts = jdbcTemplate.queryForList(
+                    "SELECT id, title FROM user_observation WHERE user_id = ? AND status = 1 ORDER BY created_at DESC", userId);
+
+            // 4. 组装数据返回
+            Map<String, Object> data = new HashMap<>();
+            data.put("username", user.get("username"));
+            data.put("avatarUrl", user.get("avatar_url"));
+            data.put("avatarFrame", user.get("avatar_frame"));
+            data.put("userTitle", user.get("user_title"));
+            data.put("level", level);
+            data.put("posts", posts);
+
+            result.put("success", true);
+            result.put("data", data);
+        } catch (Exception e) {
+            log.error("获取用户公开信息失败", e);
+            result.put("success", false);
+            result.put("message", e.getMessage());
+        }
+        return result;
+    }
+
+    /**
      * 获取常用地点标签（Top 5）
      * 从 user_observation 表中按使用频次统计 location_name
      * GET /observation/common-locations
@@ -1060,4 +1107,6 @@ public class UserObservationController {
         }
         return null;
     }
+
+
 }
