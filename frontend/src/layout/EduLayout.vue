@@ -172,7 +172,11 @@
 
     <!-- 主内容区 -->
     <el-main class="edu-main">
-      <router-view />
+      <router-view v-slot="{ Component }">
+        <keep-alive exclude="Publish">
+          <component :is="Component" />
+        </keep-alive>
+      </router-view>
     </el-main>
 
     <!-- 底部 -->

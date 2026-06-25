@@ -4,6 +4,12 @@
   </div>
 </template>
 
+<script>
+export default {
+  name: "AiAssistantView",
+};
+</script>
+
 <script setup>
 import AiIdentifyUp from "@/components/AiIdentifyUp.vue";
 </script>

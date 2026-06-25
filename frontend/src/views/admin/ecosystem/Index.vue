@@ -64,43 +64,57 @@
 
     <el-dialog v-model="dialogVisible" :title="mode === 'create' ? '新增生态系统' : '编辑生态系统'" width="680px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="110px">
-        <el-form-item label="名称" prop="name">
-          <el-input v-model="form.name" placeholder="输入名称后，AI 将自动推荐其他信息" />
-        </el-form-item>
+        <el-divider content-position="left">基础信息</el-divider>
+        <el-row :gutter="16">
+          <el-col :span="24">
+            <el-form-item label="名称" prop="name">
+              <el-input v-model="form.name" placeholder="输入名称后，AI 将自动推荐其他信息" />
+            </el-form-item>
+            <!-- AI 智能推荐面板 -->
+            <div v-if="suggestion.show" class="suggest-panel">
+              <div class="suggest-header">
+                <el-icon><Promotion /></el-icon>
+                <span>AI 推荐信息</span>
+                <el-tag v-if="suggestion.loading" size="small" type="warning">推荐中...</el-tag>
+                <el-button v-else size="small" text type="primary" @click="retrySuggestion" style="margin-left: auto;">
+                  <el-icon><Refresh /></el-icon> 重新获取
+                </el-button>
+              </div>
+              <div class="suggest-body">
+                <p v-if="suggestion.data.description" class="suggest-item">
+                  <strong>描述：</strong>
+                  <span class="suggest-value" @click="applySuggestion('description', suggestion.data.description)">{{ suggestion.data.description }}</span>
+                </p>
+                <p v-if="suggestion.data.typicalSpecies" class="suggest-item">
+                  <strong>典型物种：</strong>
+                  <span class="suggest-value" @click="applySuggestion('typicalSpecies', suggestion.data.typicalSpecies)">{{ suggestion.data.typicalSpecies }}</span>
+                </p>
+                <p v-if="suggestion.data.threats" class="suggest-item">
+                  <strong>主要威胁：</strong>
+                  <span class="suggest-value" @click="applySuggestion('threats', suggestion.data.threats)">{{ suggestion.data.threats }}</span>
+                </p>
+              </div>
+              <div class="suggest-footer">点击上方任意字段自动填入表单</div>
+            </div>
+          </el-col>
+        </el-row>
 
-        <!-- AI 智能推荐面板 -->
-        <div v-if="suggestion.show" class="suggest-panel">
-          <div class="suggest-header">
-            <el-icon><Promotion /></el-icon>
-            <span>AI 推荐信息</span>
-            <el-tag v-if="suggestion.loading" size="small" type="warning">推荐中...</el-tag>
-          </div>
-          <div class="suggest-body">
-            <p v-if="suggestion.data.description" class="suggest-item">
-              <strong>描述：</strong>
-              <span class="suggest-value" @click="applySuggestion('description', suggestion.data.description)">{{ suggestion.data.description }}</span>
-            </p>
-            <p v-if="suggestion.data.typicalSpecies" class="suggest-item">
-              <strong>典型物种：</strong>
-              <span class="suggest-value" @click="applySuggestion('typicalSpecies', suggestion.data.typicalSpecies)">{{ suggestion.data.typicalSpecies }}</span>
-            </p>
-            <p v-if="suggestion.data.threats" class="suggest-item">
-              <strong>主要威胁：</strong>
-              <span class="suggest-value" @click="applySuggestion('threats', suggestion.data.threats)">{{ suggestion.data.threats }}</span>
-            </p>
-          </div>
-          <div class="suggest-footer">点击上方任意字段自动填入表单</div>
-        </div>
-
+        <el-divider content-position="left">生态特征</el-divider>
         <el-form-item label="描述" prop="description">
           <el-input v-model="form.description" type="textarea" :rows="3" />
         </el-form-item>
-        <el-form-item label="典型物种">
-          <el-input v-model="form.typicalSpecies" placeholder="常见物种列表" />
-        </el-form-item>
-        <el-form-item label="主要威胁">
-          <el-input v-model="form.threats" placeholder="如：全球变暖、污染" />
-        </el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="典型物种">
+              <el-input v-model="form.typicalSpecies" placeholder="常见物种列表" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="主要威胁">
+              <el-input v-model="form.threats" placeholder="如：全球变暖、污染" />
+            </el-form-item>
+          </el-col>
+        </el-row>
 
         <el-divider content-position="left">影像资料</el-divider>
         <el-form-item label="生态系统图片">
@@ -138,7 +152,7 @@
 <script setup>
 import { onMounted, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Promotion, UploadFilled } from "@element-plus/icons-vue";
+import { Promotion, UploadFilled, Refresh } from "@element-plus/icons-vue";
 import { getEcosystemPage, createEcosystem, updateEcosystem, deleteEcosystem, suggestEcosystemByAI, uploadEcosystemImage } from "@/api/ecosystem";
 
 const loading = ref(false);
@@ -200,12 +214,23 @@ const fetchSuggestion = async (name) => {
       };
     } else {
       clearSuggestion();
+      ElMessage.warning("AI 推荐暂时不可用，请手动填写或稍后重试");
     }
   } catch {
     clearSuggestion();
+    ElMessage.error("AI 推荐失败，请检查网络后重试");
   } finally {
     suggestion.loading = false;
   }
+};
+
+const retrySuggestion = () => {
+  const name = form.name?.trim();
+  if (!name || name.length < 2) {
+    ElMessage.warning("请先输入至少2个字");
+    return;
+  }
+  fetchSuggestion(name);
 };
 
 const applySuggestion = (field, value) => {

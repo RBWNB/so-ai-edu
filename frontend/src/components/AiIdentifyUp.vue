@@ -52,15 +52,17 @@
       <!-- 物种匹配结果 -->
       <div v-if="matchedSpecies !== null" class="match-section">
         <div v-if="matchedSpecies" class="match-found">
-          <el-tag type="success" effect="plain" class="match-tag">已存在于生物展示馆</el-tag>
-          <el-tag
-            class="species-link-tag"
-            effect="plain"
+          <el-tag type="success" effect="plain" class="match-tag">该物种已收录</el-tag>
+          <el-button
+            type="success"
+            size="small"
             @click="goToDetail(matchedSpecies.id)"
           >
-            <el-icon><Link /></el-icon>
-            {{ matchedSpecies.chineseName }} · 点击查看详情
-          </el-tag>
+            🔍 查看该物种详情
+          </el-button>
+          <el-button type="warning" size="small" @click="goToPublish">
+            📝 发布到观察帖子
+          </el-button>
         </div>
         <div v-else class="match-not-found">
           <el-tag type="info" effect="plain" class="match-tag">该物种暂未收录</el-tag>
@@ -76,16 +78,88 @@
         </el-tag>
       </div>
     </el-card>
+
+    <!-- 物种详情弹窗 -->
+    <el-dialog
+      v-model="detailVisible"
+      title="物种详情"
+      width="720px"
+      destroy-on-close
+      append-to-body
+      class="ai-detail-dialog"
+      :close-on-click-modal="true"
+    >
+      <div v-loading="detailLoading" class="detail-content">
+        <template v-if="detailData">
+          <!-- 头图区 -->
+          <div class="detail-hero">
+            <div class="hero-image-wrap">
+              <el-image
+                v-if="detailData.imageUrl"
+                :src="getImageUrl(detailData.imageUrl)"
+                fit="cover"
+                class="hero-image"
+              >
+                <template #error><div class="hero-placeholder"><el-icon :size="60"><Picture /></el-icon></div></template>
+              </el-image>
+              <div v-else class="hero-placeholder hero-full"><el-icon :size="60"><Picture /></el-icon></div>
+              <div class="hero-gradient"></div>
+            </div>
+            <div class="hero-info">
+              <h2 class="hero-name">{{ detailData.chineseName || '未命名物种' }}</h2>
+              <p class="hero-latin">{{ detailData.scientificName || '' }}</p>
+              <div class="hero-tags">
+                <el-tag v-if="detailData.conservationStatus" :type="conservationTagType(detailData.conservationStatus)" effect="dark" round size="small">
+                  {{ detailData.conservationStatus }}
+                </el-tag>
+                <el-tag v-if="detailData.phylum" type="info" effect="plain" round size="small">{{ detailData.phylum }}</el-tag>
+                <el-tag v-if="detailData.habitat" type="" effect="plain" round size="small">{{ detailData.habitat }}</el-tag>
+              </div>
+            </div>
+          </div>
+
+          <!-- 信息面板 -->
+          <div class="detail-info">
+            <el-descriptions :column="2" border size="small" class="desc-table">
+              <el-descriptions-item label="界">{{ detailData.kingdom || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="门">{{ detailData.phylum || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="纲">{{ detailData.className || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="目">{{ detailData.orderName || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="科">{{ detailData.familyName || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="属">{{ detailData.genusName || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="分布区域" :span="2">{{ detailData.distributionArea || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="数据来源">{{ detailData.dataSource || '-' }}</el-descriptions-item>
+            </el-descriptions>
+          </div>
+
+          <!-- 特征描述 -->
+          <div class="detail-sections" v-if="detailData.morphologyDesc || detailData.habitDesc">
+            <div v-if="detailData.morphologyDesc" class="detail-section">
+              <h4 class="section-title"><el-icon><EditPen /></el-icon>形态特征</h4>
+              <p class="section-body">{{ detailData.morphologyDesc }}</p>
+            </div>
+            <div v-if="detailData.habitDesc" class="detail-section">
+              <h4 class="section-title"><el-icon><Sunny /></el-icon>生活习性</h4>
+              <p class="section-body">{{ detailData.habitDesc }}</p>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <template #footer>
+        <el-button @click="detailVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </el-card>
 </template>
 
 <script setup>
 import { ref } from "vue";
 import { ElMessage } from "element-plus";
-import { Link, Loading, UploadFilled } from "@element-plus/icons-vue";
+import { Loading, UploadFilled, Picture, EditPen, Sunny } from "@element-plus/icons-vue";
 import { useRouter } from "vue-router";
 import { identifySpecies, identifySpeciesByImage } from "@/api/ai";
-import { suggestSpecies } from "@/api/species";
+import { suggestSpecies, getSpeciesById } from "@/api/species";
 import { uploadObservationPhoto } from "@/api/observation";
 
 const router = useRouter();
@@ -96,6 +170,11 @@ const loading = ref(false);
 const result = ref(null);
 const matchedSpecies = ref(null); // null=未查询, object=找到, null-ish=未找到
 const lookingUp = ref(false);
+
+// 详情弹窗状态
+const detailVisible = ref(false);
+const detailLoading = ref(false);
+const detailData = ref(null);
 
 const handleFileChange = (uploadFile) => {
   const raw = uploadFile?.raw;
@@ -225,8 +304,37 @@ const handleIdentify = async () => {
   }
 };
 
-const goToDetail = (id) => {
-  router.push({ name: "speciesDetail", params: { id } });
+const getImageUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  if (url.startsWith('/uploads/')) return `/api${url}`;
+  if (url.startsWith('/')) return `/api/uploads${url}`;
+  return `/api/uploads/${url}`;
+};
+
+const conservationTagType = (status) => {
+  const map = { CR: 'danger', EN: 'warning', VU: 'warning', NT: 'info', LC: 'success' };
+  return map[status] || 'info';
+};
+
+const goToDetail = async (id) => {
+  if (!id) return;
+  detailLoading.value = true;
+  detailData.value = null;
+  detailVisible.value = true;
+
+  try {
+    const res = await getSpeciesById(id);
+    detailData.value = res.data;
+  } catch (error) {
+    console.error('获取物种详情失败:', error);
+    // fallback: 用当前列表中的数据
+    if (matchedSpecies.value && matchedSpecies.value.id === id) {
+      detailData.value = { ...matchedSpecies.value };
+    }
+  } finally {
+    detailLoading.value = false;
+  }
 };
 
 const goToPublish = async () => {
@@ -266,6 +374,7 @@ const goToPublish = async () => {
       aiDescription: description,
       mediaId,
       photoUrl,
+      from: "ai-assistant",
     },
   });
 };
@@ -375,22 +484,6 @@ const goToPublish = async () => {
   white-space: nowrap;
 }
 
-.species-link-tag {
-  cursor: pointer;
-  font-size: 13px;
-  padding: 6px 12px;
-  border-radius: 20px;
-  background: #ecfdf5 !important;
-  border-color: #a7f3d0 !important;
-  color: #065f46 !important;
-  transition: all 0.2s;
-}
-
-.species-link-tag:hover {
-  background: #d1fae5 !important;
-  border-color: #6ee7b7 !important;
-}
-
 .lookup-tag {
   display: flex;
   align-items: center;
@@ -404,5 +497,257 @@ const goToPublish = async () => {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+</style>
+
+<!-- ═════════ 全局弹窗样式（dialog 被 Teleport 到 body 下） ═════════ -->
+<style>
+.ai-detail-dialog {
+  border-radius: 20px !important;
+  overflow: hidden;
+  background: rgb(8, 22, 38) !important;
+  --el-dialog-bg-color: rgb(8, 22, 38) !important;
+  --el-bg-color: rgb(8, 22, 38) !important;
+  --el-bg-color-overlay: rgb(8, 22, 38) !important;
+  backdrop-filter: blur(28px);
+  border: 1px solid rgba(0, 180, 216, 0.3) !important;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6) !important;
+}
+
+.ai-detail-dialog .el-dialog__header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 18px 24px 14px;
+  margin: 0;
+  background: rgb(8, 22, 38) !important;
+}
+
+.ai-detail-dialog .el-dialog__title {
+  font-weight: 700;
+  font-size: 18px;
+  color: #ffffff !important;
+}
+
+.ai-detail-dialog .el-dialog__headerbtn .el-dialog__close {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 16px;
+}
+
+.ai-detail-dialog .el-dialog__headerbtn .el-dialog__close:hover {
+  color: #ffffff;
+}
+
+.ai-detail-dialog .el-dialog__body {
+  padding: 0 !important;
+  background: rgb(8, 22, 38) !important;
+}
+
+.ai-detail-dialog .el-dialog__footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 14px 24px 18px;
+  background: rgb(8, 22, 38) !important;
+}
+
+.ai-detail-dialog .detail-content {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 24px;
+  background: rgb(6, 18, 32) !important;
+}
+
+.ai-detail-dialog .detail-content::-webkit-scrollbar {
+  width: 5px;
+}
+
+.ai-detail-dialog .detail-content::-webkit-scrollbar-thumb {
+  background: rgba(0, 180, 216, 0.35);
+  border-radius: 4px;
+}
+
+.ai-detail-dialog .detail-hero {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.ai-detail-dialog .hero-image-wrap {
+  width: 220px;
+  height: 150px;
+  border-radius: 14px;
+  overflow: hidden;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.ai-detail-dialog .hero-image {
+  width: 100%;
+  height: 100%;
+}
+
+.ai-detail-dialog .hero-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.15);
+  background: linear-gradient(145deg, rgba(0, 50, 80, 0.4), rgba(0, 90, 130, 0.25));
+}
+
+.ai-detail-dialog .hero-placeholder.hero-full {
+  border-radius: 14px;
+}
+
+.ai-detail-dialog .hero-gradient {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 40%;
+  background: linear-gradient(to top, rgba(0, 20, 40, 0.5), transparent);
+  pointer-events: none;
+}
+
+.ai-detail-dialog .hero-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+
+.ai-detail-dialog .hero-name {
+  font-size: 22px;
+  font-weight: 800;
+  margin: 0;
+  color: #f1f5f9;
+}
+
+.ai-detail-dialog .hero-latin {
+  font-size: 14px;
+  font-style: italic;
+  color: #48cae4;
+  margin: 0;
+}
+
+.ai-detail-dialog .hero-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ai-detail-dialog .detail-info {
+  margin-bottom: 18px;
+}
+
+.ai-detail-dialog .detail-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ai-detail-dialog .detail-section {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 16px 18px;
+  transition: all 0.25s ease;
+}
+
+.ai-detail-dialog .detail-section:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(0, 180, 216, 0.3);
+}
+
+.ai-detail-dialog .section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #48cae4;
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ai-detail-dialog .section-body {
+  font-size: 13.5px;
+  line-height: 1.75;
+  color: #e2e8f0;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+/* el-descriptions 深色覆盖 */
+.ai-detail-dialog .detail-info .el-descriptions {
+  --el-descriptions-table-border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  --el-fill-color-blank: transparent !important;
+  --el-border-color: rgba(255, 255, 255, 0.1) !important;
+  --el-text-color-primary: rgba(255, 255, 255, 0.9) !important;
+  --el-text-color-regular: rgba(255, 255, 255, 0.85) !important;
+  --el-bg-color: transparent !important;
+  --el-bg-color-overlay: transparent !important;
+  background: transparent !important;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.ai-detail-dialog .detail-info .el-descriptions table {
+  background: transparent !important;
+  border-collapse: collapse;
+}
+
+.ai-detail-dialog .detail-info .el-descriptions table th,
+.ai-detail-dialog .detail-info .el-descriptions table td {
+  background: transparent !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.88) !important;
+  transition: background 0.2s;
+}
+
+.ai-detail-dialog .detail-info .el-descriptions__label {
+  background: rgba(0, 110, 170, 0.18) !important;
+  color: #48cae4 !important;
+  font-weight: 650 !important;
+  font-size: 13px !important;
+  width: 90px;
+  padding: 10px 14px !important;
+}
+
+.ai-detail-dialog .detail-info .el-descriptions__content {
+  background: rgba(255, 255, 255, 0.02) !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+  font-size: 13.5px !important;
+  padding: 10px 16px !important;
+}
+
+.ai-detail-dialog .detail-info .el-descriptions table tr:hover th,
+.ai-detail-dialog .detail-info .el-descriptions table tr:hover td {
+  background: rgba(0, 180, 216, 0.06) !important;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .ai-detail-dialog {
+    width: 94% !important;
+    margin-top: 3vh !important;
+  }
+
+  .ai-detail-dialog .detail-hero {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .ai-detail-dialog .hero-image-wrap {
+    width: 100%;
+    height: 200px;
+  }
+
+  .ai-detail-dialog .detail-info .el-descriptions__label {
+    width: 70px !important;
+    padding: 8px 10px !important;
+    font-size: 12px !important;
+  }
+
+  .ai-detail-dialog .detail-info .el-descriptions__content {
+    padding: 8px 10px !important;
+    font-size: 12.5px !important;
+  }
 }
 </style>

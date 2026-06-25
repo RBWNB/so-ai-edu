@@ -140,6 +140,9 @@
                 <el-icon><Promotion /></el-icon>
                 <span>AI 推荐信息</span>
                 <el-tag v-if="suggestion.loading" size="small" type="warning">推荐中...</el-tag>
+                <el-button v-else size="small" text type="primary" @click="retrySuggestion" style="margin-left: auto;">
+                  <el-icon><Refresh /></el-icon> 重新获取
+                </el-button>
               </div>
               <div class="suggest-body">
                 <el-descriptions :column="2" size="small" border>
@@ -343,7 +346,7 @@
 <script setup>
 import { onMounted, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Promotion, UploadFilled } from "@element-plus/icons-vue";
+import { Promotion, UploadFilled, Refresh } from "@element-plus/icons-vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   createSpecies,
@@ -477,9 +480,11 @@ const fetchSuggestion = async (name) => {
       });
     } else {
       clearSuggestion();
+      ElMessage.warning("AI 推荐暂时不可用，请手动填写或稍后重试");
     }
   } catch {
     clearSuggestion();
+    ElMessage.error("AI 推荐失败，请检查网络后重试");
   } finally {
     suggestion.loading = false;
   }
@@ -496,7 +501,7 @@ const applySuggestion = (field, value) => {
   }
 };
 
-// 监听中文名变化，触发 AI 推荐（仅新增模式 + 防抖）
+    // 监听中文名变化，触发 AI 推荐（仅新增模式 + 防抖）
 watch(
   () => formModel.chineseName,
   (val) => {
@@ -512,6 +517,16 @@ watch(
     suggestTimer = setTimeout(() => fetchSuggestion(val.trim()), 600);
   }
 );
+
+// 手动重新获取 AI 推荐
+const retrySuggestion = () => {
+  const name = formModel.chineseName?.trim();
+  if (!name || name.length < 2) {
+    ElMessage.warning("请先输入至少2个字的中文名");
+    return;
+  }
+  fetchSuggestion(name);
+};
 
 const parsePageData = (payload) => {
   const candidates = [payload, payload?.data, payload?.result, payload?.page];

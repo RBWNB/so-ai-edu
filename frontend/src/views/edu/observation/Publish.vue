@@ -205,7 +205,7 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { ArrowLeft, Plus, Location, ArrowDown, ArrowUp } from "@element-plus/icons-vue";
 import { suggestSpecies } from "@/api/species";
 import { createObservation, uploadObservationPhoto, getCommonLocations } from "@/api/observation";
@@ -433,8 +433,12 @@ const goBack = () => {
   const manualFields = ["title", "description", "locationName"];
   const hasManualInput = manualFields.some(key => form[key]);
 
+  const doGoBack = () => {
+    router.back();
+  };
+
   if (hasManualInput) {
-    ElMessage.confirm(
+    ElMessageBox.confirm(
         "返回后已填写的内容会丢失哦～确定要返回吗？",
         "提示",
         {
@@ -443,12 +447,12 @@ const goBack = () => {
           type: "warning",
         }
     ).then(() => {
-      router.back();
+      doGoBack();
     }).catch(() => {
       // 用户点击取消，不做任何操作
     });
   } else {
-    router.back();
+    doGoBack();
   }
 };
 </script>
