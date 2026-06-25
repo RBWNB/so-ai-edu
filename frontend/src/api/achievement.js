@@ -16,3 +16,6 @@ export const claimTaskReward = (taskId) => http.post(`/achievement/claim/${taskI
 
 // 每日签到
 export const dailyCheckin = () => http.post("/achievement/checkin");
+
+// 获取已获得勋章数量（用于称号解锁判断）
+export const getBadgeCount = () => http.get("/achievement/badge-count");

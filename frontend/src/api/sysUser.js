@@ -60,3 +60,9 @@ export const approveUser = (id) =>
  */
 export const rejectUser = (id, rejectReason) =>
     http.post(`/sys-user/${id}/reject`, { rejectReason });
+
+/**
+ * 更新用户称号
+ */
+export const updateUserTitleApi = (title) =>
+    http.put("/sys-user/user-title", { title });

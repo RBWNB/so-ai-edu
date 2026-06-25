@@ -366,6 +366,22 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         }
     }
 
+    @Override
+    public void updateUserTitle(Long userId, String title) {
+        validateUserId(userId);
+        ensureUserExists(userId);
+        if (title == null) {
+            throw new IllegalArgumentException("称号不能为空");
+        }
+        boolean updated = this.lambdaUpdate()
+                .eq(SysUser::getId, userId)
+                .set(SysUser::getUserTitle, title)
+                .update();
+        if (!updated) {
+            throw new IllegalStateException("更新称号失败");
+        }
+    }
+
     // ==================== 私有方法 ====================
 
     private void validateRegisterRequest(RegisterRequestDTO registerRequest) {
@@ -433,6 +449,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         profileVO.setPhone(user.getPhone());
         profileVO.setAvatarUrl(user.getAvatarUrl());
         profileVO.setAvatarFrame(user.getAvatarFrame());
+        profileVO.setUserTitle(user.getUserTitle());
         profileVO.setStatus(user.getStatus());
         return profileVO;
     }

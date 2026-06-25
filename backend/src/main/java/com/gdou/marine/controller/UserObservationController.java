@@ -626,7 +626,7 @@ public class UserObservationController {
                 item.put("username", uInfo.getOrDefault("username", "未知用户"));
                 item.put("avatarUrl", uInfo.getOrDefault("avatar_url", ""));
                 item.put("avatarFrame", uInfo.getOrDefault("avatar_frame", "default"));
-                item.put("userTitle", userBadgeMap.getOrDefault(obs.getUserId(), ""));
+                item.put("userTitle", userTitle(uInfo, userBadgeMap.getOrDefault(obs.getUserId(), "")));
 
                 // 互动数据
                 item.put("likeCount", likeCountMap.getOrDefault(obs.getId(), 0L));
@@ -739,7 +739,7 @@ public class UserObservationController {
             item.put("username", uInfo.getOrDefault("username", "未知用户"));
             item.put("avatarUrl", uInfo.getOrDefault("avatar_url", ""));
             item.put("avatarFrame", uInfo.getOrDefault("avatar_frame", "default"));
-            item.put("userTitle", badgeMap.getOrDefault(obs.getUserId(), ""));
+            item.put("userTitle", userTitle(uInfo, badgeMap.getOrDefault(obs.getUserId(), "")));
 
             item.put("likeCount", likeCount);
             item.put("liked", liked);
@@ -868,7 +868,7 @@ public class UserObservationController {
                 item.put("userId", obs.getUserId());
                 item.put("username", uInfo.getOrDefault("username", "未知用户"));
                 item.put("avatarUrl", uInfo.getOrDefault("avatar_url", ""));
-                item.put("userTitle", userBadgeMap.getOrDefault(obs.getUserId(), ""));
+                item.put("userTitle", userTitle(uInfo, userBadgeMap.getOrDefault(obs.getUserId(), "")));
 
                 return item;
             }).collect(Collectors.toList());
@@ -942,7 +942,7 @@ public class UserObservationController {
         if (userIds.isEmpty()) return map;
         String inClause = userIds.stream().map(String::valueOf).collect(Collectors.joining(","));
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT id, username, avatar_url, avatar_frame FROM app_user WHERE id IN (" + inClause + ")");
+                "SELECT id, username, avatar_url, avatar_frame, user_title FROM app_user WHERE id IN (" + inClause + ")");
         for (Map<String, Object> row : rows) {
             map.put(((Number) row.get("id")).longValue(), row);
         }
@@ -971,6 +971,19 @@ public class UserObservationController {
             log.warn("查询用户徽章失败", e);
         }
         return map;
+    }
+
+    /**
+     * 获取用户称号：
+     * - __none__ → 不显示任何称号
+     * - 有值 → 显示 user_title
+     * - 空值 → 降级显示勋章名称
+     */
+    private String userTitle(Map<String, Object> uInfo, String fallbackBadge) {
+        String raw = (String) uInfo.getOrDefault("user_title", "");
+        if ("__none__".equals(raw)) return "";
+        if (raw != null && !raw.isEmpty()) return raw;
+        return fallbackBadge;
     }
 
     private Long extractUserId(Authentication auth) {

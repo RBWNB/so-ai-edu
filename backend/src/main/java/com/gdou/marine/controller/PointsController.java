@@ -285,6 +285,40 @@ public class PointsController {
         return result;
     }
 
+    /** 是否拥有自定义称号（检查是否已购买 title_custom 商品） */
+    @GetMapping("/owned-title")
+    public Map<String, Object> getOwnedTitle(Authentication auth) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            Long userId = extractUserId(auth);
+            if (userId == null) {
+                result.put("success", false);
+                result.put("message", "请先登录");
+                return result;
+            }
+            // 查找 title_custom 商品
+            PointShopItem titleItem = pointShopItemMapper.selectOne(
+                    new LambdaQueryWrapper<PointShopItem>()
+                            .eq(PointShopItem::getDescription, "title_custom")
+                            .eq(PointShopItem::getStatus, (byte) 1));
+            boolean owned = false;
+            if (titleItem != null) {
+                long count = pointExchangeOrderMapper.selectCount(
+                        new LambdaQueryWrapper<PointExchangeOrder>()
+                                .eq(PointExchangeOrder::getUserId, userId)
+                                .eq(PointExchangeOrder::getItemId, titleItem.getId()));
+                owned = count > 0;
+            }
+            result.put("success", true);
+            result.put("data", owned);
+        } catch (Exception e) {
+            log.error("检查称号购买状态失败", e);
+            result.put("success", false);
+            result.put("message", e.getMessage());
+        }
+        return result;
+    }
+
     /** 兑换商品 */
     @Log(module = "积分商城", description = "兑换商品")
     @PostMapping("/exchange/{itemId}")

@@ -95,7 +95,7 @@ public class ContentCommentController {
                 item.put("username", userInfo.getOrDefault("username", "未知用户"));
                 item.put("avatarUrl", userInfo.getOrDefault("avatar_url", ""));
                 item.put("avatarFrame", userInfo.getOrDefault("avatar_frame", "default"));
-                item.put("title", userBadgeMap.getOrDefault(c.getUserId(), ""));
+                item.put("title", commentUserTitle(userInfo, userBadgeMap.getOrDefault(c.getUserId(), "")));
 
                 // 点赞数据
                 item.put("liked", likedByMe.contains(c.getId()));
@@ -184,7 +184,7 @@ public class ContentCommentController {
                 item.put("username", userInfo.getOrDefault("username", "未知用户"));
                 item.put("avatarUrl", userInfo.getOrDefault("avatar_url", ""));
                 item.put("avatarFrame", userInfo.getOrDefault("avatar_frame", "default"));
-                item.put("title", userBadgeMap.getOrDefault(r.getUserId(), ""));
+                item.put("title", commentUserTitle(userInfo, userBadgeMap.getOrDefault(r.getUserId(), "")));
                 item.put("isOwner", currentUserId != null && currentUserId.equals(r.getUserId()));
 
                 item.put("liked", likedByMe.contains(r.getId()));
@@ -308,7 +308,7 @@ public class ContentCommentController {
         if (userIds.isEmpty()) return map;
         String inClause = userIds.stream().map(String::valueOf).collect(Collectors.joining(","));
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT id, username, avatar_url, avatar_frame FROM app_user WHERE id IN (" + inClause + ")");
+                "SELECT id, username, avatar_url, avatar_frame, user_title FROM app_user WHERE id IN (" + inClause + ")");
         for (Map<String, Object> row : rows) {
             map.put(((Number) row.get("id")).longValue(), row);
         }
@@ -383,5 +383,18 @@ public class ContentCommentController {
             catch (NumberFormatException ignored) { return null; }
         }
         return null;
+    }
+
+    /**
+     * 获取用户称号（与 UserObservationController 逻辑一致）：
+     * - __none__ → 不显示任何称号
+     * - 有值 → 显示 user_title
+     * - 空值 → 降级显示勋章名称
+     */
+    private String commentUserTitle(Map<String, Object> userInfo, String fallbackBadge) {
+        String raw = (String) userInfo.getOrDefault("user_title", "");
+        if ("__none__".equals(raw)) return "";
+        if (raw != null && !raw.isEmpty()) return raw;
+        return fallbackBadge;
     }
 }

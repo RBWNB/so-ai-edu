@@ -24,3 +24,6 @@ export const exchangeItem = (itemId) => http.post(`/points/exchange/${itemId}`);
 
 // 已拥有的头像框编码列表
 export const getOwnedFrames = () => http.get("/points/owned-frames");
+
+// 是否拥有自定义称号
+export const getOwnedTitle = () => http.get("/points/owned-title");

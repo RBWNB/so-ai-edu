@@ -17,7 +17,8 @@
     <el-row :gutter="16" class="shop-grid" v-loading="loading">
       <el-col :xs="24" :sm="12" :md="8" v-for="item in sortedItems" :key="item.id">
         <div class="shop-card" :class="{ 'shop-card-disabled': item._purchased || (item.stock !== null && item.stock === 0) }">
-          <div class="item-icon" v-if="item.itemType !== 'avatar_frame'">{{ typeIcon(item.itemType) }}</div>
+          <div class="item-icon title-icon" v-if="item.description === 'title_custom'">✏️</div>
+          <div class="item-icon" v-else-if="item.itemType !== 'avatar_frame'">{{ typeIcon(item.itemType) }}</div>
           <div class="item-icon item-icon-frame" v-else>
             <div class="shop-frame-preview" :class="'frame-' + frameCodeFromDesc(item.description)">
               <el-avatar :size="48" :src="authStore.avatarUrl">
@@ -26,7 +27,7 @@
             </div>
           </div>
           <div class="item-name">{{ item.name }}</div>
-          <div class="item-desc">{{ item.itemType === 'avatar_frame' ? '兑换后在个人中心佩戴' : item.description }}</div>
+          <div class="item-desc">{{ item.description === 'title_custom' ? '兑换后在个人中心自定义称号' : (item.itemType === 'avatar_frame' ? '兑换后在个人中心佩戴' : item.description) }}</div>
           <div class="item-meta">
             <span class="item-price">
               <el-icon :size="14"><Coin /></el-icon>

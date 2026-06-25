@@ -11,5 +11,6 @@ public class UserProfileVO {
     private String phone;
     private String avatarUrl;
     private String avatarFrame;
+    private String userTitle;
     private Byte status;
 }

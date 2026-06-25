@@ -37,6 +37,9 @@
                   <el-dropdown-item command="frame">
                     <el-icon><Picture /></el-icon> 更换头像框
                   </el-dropdown-item>
+                  <el-dropdown-item command="title">
+                    <el-icon><Medal /></el-icon> 更换称号
+                  </el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -45,6 +48,7 @@
           <div class="user-info-center">
             <div class="main-name">{{ profileForm.realName || profileForm.username || '未命名用户' }}</div>
             <div class="sub-name">@{{ profileForm.username }}</div>
+            <div v-if="profileForm.userTitle && profileForm.userTitle !== '__none__'" class="user-title-tag">{{ profileForm.userTitle }}</div>
             <div class="role-tags">
               <el-tag v-for="role in displayRoles" :key="role" size="small" effect="light" class="custom-tag">
                 {{ role }}
@@ -577,6 +581,47 @@
     </template>
   </el-dialog>
 
+  <!-- ═══ 称号选择弹窗 ═══ -->
+  <el-dialog v-model="titleDialogVisible" title="选择称号" width="500px" :close-on-click-modal="false" class="frame-dialog">
+    <div class="title-grid">
+      <!-- 不佩戴称号 -->
+      <div class="title-card" :class="{ 'title-card-active': pendingTitle === '__none__' }" @click="selectTitle('__none__')">
+        <div class="title-card-icon">🚫</div>
+        <div class="title-card-name">不佩戴称号</div>
+      </div>
+      <div
+        v-for="t in allTitleOptions"
+        :key="t.code"
+        class="title-card"
+        :class="{
+          'title-card-active': pendingTitle === t.code,
+          'title-card-locked': !t.fromBadge && badgeCount < (t.needBadges || 999)
+        }"
+        @click="(t.fromBadge || badgeCount >= (t.needBadges || 999)) && selectTitle(t.code)"
+      >
+        <div class="title-card-icon">{{ t.icon }}</div>
+        <div class="title-card-name">{{ t.label }}</div>
+        <div class="title-card-need" v-if="!t.fromBadge && badgeCount < (t.needBadges || 999)">🔒 需{{ t.needBadges }}勋章</div>
+      </div>
+      <!-- 自定义称号 -->
+      <div class="title-card title-custom" :class="{
+        'title-card-active': pendingTitle === '__custom__',
+        'title-card-locked': !ownedCustomTitle
+      }" @click="ownedCustomTitle && startCustomTitle()">
+        <div class="title-card-icon">✏️</div>
+        <div class="title-card-name">自定义</div>
+        <div class="title-card-need" v-if="!ownedCustomTitle">🔒 商店购买</div>
+      </div>
+    </div>
+    <div v-if="customTitleMode && ownedCustomTitle" class="custom-title-input" style="margin-top:12px">
+      <el-input v-model="customTitleValue" placeholder="输入你的自定义称号（最长10字）" maxlength="10" show-word-limit />
+    </div>
+    <template #footer>
+      <el-button @click="titleDialogVisible = false">取消</el-button>
+      <el-button type="primary" :loading="titleSaving" @click="saveTitle">保存</el-button>
+    </template>
+  </el-dialog>
+
   <!-- ═══ 观察记录详情弹窗 ═══ -->
   <el-dialog v-model="obsDetailVisible" title="观察记录详情" width="600px" class="obs-detail-dialog">
     <div v-loading="obsDetailLoading" class="obs-detail-body">
@@ -722,8 +767,10 @@ import {
   Medal, TrophyBase, StarFilled, Present,
   Location, Clock, Plus, View, Edit, Delete, WarningFilled
 } from "@element-plus/icons-vue";
-import { getUserProfile, updatePasswordApi, updateUserProfile, uploadAvatarApi, updateAvatarFrameApi } from "@/api/sysUser";
+import { getUserProfile, updatePasswordApi, updateUserProfile, uploadAvatarApi, updateAvatarFrameApi, updateUserTitleApi } from "@/api/sysUser";
 import { getLearningProfile, getAnswerHistory, getAiSessionCount } from "@/api/learning";
+import { getBadgeCount } from "@/api/achievement";
+import { getOwnedTitle } from "@/api/points";
 import { getPointsAccount, getPointsTransactions, getExchangeOrders, getOwnedFrames } from "@/api/points";
 import { getBadges, getDailyTasks, claimTaskReward, dailyCheckin } from "@/api/achievement";
 import { removeBookmark as removeBookmarkApi, getBookmarkList } from "@/api/bookmark";
@@ -760,7 +807,8 @@ const profileForm = reactive({
   email: "",      // app_user.email
   phone: "",      // app_user.phone
   avatarUrl: "",  // app_user.avatar_url
-  avatarFrame: "default"  // app_user.avatar_frame
+  avatarFrame: "default",  // app_user.avatar_frame
+  userTitle: "",  // app_user.user_title
 });
 
 const rules = {
@@ -1256,6 +1304,8 @@ const handleAvatarCommand = (cmd) => {
     if (input) input.click();
   } else if (cmd === 'frame') {
     openFrameDialog();
+  } else if (cmd === 'title') {
+    openTitleDialog();
   }
 };
 
@@ -1274,6 +1324,120 @@ const saveFrame = async () => {
     ElMessage.error("更换头像框失败");
   } finally {
     frameSaving.value = false;
+  }
+};
+
+// ═══ 称号 ═══
+const titleDialogVisible = ref(false);
+const titleSaving = ref(false);
+const pendingTitle = ref('');
+const customTitleMode = ref(false);
+const customTitleValue = ref('');
+const badgeCount = ref(0);
+const ownedCustomTitle = ref(false);
+
+const titleList = [
+  { code: 'ocean_explorer', icon: '🌊', label: '海洋探索者', needBadges: 1 },
+  { code: 'marine_scholar', icon: '📚', label: '海洋学者', needBadges: 2 },
+  { code: 'coral_guardian', icon: '🪸', label: '珊瑚守护者', needBadges: 3 },
+  { code: 'whale_friend', icon: '🐋', label: '鲸鱼之友', needBadges: 4 },
+  { code: 'turtle_hero', icon: '🐢', label: '海龟英雄', needBadges: 5 },
+  { code: 'starfish_collector', icon: '⭐', label: '海星收藏家', needBadges: 6 },
+  { code: 'tide_pooler', icon: '🏖️', label: '潮间带行者', needBadges: 7 },
+  { code: 'deep_diver', icon: '🤿', label: '深海潜水员', needBadges: 8 },
+  { code: 'plankton_lover', icon: '🦐', label: '浮游生物爱好者', needBadges: 9 },
+  { code: 'kelp_guardian', icon: '🌿', label: '海藻守护者', needBadges: 10 },
+];
+
+const earnedBadgeTitles = ref([]); // 商城购买的隐藏称号
+const allTitleOptions = computed(() => [...titleList, ...earnedBadgeTitles.value]);
+
+const openTitleDialog = async () => {
+  customTitleMode.value = false;
+  customTitleValue.value = '';
+  earnedBadgeTitles.value = [];
+  // 拉取勋章数量、自定义称号拥有状态、已获勋章列表
+  try {
+    const [bcRes, otRes, badgeRes] = await Promise.all([
+      getBadgeCount(),
+      getOwnedTitle(),
+      getBadges()
+    ]);
+    badgeCount.value = bcRes.data?.data ?? 0;
+    ownedCustomTitle.value = otRes.data?.data ?? false;
+    // 筛选商城购买的隐藏称号（badgeName 以「隐藏称号」开头）
+    const badges = badgeRes.data?.data ?? [];
+    earnedBadgeTitles.value = badges
+      .filter(b => b.badgeName && b.badgeName.includes('隐藏称号'))
+      .map(b => ({
+        code: 'badge_' + b.badgeCode,
+        icon: '🏅',
+        label: b.badgeName.replace(/^🏅\s*/, ''),
+        fromBadge: true
+      }));
+  } catch { /* 降级处理 */ }
+  // 判断当前称号
+  const current = profileForm.userTitle || '';
+  if (!current) {
+    pendingTitle.value = '__none__';
+  } else {
+    const allTitles = [...titleList, ...earnedBadgeTitles.value];
+    const found = allTitles.find(t => t.code === current || t.label === current);
+    if (found) {
+      pendingTitle.value = found.code;
+    } else if (ownedCustomTitle.value) {
+      pendingTitle.value = '__custom__';
+      customTitleValue.value = current;
+      customTitleMode.value = true;
+    } else {
+      const firstUnlocked = titleList.find(t => badgeCount.value >= t.needBadges);
+      pendingTitle.value = firstUnlocked ? firstUnlocked.code : '__none__';
+    }
+  }
+  titleDialogVisible.value = true;
+};
+
+const selectTitle = (code) => {
+  customTitleMode.value = false;
+  customTitleValue.value = '';
+  pendingTitle.value = code;
+};
+
+const startCustomTitle = () => {
+  pendingTitle.value = '__custom__';
+  customTitleMode.value = true;
+  customTitleValue.value = '';
+};
+
+const saveTitle = async () => {
+  let title = '';
+  if (pendingTitle.value === '__none__') {
+    title = '__none__'; // 不佩戴称号 → 保存特殊标记
+  } else if (pendingTitle.value === '__custom__') {
+    title = customTitleValue.value.trim();
+    if (!title) {
+      ElMessage.warning('请输入自定义称号');
+      return;
+    }
+  } else {
+    // 同时查找 titleList 和商城购买的隐藏称号
+    const allTitles = [...titleList, ...earnedBadgeTitles.value];
+    const found = allTitles.find(t => t.code === pendingTitle.value);
+    title = found ? found.label : '';
+  }
+
+  titleSaving.value = true;
+  try {
+    const res = await updateUserTitleApi(title);
+    if (res.data.success || res.status === 200) {
+      profileForm.userTitle = title;
+      titleDialogVisible.value = false;
+      ElMessage.success("称号已更换");
+    }
+  } catch (err) {
+    ElMessage.error("更换称号失败");
+  } finally {
+    titleSaving.value = false;
   }
 };
 
@@ -1846,7 +2010,19 @@ watch(activeTab, (tab) => {
 .sub-name {
   font-size: 13px;
   color: #86909c;
-  margin-bottom: 14px;
+  margin-bottom: 8px;
+}
+
+.user-title-tag {
+  display: inline-block;
+  font-size: 12px;
+  color: #b8860b;
+  background: linear-gradient(135deg, #fef9e7, #fdebd0);
+  padding: 2px 12px;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  font-weight: 500;
+  border: 1px solid rgba(255, 215, 0, 0.3);
 }
 
 .custom-tag {
@@ -2698,6 +2874,70 @@ watch(activeTab, (tab) => {
   box-shadow: 0 0 16px rgba(108, 60, 199, 0.6);
 }
 .frame-royal .user-avatar { border: 3px solid #fff; border-radius: 50%; }
+
+/* ═══ 称号选择弹窗 ═══ */
+.title-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+  padding: 8px 4px;
+}
+.title-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 8px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  border: 2px solid transparent;
+  background: rgba(255,255,255,0.5);
+}
+.title-card:hover {
+  border-color: rgba(64,158,255,0.3);
+  background: rgba(64,158,255,0.05);
+  transform: translateY(-2px);
+}
+.title-card-active {
+  border-color: #409eff !important;
+  background: rgba(64,158,255,0.08) !important;
+  box-shadow: 0 0 0 3px rgba(64,158,255,0.15) !important;
+}
+.title-card-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+.title-card-name {
+  font-size: 13px;
+  color: #4e5969;
+  font-weight: 500;
+  text-align: center;
+}
+.title-card-need {
+  font-size: 10px;
+  color: #999;
+  text-align: center;
+  margin-top: 2px;
+}
+.title-card-locked {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.5);
+}
+.title-card-locked:hover {
+  border-color: transparent !important;
+  background: rgba(255,255,255,0.5) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+.title-custom {
+  border-style: dashed;
+  border-color: #dcdfe6;
+}
+.custom-title-input {
+  padding: 0 8px 4px;
+}
 </style>
 <style>
 /* ════════ 头像点击后的下拉菜单 (全局玻璃化) ════════ */

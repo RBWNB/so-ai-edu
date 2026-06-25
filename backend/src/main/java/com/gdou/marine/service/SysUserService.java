@@ -30,4 +30,6 @@ public interface SysUserService extends IService<SysUser> {
     void updatePassword(Long userId, UserPasswordUpdateDTO dto);
 
     void updateAvatarFrame(Long userId, String frameCode);
+
+    void updateUserTitle(Long userId, String title);
 }

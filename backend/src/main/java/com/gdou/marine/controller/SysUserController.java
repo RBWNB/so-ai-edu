@@ -115,6 +115,25 @@ public class SysUserController {
         }
     }
 
+    @PutMapping("/user-title")
+    @PreAuthorize("isAuthenticated()")
+    @Log(module = "用户管理", description = "更新称号")
+    public ResponseEntity<?> updateUserTitle(@RequestBody Map<String, String> body) {
+        try {
+            Long userId = getCurrentUserId();
+            String title = body.get("title");
+            if (title == null) {
+                return ResponseEntity.badRequest().body("称号不能为空");
+            }
+            sysUserService.updateUserTitle(userId, title);
+            return ResponseEntity.ok(Map.of("success", true, "userTitle", title));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(ex.getMessage());
+        } catch (Exception ex) {
+            return ResponseEntity.internalServerError().body("更新称号失败");
+        }
+    }
+
     @PutMapping("/password")
     @PreAuthorize("isAuthenticated()")
     @Log(module = "用户管理", description = "修改密码")

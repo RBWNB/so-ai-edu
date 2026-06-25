@@ -44,6 +44,9 @@ public class SysUser implements Serializable {
     @TableField("avatar_frame")
     private String avatarFrame;
 
+    @TableField("user_title")
+    private String userTitle;
+
     @TableField("status")
     private Byte status;
 

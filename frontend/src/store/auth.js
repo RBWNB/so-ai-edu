@@ -58,6 +58,7 @@ export const useAuthStore = defineStore("auth", {
     roles: getStoredRoles(),
     avatarUrl: getStoredAvatar(),
     avatarFrame: getStoredAvatarFrame(),
+    userTitle: '',
   }),
   getters: {
     isLoggedIn: (state) => Boolean(state.token),
@@ -78,7 +79,7 @@ export const useAuthStore = defineStore("auth", {
       return `/api${url}`;
     },
 
-    /** 自动拉取用户信息（含头像、角色），解决刷新/首次登录数据缺失 */
+    /** 自动拉取用户信息（含头像、角色、称号），解决刷新/首次登录数据缺失 */
     async fetchUserInfo() {
       if (!this.token) return;
       try {
@@ -91,6 +92,7 @@ export const useAuthStore = defineStore("auth", {
         // 格式化头像后同步
         this.avatarUrl = this.formatAvatarUrl(data.avatarUrl);
         this.avatarFrame = data.avatarFrame || "default";
+        this.userTitle = data.userTitle || "";
 
         // 持久化到本地存储，刷新不丢失
         localStorage.setItem(USERNAME_KEY, this.username);
@@ -105,12 +107,13 @@ export const useAuthStore = defineStore("auth", {
       }
     },
 
-    setAuth(token, username, roles = [], avatarUrl = "", avatarFrame = "default") {
+    setAuth(token, username, roles = [], avatarUrl = "", avatarFrame = "default", userTitle = "") {
       this.token = token || "";
       this.username = username || "";
       this.roles = roles;
       this.avatarUrl = this.formatAvatarUrl(avatarUrl);
       this.avatarFrame = avatarFrame || "default";
+      this.userTitle = userTitle || "";
 
       if (this.token) {
         localStorage.setItem(TOKEN_KEY, this.token);

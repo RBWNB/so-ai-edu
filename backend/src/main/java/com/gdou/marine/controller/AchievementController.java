@@ -98,6 +98,32 @@ public class AchievementController {
     }
 
     /**
+     * 已获得勋章数量（用于称号解锁判断）
+     */
+    @GetMapping("/badge-count")
+    public Map<String, Object> getBadgeCount(Authentication auth) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            Long userId = extractUserId(auth);
+            if (userId == null) {
+                result.put("success", false);
+                result.put("message", "请先登录");
+                return result;
+            }
+            long count = userBadgeMapper.selectCount(
+                    new LambdaQueryWrapper<UserBadge>()
+                            .eq(UserBadge::getUserId, userId));
+            result.put("success", true);
+            result.put("data", count);
+        } catch (Exception e) {
+            log.error("获取勋章数量失败", e);
+            result.put("success", false);
+            result.put("message", e.getMessage());
+        }
+        return result;
+    }
+
+    /**
      * 每日任务列表（含当前用户完成进度）
      * LEFT JOIN learning_task + user_task_record
      */
