@@ -1,6 +1,7 @@
 package com.gdou.marine.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.gdou.marine.annotation.Log;
 import com.gdou.marine.entity.UserBookmark;
 import com.gdou.marine.mapper.UserBookmarkMapper;
 import org.slf4j.Logger;
@@ -38,6 +39,7 @@ public class UserBookmarkController {
      * 取消收藏
      * DELETE /bookmark/{targetType}/{targetId}
      */
+    @Log(module = "用户收藏", description = "取消收藏")
     @DeleteMapping("/{targetType}/{targetId}")
     public Map<String, Object> removeBookmark(@PathVariable String targetType,
                                               @PathVariable Long targetId,
@@ -76,6 +78,7 @@ public class UserBookmarkController {
      * 添加收藏
      * POST /bookmark/{targetType}/{targetId}
      */
+    @Log(module = "用户收藏", description = "添加收藏")
     @PostMapping("/{targetType}/{targetId}")
     public Map<String, Object> addBookmark(@PathVariable String targetType,
                                            @PathVariable Long targetId,
