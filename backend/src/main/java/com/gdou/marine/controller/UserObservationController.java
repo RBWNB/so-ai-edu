@@ -471,8 +471,9 @@ public class UserObservationController {
     // 观察社区（所有用户可见的观察记录）
     // ════════════════════════════════════════════════════════════════
 
+
     /**
-     * 获取社区观察列表（所有用户的可见观察）
+     * 获取社区观察列表（所有用户的可见观察
      * GET /observation/community
      */
     @GetMapping("/community")
@@ -567,7 +568,10 @@ public class UserObservationController {
             // 收藏状态
             java.util.Set<Long> bookmarkedByMe = new java.util.HashSet<>();
 
-            // 批量查点赞数
+            // 在后端用于缓存最热评论的 Map
+            Map<Long, Map<String, Object>> hotCommentMap = new HashMap<>();
+
+            // 批量查点赞数、评论数，并顺便捞出最热评论
             for (Long oid : obsIds) {
                 long lc = contentLikeMapper.selectCount(
                         new LambdaQueryWrapper<com.gdou.marine.entity.ContentLike>()
@@ -581,6 +585,54 @@ public class UserObservationController {
                                 .eq(com.gdou.marine.entity.ContentComment::getTargetId, oid)
                                 .eq(com.gdou.marine.entity.ContentComment::getStatus, (byte) 1));
                 commentCountMap.put(oid, cc);
+
+                // 🆕 【核心改动】：如果帖子有评论，在后端直接计算出最热的一条评论
+                if (cc > 0) {
+                    List<com.gdou.marine.entity.ContentComment> rootComments = contentCommentMapper.selectList(
+                            new LambdaQueryWrapper<com.gdou.marine.entity.ContentComment>()
+                                    .eq(com.gdou.marine.entity.ContentComment::getTargetType, "user_observation")
+                                    .eq(com.gdou.marine.entity.ContentComment::getTargetId, oid)
+                                    .eq(com.gdou.marine.entity.ContentComment::getStatus, (byte) 1)
+                                    .eq(com.gdou.marine.entity.ContentComment::getParentId, 0L)); // 只筛选根评论
+
+                    if (rootComments != null && !rootComments.isEmpty()) {
+                        com.gdou.marine.entity.ContentComment bestComment = null;
+                        long maxHeat = -1;
+
+                        // 计算每条根评论的热度值
+                        for (com.gdou.marine.entity.ContentComment c : rootComments) {
+                            long cLikes = contentLikeMapper.selectCount(
+                                    new LambdaQueryWrapper<com.gdou.marine.entity.ContentLike>()
+                                            .eq(com.gdou.marine.entity.ContentLike::getTargetType, "comment")
+                                            .eq(com.gdou.marine.entity.ContentLike::getTargetId, c.getId()));
+                            long cReplies = contentCommentMapper.selectCount(
+                                    new LambdaQueryWrapper<com.gdou.marine.entity.ContentComment>()
+                                            .eq(com.gdou.marine.entity.ContentComment::getParentId, c.getId())
+                                            .eq(com.gdou.marine.entity.ContentComment::getStatus, (byte) 1));
+
+                            // 热度值算法：点赞*2 + 回复*3
+                            long heat = cLikes * 2 + cReplies * 3;
+                            if (heat > maxHeat) {
+                                maxHeat = heat;
+                                bestComment = c;
+                            }
+                        }
+
+                        // 封装最热评论基础数据与发布者用户名
+                        if (bestComment != null) {
+                            Map<String, Object> cMap = new LinkedHashMap<>();
+                            cMap.put("id", bestComment.getId());
+                            cMap.put("content", bestComment.getContent());
+
+                            List<Map<String, Object>> uRows = jdbcTemplate.queryForList(
+                                    "SELECT username FROM app_user WHERE id = ?", bestComment.getUserId());
+                            String cUsername = uRows.isEmpty() ? "未知用户" : (String) uRows.get(0).get("username");
+                            cMap.put("username", cUsername);
+
+                            hotCommentMap.put(oid, cMap);
+                        }
+                    }
+                }
             }
 
             // 当前用户的点赞状态和收藏状态
@@ -633,6 +685,9 @@ public class UserObservationController {
                 item.put("liked", likedByMe.contains(obs.getId()));
                 item.put("commentCount", commentCountMap.getOrDefault(obs.getId(), 0L));
                 item.put("bookmarked", bookmarkedByMe.contains(obs.getId()));
+
+                // 🆕 新增：直接将后端缓存好的 hotComment 塞给当前实体
+                item.put("hotComment", hotCommentMap.get(obs.getId()));
 
                 return item;
             }).collect(Collectors.toList());
