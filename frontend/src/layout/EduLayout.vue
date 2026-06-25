@@ -54,8 +54,8 @@
           ></div>
           <router-link to="/home"          class="nav-item" active-class="nav-active">首页</router-link>
           <router-link to="/encyclopedia"  class="nav-item" active-class="nav-active">海洋百科</router-link>
-          <router-link to="/ai-assistant"  class="nav-item" active-class="nav-active">AI 导师</router-link>
-          <router-link to="/map-explore"   class="nav-item" active-class="nav-active">观察社区</router-link>
+          <router-link to="/ai-assistant"  class="nav-item" active-class="nav-active">智识海物</router-link>
+          <router-link to="/obs-community"   class="nav-item" active-class="nav-active">海友社区</router-link>
           <router-link to="/quiz"          class="nav-item" active-class="nav-active">答题闯关</router-link>
 
           <!-- 管理员可见：进入B端 -->

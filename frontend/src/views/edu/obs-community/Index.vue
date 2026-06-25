@@ -120,7 +120,6 @@
       />
     </div>
 
-    <!-- 帖子详情已移至独立页面 /map-explore/detail/:id -->
     <el-backtop :right="30" :bottom="80" />
   </div>
 </template>

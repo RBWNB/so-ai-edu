@@ -102,20 +102,20 @@ const router = createRouter({
         {
           path: "ai-assistant",
           name: "EduAiAssistant",
-          meta: { title: "AI 导师", requiresAuth: true },
+          meta: { title: "智识海物", requiresAuth: true },
           component: () => import("@/views/edu/ai-assistant/Index.vue"),
         },
         {
-          path: "map-explore",
+          path: "obs-community",
           name: "EduObservationCommunity",
-          meta: { title: "观察社区", requiresAuth: true },
-          component: () => import("@/views/edu/map-explore/Index.vue"),
+          meta: { title: "海友社区", requiresAuth: true },
+          component: () => import("@/views/edu/obs-community/Index.vue"),
         },
         {
-          path: "map-explore/detail/:id",
+          path: "obs-community/detail/:id",
           name: "EduObservationDetail",
           meta: { title: "帖子详情", requiresAuth: true },
-          component: () => import("@/views/edu/map-explore/PostDetail.vue"),
+          component: () => import("@/views/edu/obs-community/PostDetail.vue"),
         },
         {
           path: "quiz",

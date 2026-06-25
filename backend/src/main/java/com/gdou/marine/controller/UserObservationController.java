@@ -1,6 +1,7 @@
 package com.gdou.marine.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.gdou.marine.annotation.Log;
 import com.gdou.marine.entity.MediaAsset;
 import com.gdou.marine.entity.UserObservation;
 import com.gdou.marine.mapper.MediaAssetMapper;
@@ -56,6 +57,7 @@ public class UserObservationController {
      * 上传观察照片到七牛云
      * POST /observation/upload/photo
      */
+    @Log(module = "社区模块", description = "上传图片")
     @PostMapping("/upload/photo")
     public Map<String, Object> uploadObservationPhoto(@RequestParam("file") MultipartFile file,
                                                         Authentication auth) {
@@ -161,6 +163,7 @@ public class UserObservationController {
      * 发布观察记录
      * POST /observation
      */
+    @Log(module = "社区模块", description = "发布观察记录")
     @PostMapping
     public Map<String, Object> createObservation(@RequestBody Map<String, Object> body,
                                                   Authentication auth) {
@@ -370,6 +373,7 @@ public class UserObservationController {
      * 更新观察记录
      * PUT /observation/{id}
      */
+    @Log(module = "社区模块", description = "获取历史会话列表")
     @PutMapping("/{id}")
     public Map<String, Object> updateObservation(@PathVariable Long id,
                                                   @RequestBody Map<String, Object> body,
@@ -436,6 +440,7 @@ public class UserObservationController {
      * 删除观察记录
      * DELETE /observation/{id}
      */
+    @Log(module = "社区模块", description = "删除观察记录")
     @DeleteMapping("/{id}")
     public Map<String, Object> deleteObservation(@PathVariable Long id,
                                                   Authentication auth) {
@@ -943,6 +948,7 @@ public class UserObservationController {
      * PUT /observation/admin/{id}/status
      * body: { status: 1(通过)/0(下架), auditRemark: "原因" }
      */
+    @Log(module = "社区模块", description = "内容审核")
     @PutMapping("/admin/{id}/status")
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public Map<String, Object> adminUpdateStatus(@PathVariable Long id,

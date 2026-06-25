@@ -1,6 +1,7 @@
 package com.gdou.marine.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.gdou.marine.annotation.Log;
 import com.gdou.marine.entity.ContentLike;
 import com.gdou.marine.mapper.ContentLikeMapper;
 import org.slf4j.Logger;
@@ -31,6 +32,7 @@ public class ContentLikeController {
      * 切换点赞状态（已赞→取消，未赞→点赞）
      * POST /like/toggle
      */
+    @Log(module = "社区模块", description = "切换点赞状态")
     @PostMapping("/toggle")
     public Map<String, Object> toggleLike(@RequestBody Map<String, Object> body,
                                           Authentication auth) {

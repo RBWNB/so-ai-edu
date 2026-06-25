@@ -1,6 +1,7 @@
 package com.gdou.marine.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.gdou.marine.annotation.Log;
 import com.gdou.marine.entity.ContentComment;
 import com.gdou.marine.mapper.ContentCommentMapper;
 import org.slf4j.Logger;
@@ -207,6 +208,7 @@ public class ContentCommentController {
      * 发布评论
      * POST /comment
      */
+    @Log(module = "社区模块", description = "发表评论")
     @PostMapping
     public Map<String, Object> createComment(@RequestBody Map<String, Object> body,
                                              Authentication auth) {
