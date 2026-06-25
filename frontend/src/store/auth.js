@@ -96,6 +96,7 @@ export const useAuthStore = defineStore("auth", {
         localStorage.setItem(USERNAME_KEY, this.username);
         localStorage.setItem(ROLES_KEY, JSON.stringify(this.roles));
         localStorage.setItem(AVATAR_KEY, this.avatarUrl);
+        localStorage.setItem(AVATAR_FRAME_KEY, this.avatarFrame);
       } catch (err) {
         console.error("拉取用户信息失败:", err);
         // token 失效时自动清理登录状态
