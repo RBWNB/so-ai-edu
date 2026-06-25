@@ -43,7 +43,7 @@
     </el-row>
 
     <el-row :gutter="16">
-      <el-col :xs="24" :lg="12">
+      <el-col :xs="24" :lg="8">
         <el-card>
           <template #header>
             <div class="card-title-row">
@@ -55,7 +55,7 @@
         </el-card>
       </el-col>
 
-      <el-col :xs="24" :lg="12">
+      <el-col :xs="24" :lg="8">
         <el-card>
           <template #header>
             <div class="card-title-row">
@@ -71,6 +71,18 @@
             </div>
           </template>
           <div ref="taxRef" class="chart-box"></div>
+        </el-card>
+      </el-col>
+
+      <el-col :xs="24" :lg="8">
+        <el-card>
+          <template #header>
+            <div class="card-title-row">
+              <span class="card-title">生态系统物种分布</span>
+              <el-button v-if="canExport" size="small" @click="exportChartPDF('ecosystem', '生态系统物种分布')">导出报表</el-button>
+            </div>
+          </template>
+          <div ref="ecosystemRef" class="chart-box"></div>
         </el-card>
       </el-col>
     </el-row>
@@ -94,7 +106,8 @@ import {
   getActivityTrend,
   getSpeciesProtectionStats,
   getSpeciesRawList,
-  getSpeciesTaxonomyStats
+  getSpeciesTaxonomyStats,
+  getEcosystemStats
 } from "@/api/visual";
 
 const authStore = useAuthStore();
@@ -120,9 +133,10 @@ const trendRef = ref(null);
 const aiSceneRef = ref(null);
 const pieRef = ref(null);
 const taxRef = ref(null);
+const ecosystemRef = ref(null);
 
 // 图表实例
-let trendChart, aiSceneChart, pieChart, taxChart;
+let trendChart, aiSceneChart, pieChart, taxChart, ecosystemChart;
 
 const GALLERY_PALETTE = ["#165DFF", "#36CFC9", "#FF7D00", "#52C41A", "#722ED1", "#F53F3F"];
 
@@ -436,6 +450,23 @@ const loadTaxonomy = async () => {
   taxChart = renderPie(taxRef, taxChart, data);
 };
 
+const loadEcosystemStats = async () => {
+  let data;
+  try {
+    const resp = await getEcosystemStats();
+    const rawList = extractList(resp?.data || resp);
+    // 根据 typicalSpecies 逗号分隔计算每类生态系统的关联物种数量
+    data = rawList.map(item => ({
+      name: item.name,
+      value: (item.typicalSpecies || "").split(/[,，]/).filter(Boolean).length || 1,
+    }));
+  } catch (e) {
+    console.error("加载生态系统统计失败", e);
+    data = [];
+  }
+  ecosystemChart = renderPie(ecosystemRef, ecosystemChart, data);
+};
+
 
 // ============ 导出 PDF (复用原有逻辑，增加图表映射) ============
 
@@ -443,6 +474,7 @@ const exportChartPDF = async (chartKey, title) => {
   const chartRefs = {
     pie: pieRef,
     tax: taxRef,
+    ecosystem: ecosystemRef,
     trend: trendRef,
     ai: aiSceneRef
   };
@@ -483,7 +515,7 @@ const exportChartPDF = async (chartKey, title) => {
 // ============ 生命周期与自适应 ============
 
 const handleResize = () => {
-  [trendChart, aiSceneChart, pieChart, taxChart].forEach(c => c?.resize());
+  [trendChart, aiSceneChart, pieChart, taxChart, ecosystemChart].forEach(c => c?.resize());
 };
 
 const initCharts = async () => {
@@ -495,7 +527,8 @@ const initCharts = async () => {
       loadTrend(),
       loadAiScene(),
       loadProtection(),
-      loadTaxonomy()
+      loadTaxonomy(),
+      loadEcosystemStats()
     ]);
     await nextTick();
     handleResize();
@@ -514,7 +547,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("resize", handleResize);
-  [trendChart, aiSceneChart, pieChart, taxChart].forEach(c => c?.dispose());
+  [trendChart, aiSceneChart, pieChart, taxChart, ecosystemChart].forEach(c => c?.dispose());
 });
 </script>
 
