@@ -45,9 +45,7 @@ export const STATIC_MENUS = {
     { id: 4, name: "RAG 知识库",      code: "knowledge",      type: 2, path: "/admin/knowledge",             icon: "Document" },
     { id: 5, name: "题库管理",        code: "quiz-manage",    type: 2, path: "/admin/quiz-manage",           icon: "Edit" },
     { id: 6, name: "积分商店管理",    code: "shop-manage",    type: 2, path: "/admin/system/shop-manage",    icon: "Setting" },
-  ],
-  VISITOR: [
-    { id: 1, name: "数据看板",       code: "dashboard",      type: 2, path: "/admin/dashboard",            icon: "DataBoard" },
+    { id: 7, name: "观察审核",        code: "observation",    type: 2, path: "/admin/observation",           icon: "Camera" },
   ],
 };
 
