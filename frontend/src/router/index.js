@@ -48,18 +48,7 @@ const router = createRouter({
           meta: { title: "题库管理" },
           component: () => import("@/views/admin/quiz-manage/Index.vue"),
         },
-        {
-          path: "visual/species-count",
-          name: "AdminSpeciesCount",
-          meta: { title: "物种数量可视化" },
-          component: () => import("@/views/admin/visual/SpeciesCountView.vue"),
-        },
-        {
-          path: "visual/geo-analysis",
-          name: "AdminGeoAnalysis",
-          meta: { title: "地理分布可视化" },
-          component: () => import("@/views/admin/visual/GeoAnalysisView.vue"),
-        },
+
         {
           path: "system/users",
           name: "AdminUsers",
