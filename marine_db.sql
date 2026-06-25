@@ -1,5 +1,5 @@
 CREATE DATABASE IF NOT EXISTS marine_db
-  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 USE marine_db;
 
 SET FOREIGN_KEY_CHECKS = 0;
@@ -14,6 +14,7 @@ CREATE TABLE app_user (
                           phone VARCHAR(20) UNIQUE,
                           avatar_url VARCHAR(500),
                           avatar_frame VARCHAR(32) NOT NULL DEFAULT 'default' COMMENT '当前头像框编码',
+                          user_title VARCHAR(32) NOT NULL DEFAULT '' COMMENT '用户自定义称号',
                           status TINYINT NOT NULL DEFAULT 1 COMMENT '1 enabled, 0 disabled',
                           last_login_time DATETIME,
                           created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -88,7 +89,6 @@ CREATE TABLE marine_species (
                                 KEY idx_species_status (conservation_status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='海洋物种百科';
 
-
 -- 6.海洋生态系统表
 CREATE TABLE marine_ecosystem (
                                   id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
@@ -98,6 +98,7 @@ CREATE TABLE marine_ecosystem (
                                   threats VARCHAR(500),
                                   protection_advice TEXT,
                                   cover_media_id BIGINT UNSIGNED,
+                                  image_url VARCHAR(500) DEFAULT NULL COMMENT '生态系统图片URL',
                                   status TINYINT NOT NULL DEFAULT 1,
                                   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                                   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -263,9 +264,7 @@ CREATE TABLE operation_log (
                                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='B端操作日志';
 
-SET FOREIGN_KEY_CHECKS = 0;
-
---  19.用户积分账户表
+-- 19.用户积分账户表
 CREATE TABLE user_point_account (
                                     id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
                                     user_id BIGINT UNSIGNED NOT NULL UNIQUE,
@@ -291,8 +290,6 @@ CREATE TABLE learning_task (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='学习任务';
 
 -- 21.用户任务完成记录表
--- task_date: 任务所属日期，按天重置进度。唯一索引 (user_id, task_id, task_date)
---             保证每个用户每天每个任务只有一条记录
 CREATE TABLE user_task_record (
                                   id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
                                   user_id BIGINT UNSIGNED NOT NULL,
@@ -418,6 +415,7 @@ CREATE TABLE user_observation (
                                   ai_identified TINYINT NOT NULL DEFAULT 0,
                                   ai_confidence DECIMAL(5,2),
                                   status TINYINT NOT NULL DEFAULT 1 COMMENT '0 hidden, 1 visible, 2 pending',
+                                  audit_remark VARCHAR(500) DEFAULT NULL COMMENT '审核备注（下架原因等）',
                                   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                                   KEY idx_observation_user (user_id),
                                   KEY idx_observation_species (species_id),
