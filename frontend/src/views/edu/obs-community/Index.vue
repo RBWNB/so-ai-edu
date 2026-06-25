@@ -4,7 +4,7 @@
       <div class="header-top-row">
         <h2 class="page-title">
           <span class="title-icon">🌊</span>
-          观察社区
+          海友社区
         </h2>
         <div class="search-box">
           <el-input
