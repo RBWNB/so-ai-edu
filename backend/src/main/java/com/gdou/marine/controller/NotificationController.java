@@ -1,6 +1,7 @@
 package com.gdou.marine.controller;
 
 import com.gdou.marine.annotation.Log;
+import com.gdou.marine.service.HighLightBroadcastService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +23,9 @@ public class NotificationController {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private HighLightBroadcastService highlightBroadcastService;
 
     /**
      * 获取当前登录用户的未读通知数量
@@ -71,7 +75,7 @@ public class NotificationController {
             String sql = """
                 SELECT n.*, u.username AS sender_name, u.avatar_url AS sender_avatar
                 FROM system_notification n
-                JOIN app_user u ON n.sender_id = u.id
+                LEFT JOIN app_user u ON n.sender_id = u.id
                 WHERE n.receiver_id = ?
                 ORDER BY n.created_at DESC
                 LIMIT ? OFFSET ?
@@ -110,6 +114,7 @@ public class NotificationController {
      * 标记单条通知为已读
      * PUT /notification/{id}/read
      */
+    @Log(module = "通知管理", description = "阅读通知")
     @PutMapping("/{id}/read")
     public Map<String, Object> markAsRead(@PathVariable Long id, Authentication auth) {
         Map<String, Object> result = new HashMap<>();
@@ -135,6 +140,7 @@ public class NotificationController {
      * 一键全部标记已读
      * PUT /notification/read-all
      */
+    @Log(module = "通知管理", description = "一键全部标记已读")
     @PutMapping("/read-all")
     public Map<String, Object> readAll(Authentication auth) {
         Map<String, Object> result = new HashMap<>();
@@ -172,6 +178,7 @@ public class NotificationController {
      * 删除单条通知
      * DELETE /notification/{id}
      */
+    @Log(module = "通知管理", description = "删除单条通知")
     @DeleteMapping("/{id}")
     public Map<String, Object> deleteNotification(@PathVariable Long id, Authentication auth) {
         Map<String, Object> result = new HashMap<>();
@@ -191,6 +198,7 @@ public class NotificationController {
      * 清空当前用户所有通知
      * DELETE /notification/all
      */
+    @Log(module = "通知管理", description = "清除所有通知")
     @DeleteMapping("/all")
     public Map<String, Object> clearAll(Authentication auth) {
         Map<String, Object> result = new HashMap<>();
@@ -225,8 +233,6 @@ public class NotificationController {
                 return result;
             }
 
-            // 核心逻辑：利用 INSERT INTO ... SELECT 语句，一次性给所有启用的用户 (status=1) 发送通知
-            // post_id 和 target_id 设为 0，代表这是一个无具体绑定的系统消息
             String sql = """
                 INSERT INTO system_notification (receiver_id, sender_id, type, target_id, post_id, content)
                 SELECT id, ?, 'broadcast', 0, 0, ? 
@@ -241,6 +247,28 @@ public class NotificationController {
             log.error("发送全站广播失败", e);
             result.put("success", false);
             result.put("message", "发送失败: " + e.getMessage());
+        }
+        return result;
+    }
+
+    /**
+     * B端管理员：手动立即触发一次【社区高光时刻】广播
+     * POST /notification/admin/trigger-highlight
+     */
+    @Log(module = "运营管理", description = "手动触发社区高光广播")
+    @PostMapping("/admin/trigger-highlight")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    public Map<String, Object> triggerHighlight() {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            // 异步执行，不要阻塞请求响应，因为 AI 生成需要时间
+            new Thread(() -> highlightBroadcastService.generateAndSendHighlight()).start();
+
+            result.put("success", true);
+            result.put("message", "触发指令已发送，AI正在提炼文案，稍后将下发至全站");
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "触发失败：" + e.getMessage());
         }
         return result;
     }

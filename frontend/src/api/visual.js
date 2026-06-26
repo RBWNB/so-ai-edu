@@ -42,3 +42,7 @@ export const getActivityTrend = () =>
 // 发送全站广播
 export const sendSystemBroadcast = (data) =>
     http.post("/notification/admin/broadcast", data);
+
+// 触发 AI 高光时刻广播
+export const triggerHighlightBroadcast = () =>
+    http.post("/notification/admin/trigger-highlight");

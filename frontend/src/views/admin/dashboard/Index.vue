@@ -1,6 +1,17 @@
 <template>
   <div class="dashboard-page" v-loading="loading">
-    <div style="display: flex; justify-content: flex-end; margin-bottom: 16px;">
+    <div style="display: flex; justify-content: flex-end; gap: 12px; margin-bottom: 16px;">
+
+      <el-button
+          v-if="canExport"
+          type="success"
+          :icon="MagicStick"
+          @click="handleTriggerHighlight"
+          :loading="triggering"
+      >
+        AI 一键生成高光广播
+      </el-button>
+
       <el-button
           v-if="canExport"
           type="primary"
@@ -128,7 +139,7 @@
 <script setup>
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
-import { User, Cpu, Document, EditPen, Bell } from "@element-plus/icons-vue";
+import { User, Cpu, Document, EditPen, Bell,MagicStick} from "@element-plus/icons-vue";
 import * as echarts from "echarts";
 import dayjs from "dayjs";
 import jsPDF from "jspdf";
@@ -144,7 +155,8 @@ import {
   getSpeciesRawList,
   getSpeciesTaxonomyStats,
   getEcosystemStats,
-  sendSystemBroadcast
+  sendSystemBroadcast,
+  triggerHighlightBroadcast
 } from "@/api/visual";
 
 const authStore = useAuthStore();
@@ -203,8 +215,28 @@ const submitBroadcast = async () => {
     broadcasting.value = false;
   }
 };
-// ============ 数据处理工具 ============
 
+// ════════ 触发 AI 高光广播逻辑 ════════
+const triggering = ref(false);
+
+const handleTriggerHighlight = async () => {
+  try {
+    triggering.value = true;
+    const res = await triggerHighlightBroadcast();
+    // 兼容可能存在的不同数据包装层级
+    if (res?.data?.success || res?.success) {
+      ElMessage.success("触发指令已发送，AI正在提炼文案，稍后将下发至全站");
+    } else {
+      ElMessage.error(res?.data?.message || res?.message || "触发失败，可能今日暂无素材");
+    }
+  } catch (e) {
+    ElMessage.error("系统异常，请检查后端服务");
+  } finally {
+    triggering.value = false;
+  }
+};
+
+// ============ 数据处理工具 ============
 const extractList = (payload) => {
   const candidates = [payload, payload?.data, payload?.result, payload?.page, payload?.records, payload?.rows, payload?.list];
   for (const c of candidates) {

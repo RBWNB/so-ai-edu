@@ -1053,6 +1053,9 @@ const doubleXpActive = ref(false);
 const xpCountdown = ref("");
 const xpExpireAt = ref(null);  // 后端返回的过期时间字符串
 
+// AI 会话数 ← GET /learning/ai-session-count ✅
+const aiSessionCount = ref(0);
+
 // 错题本数量 ← GET /learning/profile.wrongQuestionCount ✅
 const wrongBookCount = ref(0);
 

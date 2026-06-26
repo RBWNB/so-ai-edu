@@ -106,14 +106,15 @@
                     <div class="noti-content">
                       <div class="noti-title">
                         <span class="sender-name">
-                          {{ item.type === 'broadcast' ? '【系统广播】' : item.senderName }}
+                          {{ item.type === 'broadcast' || item.type === 'broadcast_link' ? '【系统广播】' : item.senderName }}
                         </span>
 
                         <span class="action-text">
                           {{
                             item.type === 'broadcast' ? item.content
-                                : item.type.includes('like') ? '赞了你的内容'
-                                    : '回复了你'
+                                : item.type === 'broadcast_link' ? item.content
+                                    : item.type.includes('like') ? '赞了你的内容'
+                                        : '回复了你'
                           }}
                         </span>
                       </div>
@@ -309,17 +310,18 @@ const onBellLeave = () => {
 const goToPost = async (item) => {
   try {
     if (item.isRead === 0) {
-      await markNotificationRead(item.id); // 标为已读API
+      await markNotificationRead(item.id);
       item.isRead = 1;
       unreadCount.value = Math.max(0, unreadCount.value - 1);
     }
 
-    // 如果是广播消息，点完红点消失即可，不需要跳转
-    if (item.type === 'broadcast') {
+
+    if (item.type === 'broadcast' && (!item.postId || item.postId === 0)) {
       return;
     }
 
     bellVisible.value = false;
+    // broadcast_link 或者 like/reply，只要有 postId，就跳转
     $router.push(`/obs-community/detail/${item.postId}`);
   } catch (err) {
     ElMessage.error("操作失败，请重试");
