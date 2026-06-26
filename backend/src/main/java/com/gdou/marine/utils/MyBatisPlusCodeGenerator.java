@@ -49,7 +49,7 @@ public class MyBatisPlusCodeGenerator {
                             .enableFileOverride()
                             .enableLombok()
                             .enableTableFieldAnnotation()
-                            .idType(IdType.AUTO)
+                            .idType(IdType.ASSIGN_ID)
                             .logicDeleteColumnName("is_deleted")
                             .addTableFills(
                                     new Column("created_at", FieldFill.INSERT),

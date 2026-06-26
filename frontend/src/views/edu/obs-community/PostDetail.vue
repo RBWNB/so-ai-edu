@@ -585,7 +585,6 @@ const goToUserPost = (postId) => {
   router.push(`/obs-community/detail/${postId}`);
 };
 
-// 🌟 核心修复：监听路由变化，解决从帖子A跳转到帖子B时页面数据不刷新的问题
 watch(() => route.params.id, (newId, oldId) => {
   if (newId && newId !== oldId) {
     loadDetail(newId);

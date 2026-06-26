@@ -2,6 +2,7 @@ package com.gdou.marine.controller;
 
 import com.gdou.marine.annotation.Log;
 import com.gdou.marine.service.HighlightBroadcastService;
+import com.gdou.marine.utils.SnowflakeIdGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +27,9 @@ public class NotificationController {
 
     @Autowired
     private HighlightBroadcastService highlightBroadcastService;
+
+    @Autowired
+    private SnowflakeIdGenerator snowflakeIdGenerator;
 
     /**
      * 获取当前登录用户的未读通知数量
@@ -233,13 +237,18 @@ public class NotificationController {
                 return result;
             }
 
-            String sql = """
-                INSERT INTO system_notification (receiver_id, sender_id, type, target_id, post_id, content)
-                SELECT id, ?, 'broadcast', 0, 0, ? 
-                FROM app_user WHERE status = 1
-                """;
+            // 查询所有活跃用户
+            List<Long> activeUserIds = jdbcTemplate.queryForList(
+                    "SELECT id FROM app_user WHERE status = 1", Long.class);
 
-            int rowsAffected = jdbcTemplate.update(sql, adminId, content.trim());
+            // 逐条插入通知（雪花 ID 每行唯一）
+            int rowsAffected = 0;
+            for (Long receiverId : activeUserIds) {
+                jdbcTemplate.update(
+                        "INSERT INTO system_notification (id, receiver_id, sender_id, type, target_id, post_id, content) VALUES (?, ?, ?, 'broadcast', 0, 0, ?)",
+                        snowflakeIdGenerator.nextId(), receiverId, adminId, content.trim());
+                rowsAffected++;
+            }
 
             result.put("success", true);
             result.put("message", "广播发送成功，覆盖 " + rowsAffected + " 名用户");

@@ -1,6 +1,7 @@
 package com.gdou.marine.service;
 
 import com.gdou.marine.service.impl.ZhipuAiServiceImpl;
+import com.gdou.marine.utils.SnowflakeIdGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +25,9 @@ public class HighlightBroadcastService {
 
     @Autowired
     private ZhipuAiServiceImpl zhipuAiService;
+
+    @Autowired
+    private SnowflakeIdGenerator snowflakeIdGenerator;
 
     /**
      * 生成并发送高光时刻广播
@@ -75,14 +79,17 @@ public class HighlightBroadcastService {
             String aiContent = zhipuAiService.callAI(userInput, systemPrompt);
             log.info("AI生成的高光广播: {}", aiContent);
 
-            // 4. 将 AI 生成的推荐语作为全站广播发送
-            String insertSql = """
-                INSERT INTO system_notification (receiver_id, sender_id, type, target_id, post_id, content)
-                SELECT id, 0, 'broadcast_link', 0, ?, ? 
-                FROM app_user WHERE status = 1
-                """;
+            // 4. 将 AI 生成的推荐语作为全站广播逐条发送（雪花 ID 每行唯一）
+            List<Long> activeUserIds = jdbcTemplate.queryForList(
+                    "SELECT id FROM app_user WHERE status = 1", Long.class);
 
-            int count = jdbcTemplate.update(insertSql, postId, aiContent);
+            int count = 0;
+            for (Long receiverId : activeUserIds) {
+                jdbcTemplate.update(
+                        "INSERT INTO system_notification (id, receiver_id, sender_id, type, target_id, post_id, content) VALUES (?, ?, 0, 'broadcast_link', 0, ?, ?)",
+                        snowflakeIdGenerator.nextId(), receiverId, postId, aiContent);
+                count++;
+            }
             log.info("高光时刻广播发送完毕，覆盖用户数：{}", count);
 
         } catch (Exception e) {

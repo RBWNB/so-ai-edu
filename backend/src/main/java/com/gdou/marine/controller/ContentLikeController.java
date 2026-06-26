@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.gdou.marine.annotation.Log;
 import com.gdou.marine.entity.ContentLike;
 import com.gdou.marine.mapper.ContentLikeMapper;
+import com.gdou.marine.utils.SnowflakeIdGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +33,9 @@ public class ContentLikeController {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private SnowflakeIdGenerator snowflakeIdGenerator;
 
     /**
      * 切换点赞状态（已赞→取消，未赞→点赞）
@@ -91,8 +95,8 @@ public class ContentLikeController {
                             // 自己给自己点赞不触发通知
                             if (!receiverId.equals(userId)) {
                                 jdbcTemplate.update(
-                                        "INSERT INTO system_notification (receiver_id, sender_id, type, target_id, post_id, content) VALUES (?, ?, 'like_post', ?, ?, '')",
-                                        receiverId, userId, like.getId(), targetId
+                                        "INSERT INTO system_notification (id, receiver_id, sender_id, type, target_id, post_id, content) VALUES (?, ?, ?, 'like_post', ?, ?, '')",
+                                        snowflakeIdGenerator.nextId(), receiverId, userId, like.getId(), targetId
                                 );
                             }
                         }
@@ -106,8 +110,8 @@ public class ContentLikeController {
                             // 仅当评论属于社区观察帖子，且不是自己给自己点赞时触发
                             if (!receiverId.equals(userId) && "user_observation".equals(tType)) {
                                 jdbcTemplate.update(
-                                        "INSERT INTO system_notification (receiver_id, sender_id, type, target_id, post_id, content) VALUES (?, ?, 'like_comment', ?, ?, '')",
-                                        receiverId, userId, like.getId(), postId
+                                        "INSERT INTO system_notification (id, receiver_id, sender_id, type, target_id, post_id, content) VALUES (?, ?, ?, 'like_comment', ?, ?, '')",
+                                        snowflakeIdGenerator.nextId(), receiverId, userId, like.getId(), postId
                                 );
                             }
                         }

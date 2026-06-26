@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.gdou.marine.annotation.Log;
 import com.gdou.marine.entity.ContentComment;
 import com.gdou.marine.mapper.ContentCommentMapper;
+import com.gdou.marine.utils.SnowflakeIdGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +35,9 @@ public class ContentCommentController {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private SnowflakeIdGenerator snowflakeIdGenerator;
 
     /**
      * 获取某个目标的评论列表
@@ -261,8 +265,8 @@ public class ContentCommentController {
                             Long receiverId = ((Number) obsRows.get(0).get("user_id")).longValue();
                             if (!receiverId.equals(userId)) {
                                 jdbcTemplate.update(
-                                        "INSERT INTO system_notification (receiver_id, sender_id, type, target_id, post_id, content) VALUES (?, ?, 'reply_post', ?, ?, ?)",
-                                        receiverId, userId, comment.getId(), targetId,
+                                        "INSERT INTO system_notification (id, receiver_id, sender_id, type, target_id, post_id, content) VALUES (?, ?, ?, 'reply_post', ?, ?, ?)",
+                                        snowflakeIdGenerator.nextId(), receiverId, userId, comment.getId(), targetId,
                                         content.length() > 40 ? content.substring(0, 40) + "..." : content
                                 );
                             }
@@ -275,8 +279,8 @@ public class ContentCommentController {
                             Long receiverId = ((Number) pCommentRows.get(0).get("user_id")).longValue();
                             if (!receiverId.equals(userId)) {
                                 jdbcTemplate.update(
-                                        "INSERT INTO system_notification (receiver_id, sender_id, type, target_id, post_id, content) VALUES (?, ?, 'reply_comment', ?, ?, ?)",
-                                        receiverId, userId, comment.getId(), targetId,
+                                        "INSERT INTO system_notification (id, receiver_id, sender_id, type, target_id, post_id, content) VALUES (?, ?, ?, 'reply_comment', ?, ?, ?)",
+                                        snowflakeIdGenerator.nextId(), receiverId, userId, comment.getId(), targetId,
                                         content.length() > 40 ? content.substring(0, 40) + "..." : content
                                 );
                             }
