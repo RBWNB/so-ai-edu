@@ -19,3 +19,11 @@ export const markNotificationRead = (id) =>
 // 一键清空所有未读状态
 export const markAllRead = () =>
     http.put("/notification/read-all");
+
+// 删除单条通知
+export const deleteNotification = (id) =>
+    http.delete(`/notification/${id}`);
+
+// 清除所有通知
+export const clearAllNotifications = () =>
+    http.delete("/notification/all");

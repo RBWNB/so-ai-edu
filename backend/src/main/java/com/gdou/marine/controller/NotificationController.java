@@ -167,4 +167,42 @@ public class NotificationController {
         return null;
     }
 
+    /**
+     * 删除单条通知
+     * DELETE /notification/{id}
+     */
+    @DeleteMapping("/{id}")
+    public Map<String, Object> deleteNotification(@PathVariable Long id, Authentication auth) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            Long userId = extractUserId(auth);
+            if (userId != null) {
+                jdbcTemplate.update("DELETE FROM system_notification WHERE id = ? AND receiver_id = ?", id, userId);
+            }
+            result.put("success", true);
+        } catch (Exception e) {
+            result.put("success", false);
+        }
+        return result;
+    }
+
+    /**
+     * 清空当前用户所有通知
+     * DELETE /notification/all
+     */
+    @DeleteMapping("/all")
+    public Map<String, Object> clearAll(Authentication auth) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            Long userId = extractUserId(auth);
+            if (userId != null) {
+                jdbcTemplate.update("DELETE FROM system_notification WHERE receiver_id = ?", userId);
+            }
+            result.put("success", true);
+        } catch (Exception e) {
+            result.put("success", false);
+        }
+        return result;
+    }
+
 }

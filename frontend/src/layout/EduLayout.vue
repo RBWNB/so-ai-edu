@@ -79,18 +79,24 @@
               @mouseleave="onBellLeave"
           >
             <el-badge :is-dot="unreadCount > 0" class="bell-badge">
-              <el-icon class="bell-icon"><Bell /></el-icon>
+              <el-icon class="bell-icon" :class="{ 'is-ringing': unreadCount > 0 }">
+                <Bell />
+              </el-icon>
             </el-badge>
 
             <Transition name="hologram-menu">
               <div v-if="bellVisible" class="notification-popover">
                 <div class="noti-header">
                   <span>消息通知</span>
-                  <span class="read-all" @click="handleReadAll">全部已读</span>
+                  <div class="noti-actions">
+                    <span class="action-btn" @click="handleReadAll">全部已读</span>
+                    <span class="action-btn danger" @click="handleClearAll">清空</span>
+                  </div>
                 </div>
+
                 <div class="noti-list" v-if="notificationList.length > 0">
                   <div
-                      v-for="item in notificationList"
+                      v-for="(item, index) in notificationList"
                       :key="item.id"
                       class="noti-item"
                       :class="{ 'is-unread': item.isRead === 0 }"
@@ -101,10 +107,14 @@
                       <div class="noti-title">
                         <span class="sender-name">{{ item.senderName }}</span>
                         <span class="action-text">
-                  {{ item.type.includes('like') ? '赞了你的内容' : '回复了你' }}
-                </span>
+                          {{ item.type.includes('like') ? '赞了你的内容' : '回复了你' }}
+                        </span>
                       </div>
                       <div class="noti-time">{{ item.createdAt }}</div>
+                    </div>
+
+                    <div class="noti-delete" @click.stop="handleDelete(item, index)">
+                      <el-icon><Close /></el-icon>
                     </div>
                   </div>
                 </div>
@@ -236,10 +246,10 @@ import { useRoute, useRouter } from "vue-router";
 import * as THREE from "three";
 import { useAuthStore } from "@/store/auth";
 import { ElMessageBox, ElMessage } from "element-plus";
-import { ArrowDown, Bell, ChatDotRound, Setting, Ship, SwitchButton, User } from "@element-plus/icons-vue";
+import { ArrowDown, Bell, ChatDotRound, Close, Setting, Ship, SwitchButton, User } from "@element-plus/icons-vue";
 import RagChatWindow from "@/components/RagChatWindow.vue";
 import AgentFloatWidget from "@/components/AgentFloatWidget.vue";
-import { getUnreadCount, getNotificationList, markNotificationRead, markAllRead } from "@/utils/notification";
+import { getUnreadCount, getNotificationList, markNotificationRead, markAllRead, deleteNotification, clearAllNotifications } from "@/utils/notification";
 
 const route = useRoute();
 const $router = useRouter();
@@ -315,6 +325,39 @@ const handleReadAll = async () => {
     }
   } catch (err) {
     ElMessage.error("一键已读处理失败");
+  }
+};
+
+// 单条删除
+const handleDelete = async (item, index) => {
+  try {
+    // 1. 乐观更新：直接从列表中移除
+    notificationList.value.splice(index, 1);
+
+    // 如果删除的是未读消息，未读数减1
+    if (item.isRead === 0) {
+      unreadCount.value = Math.max(0, unreadCount.value - 1);
+    }
+
+    // 2. 异步请求后端删除
+    await deleteNotification(item.id);
+  } catch (err) {
+    ElMessage.error("删除失败");
+  }
+};
+
+// 清空所有通知
+const handleClearAll = async () => {
+  try {
+    // 1. 乐观更新：清空列表和红点
+    notificationList.value = [];
+    unreadCount.value = 0;
+
+    // 2. 请求后端清空
+    await clearAllNotifications();
+    ElMessage.success("消息已清空");
+  } catch (err) {
+    ElMessage.error("清空失败");
   }
 };
 
@@ -897,10 +940,7 @@ onUnmounted(() => {
   destroyThree();
 });
 // ── Three.js 粒子背景 END ──────────────────────────────────────────
-
-// ══════════════════════════════════════════════════════════════════════
 // ── 流体滑动指示器 (Fluid Sliding Indicator) ──
-// ══════════════════════════════════════════════════════════════════════
 const navRef = ref(null);
 const indicatorX = ref(0);
 const indicatorW = ref(0);
@@ -969,7 +1009,6 @@ onUnmounted(() => {
     window.removeEventListener("resize", _indicatorResizeHandler);
   }
 });
-// ── 流体滑动指示器 END ──────────────────────────────────────────────
 
 /* 打开 RAG 问答窗口 */
 const openRagChat = () => {
@@ -1564,6 +1603,93 @@ const handleUserCommand = (command) => {
   height: 1px;
   background: rgba(255, 255, 255, 0.08);
   margin: 4px 12px;
+}
+/* ════════════════════════════════════════════════════════════
+   铃铛晃动特效
+   ════════════════════════════════════════════════════════════ */
+@keyframes bell-shake {
+  0%   { transform: rotate(0deg); }
+  10%  { transform: rotate(15deg); }
+  20%  { transform: rotate(-10deg); }
+  30%  { transform: rotate(8deg); }
+  40%  { transform: rotate(-5deg); }
+  50%  { transform: rotate(2deg); }
+  60%  { transform: rotate(0deg); }
+  100% { transform: rotate(0deg); } /* 留出一段停顿时间 */
+}
+
+/* 当有未读消息时，每3秒晃动一次，吸引注意力 */
+.bell-icon.is-ringing {
+  animation: bell-shake 3s infinite ease-in-out;
+  transform-origin: top center; /* 确保是以铃铛顶部为中心摇晃 */
+}
+
+/* 鼠标悬停时暂停摇晃，防止点不准 */
+.notification-wrapper:hover .bell-icon.is-ringing {
+  animation-play-state: paused;
+}
+
+
+/* 下拉面板：清空按钮与单条删除样式 */
+.noti-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.action-btn {
+  font-size: 12px;
+  color: #00d2ff;
+  font-weight: normal;
+  cursor: pointer;
+  transition: color 0.3s;
+}
+.action-btn:hover {
+  text-shadow: 0 0 8px rgba(0, 210, 255, 0.6);
+}
+.action-btn.danger {
+  color: rgba(255, 255, 255, 0.5);
+}
+.action-btn.danger:hover {
+  color: #ff3f3f;
+  text-shadow: 0 0 8px rgba(255, 63, 63, 0.6);
+}
+
+/* 调整 noti-item 为相对定位，以容纳删除按钮 */
+.noti-item {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  transition: background 0.3s;
+  cursor: pointer;
+}
+
+/* 单条删除按钮：默认隐藏，悬停时显示 */
+.noti-delete {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 63, 63, 0.1);
+  color: #ff3f3f;
+  opacity: 0;
+  transition: opacity 0.3s, background 0.3s, transform 0.2s;
+}
+
+.noti-item:hover .noti-delete {
+  opacity: 1;
+}
+
+.noti-delete:hover {
+  background: rgba(255, 63, 63, 0.8);
+  color: #fff;
+  transform: translateY(-50%) scale(1.1);
 }
 
 /* --- 通知中心铃铛样式 --- */
