@@ -234,7 +234,7 @@
     <el-empty v-else description="暂无数据" :image-size="80" />
   </div>
 
-  <el-dialog v-model="userProfileVisible" title="主页" width="380px" class="glass-dialog">
+  <el-dialog v-model="userProfileVisible" title="用户信息" width="380px" class="glass-dialog">
     <div v-loading="userProfileLoading" class="user-pop-profile">
       <div class="up-header">
         <div class="detail-avatar-frame" :class="'frame-' + (userProfileData.avatarFrame || 'default')">
@@ -247,9 +247,16 @@
             {{ userProfileData.username }}
             <span class="up-level">Lv.{{ userProfileData.level }}</span>
           </div>
-          <div v-if="userProfileData.userTitle && userProfileData.userTitle !== '__none__'" class="up-title">
-            {{ userProfileData.userTitle }}
+
+          <div class="up-tags">
+            <span v-if="userProfileData.userTitle && userProfileData.userTitle !== '__none__'" class="up-title">
+              {{ userProfileData.userTitle }}
+            </span>
+            <span class="up-likes">
+               🔥 获赞 {{ userProfileData.totalLikes || 0 }}
+            </span>
           </div>
+
         </div>
       </div>
 
@@ -262,10 +269,15 @@
             class="up-post-item"
             @click="goToUserPost(post.id)"
         >
-          <el-icon><Reading /></el-icon>
+          <el-icon class="post-icon"><Document /></el-icon>
           <span class="up-post-title">{{ post.title }}</span>
+
+          <div class="up-post-stats">
+            <span title="点赞数"><el-icon><Pointer /></el-icon> {{ post.like_count || 0 }}</span>
+            <span title="评论数"><el-icon><ChatDotRound /></el-icon> {{ post.comment_count || 0 }}</span>
+            <span title="收藏数"><el-icon><Star /></el-icon> {{ post.bookmark_count || 0 }}</span>
+          </div>
         </div>
-        <el-empty v-if="!userProfileData.posts.length" description="TA 还没有发布过动态" :image-size="60" />
       </div>
     </div>
   </el-dialog>
@@ -276,7 +288,7 @@ import { ref, reactive, onMounted, nextTick, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useAuthStore } from "@/store/auth";
 import { ElMessage } from "element-plus";
-import { ArrowLeft, User, Clock, CircleCheck, Star, Reading } from "@element-plus/icons-vue";
+import { ArrowLeft, User, Clock, CircleCheck, Star, Pointer ,ChatDotRound, Document } from "@element-plus/icons-vue";
 import {getCommunityObservationDetail, getPublicProfile} from "@/api/observation";
 import { getComments, getReplies, createComment, deleteComment as deleteCommentApi } from "@/api/comment";
 import { toggleLike as toggleLikeApi } from "@/api/like";
@@ -545,6 +557,7 @@ const userProfileData = ref({
   avatarFrame: "default",
   userTitle: "",
   level: 1,
+  totalLikes: 0,
   posts: []
 });
 
@@ -896,16 +909,35 @@ watch(() => route.params.id, (newId, oldId) => {
   border-radius: 10px;
 }
 .up-title {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   font-size: 12px;
   color: #b8860b;
   background: rgba(255, 215, 0, 0.15);
   padding: 2px 10px;
   border-radius: 12px;
-  margin-top: 6px;
   border: 1px solid rgba(255, 215, 0, 0.3);
 }
 
+.up-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.up-likes {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ff5722;
+  background: rgba(255, 87, 34, 0.1);
+  padding: 2px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 87, 34, 0.2);
+}
 .up-divider {
   font-size: 13px;
   font-weight: 600;
@@ -925,38 +957,112 @@ watch(() => route.params.id, (newId, oldId) => {
 .up-post-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-height: 250px;
+  gap: 10px;
+  max-height: 260px;
   overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 6px 12px 4px;
 }
-/* 隐藏滚动条让视觉更干净 */
-.up-post-list::-webkit-scrollbar { width: 4px; }
-.up-post-list::-webkit-scrollbar-thumb { background: #dcdfe6; border-radius: 2px; }
 
+.up-post-list::-webkit-scrollbar { width: 4px; }
+.up-post-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+.up-post-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* 单个帖子卡片样式 */
 .up-post-item {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  background: rgba(0, 0, 0, 0.03);
-  border-radius: 10px;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #f8fafc; /* 替换掉原本生硬的纯灰，改为清爽的蓝灰色系 */
+  border: 1px solid transparent;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.25s ease;
-  color: #4e5969;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); /* 更顺滑的过渡动画 */
+  color: #475569;
+  overflow: hidden;
 }
+
+/* 前置小图标颜色 */
+.up-post-item .el-icon {
+  font-size: 16px;
+  color: #94a3b8;
+  transition: color 0.3s;
+}
+
+
+
 .up-post-item:hover {
-  background: rgba(22, 93, 255, 0.08);
+  background: #ffffff;
   color: #165dff;
-  transform: translateX(4px); /* 悬浮右移效果 */
+  border-color: rgba(22, 93, 255, 0.15);
+  box-shadow: 0 6px 16px rgba(22, 93, 255, 0.08);
+  transform: translateY(-2px);
 }
+
+.up-post-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: #165dff;
+  opacity: 0;
+  transform: scaleY(0);
+  transition: all 0.3s ease;
+}
+.up-post-item:hover::before {
+  opacity: 1;
+  transform: scaleY(1);
+}
+.up-post-item:hover .el-icon {
+  color: #165dff;
+}
+
+
 .up-post-title {
   font-size: 14px;
+  font-weight: 500;
   flex: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin-right: 16px;
 }
 
+.up-post-stats {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 12px;
+  color: #94a3b8;
+  flex-shrink: 0;
+  transition: color 0.3s ease;
+}
+
+.up-post-stats span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: monospace;
+}
+
+.up-post-item:hover .up-post-stats {
+  color: #64748b;
+}
+
+.up-post-item:hover .up-post-stats .el-icon {
+  color: #165dff;
+  transform: scale(1.1);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s;
+}
 /* 头像框 */
 .frame-default { background: #dcdfe6; }
 .frame-gold {

@@ -825,7 +825,7 @@ public class UserObservationController {
     }
 
     /**
-     * 获取指定用户的公开主页信息（包含基础信息、等级、过往公开帖子）
+     * 获取指定用户的公开主页信息（包含基础信息、等级、总获赞数、过往公开帖子）
      * GET /observation/public-profile/{userId}
      */
     @GetMapping("/public-profile/{userId}")
@@ -849,16 +849,40 @@ public class UserObservationController {
             int level = levels.isEmpty() ? 1 : ((Number) levels.get(0).get("level")).intValue();
 
             // 3. 查过往发帖 (user_observation 表) - 只查审核通过公开的(status=1)
-            List<Map<String, Object>> posts = jdbcTemplate.queryForList(
-                    "SELECT id, title FROM user_observation WHERE user_id = ? AND status = 1 ORDER BY created_at DESC", userId);
+            String postsSql = """
+                SELECT 
+                    o.id, 
+                    o.title,
+                    (SELECT COUNT(*) FROM content_like cl WHERE cl.target_type = 'user_observation' AND cl.target_id = o.id) AS like_count,
+                    (SELECT COUNT(*) FROM content_comment cc WHERE cc.target_type = 'user_observation' AND cc.target_id = o.id) AS comment_count,
+                    (SELECT COUNT(*) FROM user_bookmark ub WHERE ub.target_type = 'user_observation' AND ub.target_id = o.id) AS bookmark_count
+                FROM user_observation o 
+                WHERE o.user_id = ? AND o.status = 1 
+                ORDER BY o.created_at DESC
+                """;
+            List<Map<String, Object>> posts = jdbcTemplate.queryForList(postsSql, userId);
 
-            // 4. 组装数据返回
+            // 4. 🆕 查总获赞数 (计算用户所有帖子和评论收到的点赞总和)
+            String obsLikeSql = "SELECT COUNT(*) FROM content_like cl " +
+                    "JOIN user_observation uo ON cl.target_id = uo.id AND cl.target_type = 'user_observation' " +
+                    "WHERE uo.user_id = ?";
+            Long obsLikes = jdbcTemplate.queryForObject(obsLikeSql, Long.class, userId);
+
+            String commentLikeSql = "SELECT COUNT(*) FROM content_like cl " +
+                    "JOIN content_comment cc ON cl.target_id = cc.id AND cl.target_type = 'comment' " +
+                    "WHERE cc.user_id = ?";
+            Long commentLikes = jdbcTemplate.queryForObject(commentLikeSql, Long.class, userId);
+
+            long totalLikes = (obsLikes != null ? obsLikes : 0L) + (commentLikes != null ? commentLikes : 0L);
+
+            // 5. 组装数据返回
             Map<String, Object> data = new HashMap<>();
             data.put("username", user.get("username"));
             data.put("avatarUrl", user.get("avatar_url"));
             data.put("avatarFrame", user.get("avatar_frame"));
             data.put("userTitle", user.get("user_title"));
             data.put("level", level);
+            data.put("totalLikes", totalLikes); // 🆕 注入总获赞数
             data.put("posts", posts);
 
             result.put("success", true);
