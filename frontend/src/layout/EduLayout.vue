@@ -71,6 +71,47 @@
 
         <!-- 右侧用户区 -->
         <div class="user-area">
+          <!--  消息铃铛  -->
+          <div
+              v-if="authStore.isLoggedIn"
+              class="notification-wrapper"
+              @mouseenter="onBellEnter"
+              @mouseleave="onBellLeave"
+          >
+            <el-badge :is-dot="unreadCount > 0" class="bell-badge">
+              <el-icon class="bell-icon"><Bell /></el-icon>
+            </el-badge>
+
+            <Transition name="hologram-menu">
+              <div v-if="bellVisible" class="notification-popover">
+                <div class="noti-header">
+                  <span>消息通知</span>
+                  <span class="read-all" @click="handleReadAll">全部已读</span>
+                </div>
+                <div class="noti-list" v-if="notificationList.length > 0">
+                  <div
+                      v-for="item in notificationList"
+                      :key="item.id"
+                      class="noti-item"
+                      :class="{ 'is-unread': item.isRead === 0 }"
+                      @click="goToPost(item)"
+                  >
+                    <el-avatar :size="32" :src="item.senderAvatar" />
+                    <div class="noti-content">
+                      <div class="noti-title">
+                        <span class="sender-name">{{ item.senderName }}</span>
+                        <span class="action-text">
+                  {{ item.type.includes('like') ? '赞了你的内容' : '回复了你' }}
+                </span>
+                      </div>
+                      <div class="noti-time">{{ item.createdAt }}</div>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="noti-empty">暂无新消息</div>
+              </div>
+            </Transition>
+          </div>
           <!-- RAG 智能问答按钮 -->
           <AgentFloatWidget
               v-if="authStore.isLoggedIn"
@@ -195,15 +236,102 @@ import { useRoute, useRouter } from "vue-router";
 import * as THREE from "three";
 import { useAuthStore } from "@/store/auth";
 import { ElMessageBox, ElMessage } from "element-plus";
-import { ArrowDown, ChatDotRound, Setting, Ship, SwitchButton, User } from "@element-plus/icons-vue";
+import { ArrowDown, Bell, ChatDotRound, Setting, Ship, SwitchButton, User } from "@element-plus/icons-vue";
 import RagChatWindow from "@/components/RagChatWindow.vue";
 import AgentFloatWidget from "@/components/AgentFloatWidget.vue";
+import { getUnreadCount, getNotificationList, markNotificationRead, markAllRead } from "@/utils/notification";
 
 const route = useRoute();
 const $router = useRouter();
 const authStore = useAuthStore();
 const ragChatRef = ref(null);
 const threeCanvas = ref(null);
+
+const bellVisible = ref(false);
+const unreadCount = ref(0);
+const notificationList = ref([]);
+let bellLeaveTimer = null;
+let unreadPollingTimer = null; // 全局未读条数定时轮询器
+
+// 获取最新的未读总数
+const fetchUnreadNumber = async () => {
+  if (!authStore.isLoggedIn) return;
+  try {
+    const res = await getUnreadCount();
+    if (res?.data?.success) {
+      unreadCount.value = res.data.data || 0;
+    }
+  } catch (err) {
+    console.error("轮询消息未读数异常", err);
+  }
+};
+
+// 鼠标悬停进入铃铛：显示通知面板，动态加载前5条最新互动
+const onBellEnter = async () => {
+  clearTimeout(bellLeaveTimer);
+  bellVisible.value = true;
+  if (!authStore.isLoggedIn) return;
+  try {
+    const res = await getNotificationList({ pageNum: 1, pageSize: 5 });
+    if (res?.data?.success) {
+      notificationList.value = res.data.data.records || [];
+    }
+  } catch (err) {
+    console.error("加载消息面板失败", err);
+  }
+};
+
+// 鼠标移出铃铛：延时关闭面板
+const onBellLeave = () => {
+  bellLeaveTimer = setTimeout(() => {
+    bellVisible.value = false;
+  }, 250);
+};
+
+// 点击具体通知项：设为已读并跳转对应的帖子详情页
+const goToPost = async (item) => {
+  try {
+    if (item.isRead === 0) {
+      await markNotificationRead(item.id);
+      item.isRead = 1;
+      unreadCount.value = Math.max(0, unreadCount.value - 1);
+    }
+    bellVisible.value = false;
+    // 精准跳转去海友社区的帖子详情页
+    $router.push(`/obs-community/detail/${item.postId}`);
+  } catch (err) {
+    ElMessage.error("操作失败，请重试");
+  }
+};
+
+// 点击一键全部已读
+const handleReadAll = async () => {
+  try {
+    const res = await markAllRead();
+    if (res?.data?.success) {
+      unreadCount.value = 0;
+      notificationList.value.forEach(x => x.isRead = 1);
+      ElMessage.success("全部通知已标记为已读");
+    }
+  } catch (err) {
+    ElMessage.error("一键已读处理失败");
+  }
+};
+
+// 监听登录状态：一旦登入立刻开启未读轮询；登出则注销并清空状态
+watch(() => authStore.isLoggedIn, (isLoggedIn) => {
+  if (isLoggedIn) {
+    fetchUnreadNumber();
+    unreadPollingTimer = setInterval(fetchUnreadNumber, 30000); // 每30秒自动检测一次新消息
+  } else {
+    unreadCount.value = 0;
+    notificationList.value = [];
+    if (unreadPollingTimer) {
+      clearInterval(unreadPollingTimer);
+      unreadPollingTimer = null;
+    }
+  }
+}, { immediate: true });
 
 // ── Three.js 粒子背景\
 /** 粒子数量响应式分级（按屏幕宽度） */
@@ -1140,6 +1268,7 @@ const handleUserCommand = (command) => {
   flex-shrink: 0;
   display: flex;
   align-items: center;
+  gap: 18px;
 }
 /* 下拉菜单容器 */
 .user-dropdown-wrapper {
@@ -1435,6 +1564,135 @@ const handleUserCommand = (command) => {
   height: 1px;
   background: rgba(255, 255, 255, 0.08);
   margin: 4px 12px;
+}
+
+/* --- 通知中心铃铛样式 --- */
+.notification-wrapper {
+  position: relative;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  transition: background 0.3s ease, transform 0.2s ease;
+}
+
+.bell-icon {
+  font-size: 20px;
+  color: rgba(235, 245, 255, 0.85);
+  transition: all 0.3s ease;
+}
+
+.notification-wrapper:hover .bell-icon {
+  color: #00d2ff;
+  filter: drop-shadow(0 0 8px rgba(0, 210, 255, 0.6));
+}
+
+.notification-wrapper:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+.bell-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+/* 通知面板 */
+.notification-popover {
+  position: absolute;
+  top: calc(100% + 16px);
+  right: -10px;
+  width: 300px;
+  z-index: 9999;
+  background: rgba(10, 18, 38, 0.95);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(0, 210, 255, 0.2);
+  border-radius: 16px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+  padding: 12px 0;
+}
+
+.noti-header {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 16px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 14px;
+  color: #fff;
+  font-weight: 600;
+}
+
+.read-all {
+  font-size: 12px;
+  color: #00d2ff;
+  font-weight: normal;
+}
+
+.noti-list {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.noti-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  transition: background 0.3s;
+}
+
+.noti-item:hover {
+  background: rgba(0, 210, 255, 0.08);
+}
+
+.noti-item.is-unread {
+  background: rgba(0, 210, 255, 0.04);
+}
+
+.noti-item.is-unread::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  margin-top: 14px;
+  width: 6px;
+  height: 6px;
+  background: #ff3f3f;
+  border-radius: 50%;
+}
+
+.noti-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sender-name {
+  color: #00d2ff;
+  font-weight: 600;
+  font-size: 13px;
+  margin-right: 6px;
+}
+
+.action-text {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 13px;
+}
+
+.noti-time {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+}
+
+.noti-empty {
+  text-align: center;
+  padding: 30px 0;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 13px;
 }
 
 </style>

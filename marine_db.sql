@@ -492,4 +492,17 @@ CREATE TABLE IF NOT EXISTS competition_record (
                                                   INDEX idx_created  (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='竞技模式答题记录';
 
+-- 35.用户消息通知表
+CREATE TABLE system_notification (
+                                     id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+                                     receiver_id BIGINT UNSIGNED NOT NULL COMMENT '接收通知的用户ID',
+                                     sender_id BIGINT UNSIGNED NOT NULL COMMENT '触发通知的用户ID',
+                                     type VARCHAR(32) NOT NULL COMMENT '通知类型: like_post, like_comment, reply_post, reply_comment',
+                                     target_id BIGINT UNSIGNED NOT NULL COMMENT '点赞或评论的ID，用于溯源',
+                                     post_id BIGINT UNSIGNED NOT NULL COMMENT '用于前端直接跳转的顶级帖子(观察记录)ID',
+                                     content VARCHAR(255) COMMENT '简略内容，如评论的前50个字，点赞可为空',
+                                     is_read TINYINT NOT NULL DEFAULT 0 COMMENT '0:未读, 1:已读',
+                                     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                     KEY idx_receiver_unread (receiver_id, is_read)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户消息通知';
 SET FOREIGN_KEY_CHECKS = 1;
