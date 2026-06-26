@@ -66,7 +66,13 @@
               <span class="username">{{ post.username }}</span>
               <span v-if="post.userTitle" class="user-badge">{{ post.userTitle }}</span>
             </div>
-            <div class="feed-time">{{ post.createdAt }}</div>
+            <div class="feed-time">
+              {{ post.createdAt }}
+              <span v-if="post.locationName" class="feed-location">
+                <el-icon :size="12"><Location /></el-icon>
+                {{ post.locationName }}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -98,7 +104,7 @@
           <div class="footer-btn">
             <el-icon><Share /></el-icon> 分享
           </div>
-          <div class="footer-btn">
+          <div class="footer-btn" @click.stop="goToComment(post)">
             <el-icon><ChatDotSquare /></el-icon> {{ post.commentCount || '评论' }}
           </div>
           <div class="footer-btn" :class="{ liked: post.liked }" @click.stop="toggleListLike(post)">
@@ -130,7 +136,7 @@ import { useRouter, useRoute } from "vue-router";
 import { ElMessage } from "element-plus";
 import {
   Plus, User, Clock, CircleCheck, ChatDotSquare, Share,
-  Lightning, Search
+  Lightning, Search, Location
 } from "@element-plus/icons-vue";
 import { getCommunityObservations } from "@/api/observation";
 import { toggleLike as toggleLikeApi } from "@/api/like";
@@ -213,6 +219,15 @@ const toggleListLike = async (post) => {
       post.likeCount = res.data.data.count;
     }
   } catch (err) { console.error(err); }
+};
+
+// 点击评论按钮 → 跳转到帖子详情评论区
+const goToComment = (post) => {
+  sessionStorage.setItem('community_scroll_top', window.scrollY);
+  sessionStorage.setItem('community_page_num', String(pageNum.value));
+  sessionStorage.setItem('community_sort', sortMode.value);
+  sessionStorage.setItem('community_keyword', searchKeyword.value);
+  router.push({ name: 'EduObservationDetail', params: { id: post.id }, hash: '#comments' });
 };
 
 // 点击帖子 → 跳转到独立详情页面，并保存滚动位置
@@ -390,7 +405,21 @@ onMounted(async () => {
 .feed-user-name { display: flex; align-items: center; gap: 8px; }
 .username { font-size: 15px; font-weight: 600; color: #fb7299; /* B站标志粉色 */ }
 .user-badge { font-size: 10px; color: #b8860b; background: rgba(255,215,0,0.15); padding: 1px 6px; border-radius: 4px; }
-.feed-time { font-size: 12px; color: #99a2aa; margin-top: 3px; }
+.feed-time { font-size: 12px; color: #99a2aa; margin-top: 3px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.feed-location {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  color: #008ac5;
+  background: rgba(0, 138, 197, 0.08);
+  padding: 1px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.feed-location .el-icon {
+  font-size: 11px;
+}
 
 /* 动态内容正文 */
 .feed-body { margin-bottom: 12px; padding-left: 62px; /* 对齐头部头像右侧起步线 */ }
