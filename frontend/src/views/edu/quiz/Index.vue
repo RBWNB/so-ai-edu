@@ -261,9 +261,14 @@
           <p class="score-summary">答对 {{ correctCount }} / {{ totalCount }} 题</p>
         </div>
 
-        <el-button type="primary" size="large" class="retry-btn" @click="resetExam">
-          再来一次
-        </el-button>
+        <div class="result-actions">
+          <el-button type="primary" size="large" class="retry-btn" @click="resetExam">
+            再来一次
+          </el-button>
+          <el-button size="large" class="exit-btn" @click="exitToStart">
+            退出答题
+          </el-button>
+        </div>
 
         <!-- 详细解析 -->
         <div class="detail-section">
@@ -356,39 +361,134 @@
           <div class="q-stem">{{ compCurrentQ.stem }}</div>
 
           <!-- 竞技选项（带对错反馈） -->
-          <div class="options-list">
-            <div
-              v-for="opt in compParsedOptions"
-              :key="opt.label"
-              class="option-item comp-option"
-              :class="{
-                selected: compSelectedAnswer === opt.label && !compFeedback,
-                correct: compFeedback && opt.label === compCurrentQ.correctAnswer,
-                wrong: compFeedback && compSelectedAnswer === opt.label && opt.label !== compCurrentQ.correctAnswer,
-                dimmed: compFeedback && opt.label !== compCurrentQ.correctAnswer && opt.label !== compSelectedAnswer,
-              }"
-              @click="compSelectAnswer(opt.label)"
-            >
-              <span
-                class="indicator radio-indicator"
+          <!-- 单选题 -->
+          <template v-if="compCurrentQ.questionType === 'single'">
+            <div class="options-list">
+              <div
+                v-for="opt in compParsedOptions"
+                :key="opt.label"
+                class="option-item comp-option"
                 :class="{
-                  active: compSelectedAnswer === opt.label && !compFeedback,
-                  'indicator-correct': compFeedback && opt.label === compCurrentQ.correctAnswer,
-                  'indicator-wrong': compFeedback && compSelectedAnswer === opt.label && opt.label !== compCurrentQ.correctAnswer,
+                  selected: compSelectedAnswer === opt.label && !compFeedback,
+                  correct: compFeedback && opt.label === compCurrentQ.correctAnswer,
+                  wrong: compFeedback && compSelectedAnswer === opt.label && opt.label !== compCurrentQ.correctAnswer,
+                  dimmed: compFeedback && opt.label !== compCurrentQ.correctAnswer && opt.label !== compSelectedAnswer,
                 }"
+                @click="compSelectAnswer(opt.label)"
               >
-                <span v-if="compFeedback && opt.label === compCurrentQ.correctAnswer" class="indicator-check">✓</span>
-                <span v-else-if="compFeedback && compSelectedAnswer === opt.label && opt.label !== compCurrentQ.correctAnswer" class="indicator-cross">✗</span>
-                <span v-else-if="compSelectedAnswer === opt.label && !compFeedback" class="indicator-dot" />
-              </span>
-              <span class="opt-label">{{ opt.label }}.</span>
-              <span class="opt-text">{{ opt.text }}</span>
+                <span
+                  class="indicator radio-indicator"
+                  :class="{
+                    active: compSelectedAnswer === opt.label && !compFeedback,
+                    'indicator-correct': compFeedback && opt.label === compCurrentQ.correctAnswer,
+                    'indicator-wrong': compFeedback && compSelectedAnswer === opt.label && opt.label !== compCurrentQ.correctAnswer,
+                  }"
+                >
+                  <span v-if="compFeedback && opt.label === compCurrentQ.correctAnswer" class="indicator-check">✓</span>
+                  <span v-else-if="compFeedback && compSelectedAnswer === opt.label && opt.label !== compCurrentQ.correctAnswer" class="indicator-cross">✗</span>
+                  <span v-else-if="compSelectedAnswer === opt.label && !compFeedback" class="indicator-dot" />
+                </span>
+                <span class="opt-label">{{ opt.label }}.</span>
+                <span class="opt-text">{{ opt.text }}</span>
+              </div>
             </div>
-          </div>
+          </template>
+
+          <!-- 多选题（勾选多个 → 确认 → 结算） -->
+          <template v-if="compCurrentQ.questionType === 'multiple'">
+            <div class="options-list">
+              <div
+                v-for="opt in compParsedOptions"
+                :key="opt.label"
+                class="option-item comp-option"
+                :class="{
+                  selected: compMultiSelected.includes(opt.label) && !compFeedback,
+                  correct: compFeedback && compCorrectSet.includes(opt.label),
+                  wrong: compFeedback && compMultiSelected.includes(opt.label) && !compCorrectSet.includes(opt.label),
+                  dimmed: compFeedback && !compCorrectSet.includes(opt.label) && !compMultiSelected.includes(opt.label),
+                }"
+                @click="compToggleMulti(opt.label)"
+              >
+                <span
+                  class="indicator checkbox-indicator"
+                  :class="{
+                    active: compMultiSelected.includes(opt.label) && !compFeedback,
+                    'indicator-correct': compFeedback && compCorrectSet.includes(opt.label),
+                    'indicator-wrong': compFeedback && compMultiSelected.includes(opt.label) && !compCorrectSet.includes(opt.label),
+                  }"
+                >
+                  <span v-if="compFeedback && compCorrectSet.includes(opt.label)" class="indicator-check">✓</span>
+                  <span v-else-if="compFeedback && compMultiSelected.includes(opt.label) && !compCorrectSet.includes(opt.label)" class="indicator-cross">✗</span>
+                  <span v-else-if="compMultiSelected.includes(opt.label) && !compFeedback" class="indicator-check">✓</span>
+                </span>
+                <span class="opt-label">{{ opt.label }}.</span>
+                <span class="opt-text">{{ opt.text }}</span>
+              </div>
+            </div>
+            <div class="comp-confirm-bar" v-if="compMultiSelected.length > 0 && !compFeedback">
+              <span class="comp-confirm-hint">已选 {{ compMultiSelected.length }} 项</span>
+              <el-button type="primary" size="small" round @click="compConfirmMulti">确认选择</el-button>
+            </div>
+          </template>
+
+          <!-- 判断题 -->
+          <template v-if="compCurrentQ.questionType === 'judge'">
+            <div class="options-list judge-options">
+              <div
+                class="option-item comp-option"
+                :class="{
+                  selected: compSelectedAnswer === '正确' && !compFeedback,
+                  correct: compFeedback && compCurrentQ.correctAnswer === '正确',
+                  wrong: compFeedback && compSelectedAnswer === '正确' && compCurrentQ.correctAnswer !== '正确',
+                  dimmed: compFeedback && compCurrentQ.correctAnswer !== '正确' && compSelectedAnswer !== '正确',
+                }"
+                @click="compSelectAnswer('正确')"
+              >
+                <span
+                  class="indicator radio-indicator"
+                  :class="{
+                    active: compSelectedAnswer === '正确' && !compFeedback,
+                    'indicator-correct': compFeedback && compCurrentQ.correctAnswer === '正确',
+                    'indicator-wrong': compFeedback && compSelectedAnswer === '正确' && compCurrentQ.correctAnswer !== '正确',
+                  }"
+                >
+                  <span v-if="compFeedback && compCurrentQ.correctAnswer === '正确'" class="indicator-check">✓</span>
+                  <span v-else-if="compFeedback && compSelectedAnswer === '正确' && compCurrentQ.correctAnswer !== '正确'" class="indicator-cross">✗</span>
+                  <span v-else-if="compSelectedAnswer === '正确' && !compFeedback" class="indicator-dot" />
+                </span>
+                <span class="opt-text">正确</span>
+              </div>
+              <div
+                class="option-item comp-option"
+                :class="{
+                  selected: compSelectedAnswer === '错误' && !compFeedback,
+                  correct: compFeedback && compCurrentQ.correctAnswer === '错误',
+                  wrong: compFeedback && compSelectedAnswer === '错误' && compCurrentQ.correctAnswer !== '错误',
+                  dimmed: compFeedback && compCurrentQ.correctAnswer !== '错误' && compSelectedAnswer !== '错误',
+                }"
+                @click="compSelectAnswer('错误')"
+              >
+                <span
+                  class="indicator radio-indicator"
+                  :class="{
+                    active: compSelectedAnswer === '错误' && !compFeedback,
+                    'indicator-correct': compFeedback && compCurrentQ.correctAnswer === '错误',
+                    'indicator-wrong': compFeedback && compSelectedAnswer === '错误' && compCurrentQ.correctAnswer !== '错误',
+                  }"
+                >
+                  <span v-if="compFeedback && compCurrentQ.correctAnswer === '错误'" class="indicator-check">✓</span>
+                  <span v-else-if="compFeedback && compSelectedAnswer === '错误' && compCurrentQ.correctAnswer !== '错误'" class="indicator-cross">✗</span>
+                  <span v-else-if="compSelectedAnswer === '错误' && !compFeedback" class="indicator-dot" />
+                </span>
+                <span class="opt-text">错误</span>
+              </div>
+            </div>
+          </template>
 
           <!-- 超时提示 -->
           <div v-if="compTimeoutFlag" class="comp-timeout-tip">
             <span>⏰ 时间到！正确答案：<b>{{ compCurrentQ.correctAnswer }}</b></span>
+            <div v-if="compCurrentQ.questionType === 'multiple'" class="timeout-note">（竞技模式多选题选对任一正确选项即得分）</div>
           </div>
         </div>
       </div>
@@ -640,7 +740,8 @@ const compUserAnswers = ref([]) // { answer, correct, timeMs } per question
 const compQuestionStartTime = ref(0)
 const countdown = ref(10)
 const compFeedback = ref(false)     // 是否正在展示对错反馈
-const compSelectedAnswer = ref('')  // 当前题用户选择的答案
+const compSelectedAnswer = ref('')  // 当前题用户选择的答案（单选/判断）
+const compMultiSelected = ref([])   // 当前题多选题已选标签
 const compTimeoutFlag = ref(false)  // 是否因超时展示提示
 
 // 结算数据
@@ -713,6 +814,11 @@ const compParsedOptions = computed(() => {
   const q = compCurrentQ.value
   if (!q || !q.optionsJson) return []
   return parseOptions(q.optionsJson)
+})
+
+const compCorrectSet = computed(() => {
+  const ans = compCurrentQ.value?.correctAnswer || ''
+  return ans.split(',').map(s => s.trim()).filter(Boolean)
 })
 
 const countdownDashArray = computed(() => {
@@ -937,6 +1043,10 @@ const resetExam = () => {
   fetchHistory()
 }
 
+const exitToStart = () => {
+  resetExam()
+}
+
 const confirmExit = () => {
   const hasAnyAnswer = userAnswers.value.some(a => a !== null && a !== undefined && a !== '')
   if (hasAnyAnswer) {
@@ -1043,6 +1153,7 @@ const startCountdown = () => {
   countdown.value = 10
   compFeedback.value = false
   compSelectedAnswer.value = ''
+  compMultiSelected.value = []
   compTimeoutFlag.value = false
   compQuestionStartTime.value = Date.now()
 
@@ -1072,6 +1183,7 @@ const handleTimeout = () => {
   compTimeoutFlag.value = true
   compFeedback.value = true
   compSelectedAnswer.value = ''
+  compMultiSelected.value = []
 
   const timeMs = 10000 // 超时即 10 秒
   recordAnswer('', false, timeMs)
@@ -1082,7 +1194,7 @@ const handleTimeout = () => {
 }
 
 const compSelectAnswer = (label) => {
-  // 已展示反馈或未开始倒计时时忽略点击
+  // 已展示超时反馈或未开始倒计时时忽略点击
   if (compFeedback.value || countdown.value <= 0) return
 
   clearInterval(countdownTimer)
@@ -1090,19 +1202,39 @@ const compSelectAnswer = (label) => {
 
   compSelectedAnswer.value = label
   const elapsed = Date.now() - compQuestionStartTime.value
-  const isCorrect = label === compCurrentQ.value.correctAnswer
+
+  const ca = compCurrentQ.value?.correctAnswer || ''
+  const isCorrect = label === ca
 
   recordAnswer(label, isCorrect, elapsed)
+  advanceQuestion()
+}
 
-  // 显示反馈
-  compFeedback.value = true
-  compTimeoutFlag.value = false
+const compToggleMulti = (label) => {
+  if (compFeedback.value || countdown.value <= 0) return
+  const idx = compMultiSelected.value.indexOf(label)
+  if (idx === -1) {
+    compMultiSelected.value.push(label)
+  } else {
+    compMultiSelected.value.splice(idx, 1)
+  }
+}
 
-  // 答错展示 1.2 秒，答对展示 0.6 秒
-  const delay = isCorrect ? 600 : 1200
-  autoAdvanceTimer = setTimeout(() => {
-    advanceQuestion()
-  }, delay)
+const compConfirmMulti = () => {
+  if (compFeedback.value || countdown.value <= 0) return
+  if (compMultiSelected.value.length === 0) return
+
+  clearInterval(countdownTimer)
+  countdownTimer = null
+
+  const selected = [...compMultiSelected.value].sort()
+  const correct = [...compCorrectSet.value].sort()
+  const isCorrect = selected.join(',') === correct.join(',')
+
+  const answer = compMultiSelected.value.join(',')
+  const elapsed = Date.now() - compQuestionStartTime.value
+  recordAnswer(answer, isCorrect, elapsed)
+  advanceQuestion()
 }
 
 const recordAnswer = (answer, correct, timeMs) => {
@@ -1143,6 +1275,7 @@ const startCompetition = async () => {
     compUserAnswers.value = new Array(questions.length).fill(null)
     compFeedback.value = false
     compSelectedAnswer.value = ''
+    compMultiSelected.value = []
     compTimeoutFlag.value = false
     compStage.value = 'PLAYING'
 
@@ -1760,7 +1893,27 @@ loadCompHistory()
 
 .result-header h2 { font-size: 28px; margin: 0 0 12px; color: #1d2129; font-weight: 800; letter-spacing: 1px; }
 .score-summary { color: #86909c; font-size: 16px; font-weight: 500; }
-.retry-btn { margin-bottom: 50px; min-width: 180px; padding: 20px 40px; font-size: 16px; border-radius: 30px; }
+.result-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin-bottom: 50px;
+  flex-wrap: wrap;
+}
+.retry-btn {
+  min-width: 180px;
+  padding: 20px 40px;
+  font-size: 16px;
+  border-radius: 30px;
+}
+.exit-btn {
+  min-width: 140px;
+  padding: 20px 40px;
+  font-size: 16px;
+  border-radius: 30px;
+  color: #86909c;
+  border-color: #e5e6eb;
+}
 
 .detail-section { text-align: left; }
 .detail-section h3 { font-size: 20px; font-weight: 800; color: #1d2129; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
@@ -1978,6 +2131,30 @@ loadCompHistory()
 .comp-timeout-tip b {
   color: #00b42a;
   font-weight: 700;
+}
+
+.timeout-note {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #86909c;
+  font-weight: 400;
+}
+
+.comp-confirm-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding: 10px 16px;
+  background: rgba(22, 93, 255, 0.04);
+  border: 1px solid rgba(22, 93, 255, 0.15);
+  border-radius: 10px;
+}
+
+.comp-confirm-hint {
+  font-size: 13px;
+  color: #165dff;
+  font-weight: 500;
 }
 
 /* ═══════════════════════════════════════════════════

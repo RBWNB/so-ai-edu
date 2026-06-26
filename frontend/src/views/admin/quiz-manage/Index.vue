@@ -819,7 +819,12 @@ const handleSubmit = async () => {
 
     // 构建optionsJson
     let optionsJsonStr = ''
-    if (formModel.questionType !== 'judge') {
+    if (formModel.questionType === 'judge') {
+      optionsJsonStr = JSON.stringify([
+        { label: 'A', text: '正确' },
+        { label: 'B', text: '错误' },
+      ])
+    } else {
       const opts = formModel._options.filter(o => o.text)
         .map(o => ({ label: o.label, text: o.text }))
       optionsJsonStr = JSON.stringify(opts)
