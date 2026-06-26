@@ -411,7 +411,7 @@ const submitForm = async () => {
 
       const res = await createObservation(payload);
       if (res.data.success) {
-        ElMessage.success("发布成功啦 ✨ 快去看看你的观察记录吧～");
+        ElMessage.success("发布成功啦 ✨ 请等待内容管理员审核吧～");
         // 延迟跳转，让用户看到成功提示
         setTimeout(() => {
           router.push("/profile?tab=observation");
