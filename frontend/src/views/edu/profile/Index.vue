@@ -47,6 +47,9 @@
 
           <div class="user-info-center">
             <div class="main-name">{{ profileForm.realName || profileForm.username || '未命名用户' }}</div>
+            <div v-if="compStats.tier" class="comp-rank-badge" :class="'tier-' + compStats.tier">
+              {{ compStats.tier }} · #{{ compStats.rank }}
+            </div>
             <div class="sub-name">@{{ profileForm.username }}</div>
             <div v-if="profileForm.userTitle && profileForm.userTitle !== '__none__'" class="user-title-tag">{{ profileForm.userTitle }}</div>
             <div class="role-tags">
@@ -827,6 +830,7 @@ import { getPointsAccount, getPointsTransactions, getExchangeOrders, getOwnedFra
 import { getBadges, getDailyTasks, claimTaskReward, dailyCheckin } from "@/api/achievement";
 import { removeBookmark as removeBookmarkApi, getBookmarkList } from "@/api/bookmark";
 import { getObservationList, getObservationDetail, updateObservation, deleteObservation } from "@/api/observation";
+import { getMyCompetitionStats } from "@/api/competition";
 import { useAuthStore } from "@/store/auth";
 
 const authStore = useAuthStore();
@@ -1010,6 +1014,27 @@ const coreOverview = reactive({
   // COUNT(user_badge) ← GET /achievement/badges ✅
   badgeCount: 0,
 });
+
+// 竞技模式排名段位
+const compStats = reactive({
+  rank: 0,
+  tier: '',
+})
+const compStatsLoading = ref(false)
+const fetchCompStats = async () => {
+  compStatsLoading.value = true
+  try {
+    const res = await getMyCompetitionStats()
+    if (res.data.success && res.data.data) {
+      compStats.rank = res.data.data.rank ?? 0
+      compStats.tier = res.data.data.tier ?? ''
+    }
+  } catch {
+    // 静默失败
+  } finally {
+    compStatsLoading.value = false
+  }
+}
 
 // ═══ Tab 3：我的学习 ═══
 const learningLoading = ref(false);
@@ -1915,6 +1940,7 @@ const publishObservation = () => {
 onMounted(() => {
   fetchProfile();
   fetchLearningData();
+  fetchCompStats();
   // 预加载左侧名片核心数据（积分余额 + 勋章数量）
   fetchPointsAccount();
   fetchBadges();
@@ -2126,6 +2152,36 @@ watch(activeTab, (tab) => {
   font-weight: 700;
   color: #1d2129;
   margin-bottom: 4px;
+}
+.comp-rank-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+.comp-rank-badge.tier-王者 {
+  background: linear-gradient(135deg, #ff6b35, #f7931e);
+  color: #fff;
+}
+.comp-rank-badge.tier-钻石 {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+}
+.comp-rank-badge.tier-黄金 {
+  background: linear-gradient(135deg, #f5a623, #f7c948);
+  color: #fff;
+}
+.comp-rank-badge.tier-白银 {
+  background: linear-gradient(135deg, #b8c0d0, #8d95a5);
+  color: #fff;
+}
+.comp-rank-badge.tier-青铜 {
+  background: linear-gradient(135deg, #c8956c, #a67c52);
+  color: #fff;
 }
 .sub-name {
   font-size: 13px;
