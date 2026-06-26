@@ -34,34 +34,55 @@
           </div>
         </div>
 
-        <h2 class="detail-title">{{ data.title }}</h2>
-        <p v-if="data.description" class="detail-desc">{{ data.description }}</p>
+        <!-- 有图：标准图文排版 -->
+        <template v-if="data.photoUrl">
+          <h2 class="detail-title">{{ data.title }}</h2>
+          <p v-if="data.description" class="detail-desc">{{ data.description }}</p>
+          <div class="detail-img-wrapper">
+            <el-image
+                :src="data.photoUrl"
+                fit="contain"
+                :preview-src-list="[data.photoUrl]"
+                preview-teleported
+                style="width:100%;max-height:420px;border-radius:8px"
+            />
+          </div>
+          <div class="detail-tags">
+            <span v-if="data.speciesName" class="dtag sp">🐟 {{ data.speciesName }}</span>
+            <span v-if="data.locationName" class="dtag loc">📍 {{ data.locationName }}</span>
+            <span v-if="data.observedAt" class="dtag dt">📅 {{ data.observedAt }}</span>
+          </div>
+          <div class="detail-actions">
+            <button class="daction-btn" :class="{ liked: data.liked }" @click="toggleDetailLike">
+              <el-icon :size="18"><CircleCheck /></el-icon>
+              <span>{{ data.likeCount || 0 }}</span>
+            </button>
+            <button class="daction-btn" :class="{ bookmarked: data.bookmarked }" @click="toggleDetailBookmark">
+              <el-icon :size="18"><Star /></el-icon>
+              <span>{{ data.bookmarked ? '已收藏' : '收藏' }}</span>
+            </button>
+          </div>
+        </template>
 
-        <div v-if="data.photoUrl" class="detail-img-wrapper">
-          <el-image
-              :src="data.photoUrl"
-              fit="contain"
-              :preview-src-list="[data.photoUrl]"
-              preview-teleported
-              style="width:100%;max-height:420px;border-radius:8px"
-          />
-        </div>
-
-        <div class="detail-tags">
-          <span v-if="data.speciesName" class="dtag sp">🐟 {{ data.speciesName }}</span>
-          <span v-if="data.locationName" class="dtag loc">📍 {{ data.locationName }}</span>
-          <span v-if="data.observedAt" class="dtag dt">📅 {{ data.observedAt }}</span>
-        </div>
-
-        <div class="detail-actions">
-          <button class="daction-btn" :class="{ liked: data.liked }" @click="toggleDetailLike">
-            <el-icon :size="18"><CircleCheck /></el-icon>
-            <span>{{ data.likeCount || 0 }}</span>
-          </button>
-          <button class="daction-btn" :class="{ bookmarked: data.bookmarked }" @click="toggleDetailBookmark">
-            <el-icon :size="18"><Star /></el-icon>
-            <span>{{ data.bookmarked ? '已收藏' : '收藏' }}</span>
-          </button>
+        <!-- 无图：纯文字紧凑排版 -->
+        <div v-else class="text-only-detail">
+          <h2 class="detail-title text-only-title">{{ data.title }}</h2>
+          <p v-if="data.description" class="text-only-desc">{{ data.description }}</p>
+          <div class="detail-tags">
+            <span v-if="data.speciesName" class="dtag sp">🐟 {{ data.speciesName }}</span>
+            <span v-if="data.locationName" class="dtag loc">📍 {{ data.locationName }}</span>
+            <span v-if="data.observedAt" class="dtag dt">📅 {{ data.observedAt }}</span>
+          </div>
+          <div class="detail-actions text-only-actions">
+            <button class="daction-btn" :class="{ liked: data.liked }" @click="toggleDetailLike">
+              <el-icon :size="18"><CircleCheck /></el-icon>
+              <span>{{ data.likeCount || 0 }}</span>
+            </button>
+            <button class="daction-btn" :class="{ bookmarked: data.bookmarked }" @click="toggleDetailBookmark">
+              <el-icon :size="18"><Star /></el-icon>
+              <span>{{ data.bookmarked ? '已收藏' : '收藏' }}</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -636,7 +657,7 @@ watch(() => route.params.id, (newId, oldId) => {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 .detail-avatar-frame {
   display: inline-flex;
@@ -664,8 +685,40 @@ watch(() => route.params.id, (newId, oldId) => {
 .detail-desc { font-size: 14px; color: #444; line-height: 1.7; margin: 0 0 14px; white-space: pre-wrap; word-break: break-word; }
 .detail-img-wrapper { margin-bottom: 12px; display: flex; justify-content: center; background: rgba(0, 0, 0, 0.03); border-radius: 8px; overflow: hidden; }
 
+/* 无图纯文字详情 — 居中排版 + 限制阅读宽度 */
+.text-only-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 8px 0 0;
+}
+
+.text-only-title {
+  max-width: 600px;
+  margin-bottom: 14px !important;
+  font-size: 22px;
+}
+
+.text-only-desc {
+  max-width: 600px;
+  width: 100%;
+  margin: 0 auto 8px;
+  font-size: 15px;
+  color: #444;
+  line-height: 1.85;
+  white-space: pre-wrap;
+  word-break: break-word;
+  text-align: left;
+}
+
+.text-only-actions {
+  margin-top: 0;
+}
+
 /* 标签 */
 .detail-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.text-only-detail .detail-tags { margin-bottom: 10px; }
 .dtag { font-size: 12px; padding: 3px 10px; border-radius: 14px; white-space: nowrap; }
 .dtag.sp { color: #1a9bc4; background: rgba(26, 155, 196, 0.08); }
 .dtag.loc { color: #67c23a; background: rgba(103, 194, 58, 0.08); }
@@ -989,6 +1042,10 @@ watch(() => route.params.id, (newId, oldId) => {
   .post-detail-page { padding: 0 8px 20px; }
   .glass-pill { padding: 20px 16px; }
   .detail-topbar { padding: 12px 0; margin-bottom: 12px; }
+
+  .text-only-detail { padding-top: 4px; }
+  .text-only-title { max-width: 100%; font-size: 20px; }
+  .text-only-desc { max-width: 100%; font-size: 14px; line-height: 1.75; }
 }
 
 /* ═══ 微交互动效 (详情页) ═══ */

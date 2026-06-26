@@ -79,7 +79,7 @@
           </el-col>
         </el-row>
 
-        <el-form-item label="现场照片" prop="photoFile">
+        <el-form-item label="现场照片（可选）" prop="photoFile">
           <el-upload
               action="#"
               :class="{ 'hide-upload-trigger': form.photoFile !== null }"
@@ -240,7 +240,7 @@ const rules = {
   title: [{ required: true, message: "标题不能为空哦～", trigger: "blur" }],
   locationName: [{ required: true, message: "请填写观察地点呀～", trigger: "blur" }],
   observedAt: [{ required: true, message: "选一下观察时间吧～", trigger: "change" }],
-  photoFile: [{ required: true, message: "上传一张现场照片吧～", trigger: "change" }], // 新增照片必填
+  photoFile: [], // 照片改为可选
 };
 
 // 初始化时间
@@ -276,7 +276,7 @@ onMounted(async () => {
     }
   } catch { /* 加载失败不影响主流程 */ }
   // 监听表单变化，实时更新提交按钮状态
-  watch([() => form.title, () => form.locationName, () => form.observedAt, () => form.photoFile], () => {
+  watch([() => form.title, () => form.locationName, () => form.observedAt], () => {
     checkFormReady();
   });
 });
@@ -288,7 +288,6 @@ const isFormReady = computed(() => {
     { key: "title", name: "标题" },
     { key: "locationName", name: "观察地点" },
     { key: "observedAt", name: "观察时间" },
-    { key: "photoFile", name: "现场照片" },
   ];
   const unFinished = fields.filter(item => !form[item.key]);
   unFinishedFields.value = unFinished.map(item => item.name);
