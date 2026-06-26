@@ -203,7 +203,10 @@
 
         <!-- 底部导航 -->
         <div class="nav-bar">
-          <el-button :disabled="currentIndex === 0" @click="prevQuestion">上一题</el-button>
+          <div class="nav-left">
+            <el-button :disabled="currentIndex === 0" @click="prevQuestion">上一题</el-button>
+            <el-button class="exit-btn" @click="confirmExit">退出答题</el-button>
+          </div>
 
           <div class="nav-center">
             <el-tag v-if="isAnswered" type="success" effect="plain" size="small">✓ 已作答</el-tag>
@@ -216,7 +219,6 @@
             @click="nextQuestion"
           >下一题</el-button>
           <el-button
-            v-else
             type="success"
             :disabled="remainingCount > 0"
             @click="handleSubmit"
@@ -582,8 +584,9 @@
 
             <!-- 右侧统计 -->
             <span class="lb-stat lb-stat-matches">{{ item.totalMatches }}场</span>
-            <span class="lb-stat lb-stat-accuracy">{{ item.averageAccuracy }}%</span>
-            <span class="lb-tier-badge-sm" :class="'tier-sm-' + item.bestTier">{{ item.bestTier }}</span>
+            <span class="lb-stat lb-stat-answered">{{ item.totalAnswered }}题</span>
+            <span class="lb-stat lb-stat-accuracy">{{ item.cumulativeAccuracy }}%</span>
+            <span class="lb-tier-badge-sm" :class="'tier-sm-' + item.tier">{{ item.tier }}</span>
           </div>
         </div>
       </div>
@@ -594,11 +597,11 @@
 
 <script setup>
 import { ref, reactive, computed, nextTick, onBeforeUnmount, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { User } from '@element-plus/icons-vue'
 import { startExam, submitExam, getExamHistory, examTts } from '@/api/exam'
 import { getLearningProfile } from '@/api/learning'
-import { submitCompetitionResult, getLeaderboard } from '@/api/competition'
+import { submitCompetitionResult, getLeaderboard, getCompetitionQuestions } from '@/api/competition'
 import LevelUpPopup from "@/components/LevelUpPopup.vue";
 
 // ==================== 模式切换 ====================
@@ -606,6 +609,9 @@ const gameMode = ref('normal') // 'normal' | 'competition'
 
 const switchMode = (mode) => {
   gameMode.value = mode
+  if (mode === 'normal') {
+    compStage.value = 'NOT_STARTED'
+  }
 }
 
 // ==================== 普通模式状态 ====================
@@ -931,6 +937,21 @@ const resetExam = () => {
   fetchHistory()
 }
 
+const confirmExit = () => {
+  const hasAnyAnswer = userAnswers.value.some(a => a !== null && a !== undefined && a !== '')
+  if (hasAnyAnswer) {
+    ElMessageBox.confirm(
+      '退出后当前答题进度将丢失，确定退出吗？',
+      '提示',
+      { confirmButtonText: '确定退出', cancelButtonText: '继续答题', type: 'warning' }
+    ).then(() => {
+      resetExam()
+    }).catch(() => {})
+  } else {
+    resetExam()
+  }
+}
+
 // ==================== 普通模式：历史 ====================
 const fetchHistory = async () => {
   try {
@@ -1104,7 +1125,19 @@ const advanceQuestion = () => {
 const startCompetition = async () => {
   compStartLoading.value = true
   try {
-    const questions = await fetchCompetitionQuestions()
+    let questions = []
+    // 优先调用后端题库
+    try {
+      const res = await getCompetitionQuestions(10)
+      if (res.data.success && res.data.data?.length > 0) {
+        questions = res.data.data
+      } else {
+        throw new Error('empty')
+      }
+    } catch {
+      // 降级使用 Mock 题库
+      questions = await fetchCompetitionQuestions()
+    }
     compQuestions.value = questions
     compCurrentIndex.value = 0
     compUserAnswers.value = new Array(questions.length).fill(null)
@@ -1155,14 +1188,9 @@ const finishCompetition = async () => {
   // 加载竞技历史
   loadCompHistory()
 
-  // 累计统计
-  compParticipationCount.value = compHistory.value.length + 1
-  compTotalAnsweredCount.value = compHistory.value.reduce((s, h) => s + (h.total || 0), 0) + compTotalCount.value
-
   const avgTimeMsVal = answeredList.length > 0 ? Math.round(totalTimeMs / answeredList.length) : 10000
-  const localTier = calcTierFromAccuracy(compAccuracy.value, avgTimeMsVal / 1000)
 
-  // 提交成绩到后端，获取真实排名
+  // 提交成绩到后端，获取累积排名
   try {
     const submitRes = await submitCompetitionResult({
       accuracy: compAccuracy.value,
@@ -1170,16 +1198,21 @@ const finishCompetition = async () => {
       correctCount: compCorrectCount.value,
       totalTimeMs: totalTimeMs,
       avgTimeMs: avgTimeMsVal,
-      tier: localTier,
     })
     if (submitRes.data.success) {
-      compRank.value = submitRes.data.data.rank
-      compRankTier.value = submitRes.data.data.tier
+      const d = submitRes.data.data
+      compRank.value = d.rank
+      compRankTier.value = d.tier
+      compParticipationCount.value = d.totalMatches
+      compTotalAnsweredCount.value = d.totalAnswered
     } else {
       throw new Error('submit failed')
     }
   } catch {
-    // 后端不可用 → 降级使用前端 Mock 排名
+    // 后端不可用 → 降级使用本地计算
+    compParticipationCount.value = compHistory.value.length + 1
+    compTotalAnsweredCount.value = compHistory.value.reduce((s, h) => s + (h.total || 0), 0) + compTotalCount.value
+    const localTier = calcTierFromAccuracy(compAccuracy.value, avgTimeMsVal / 1000)
     try {
       const ranking = await getUserRanking({
         accuracy: compAccuracy.value,
@@ -1290,10 +1323,10 @@ const mockLeaderboard = () => {
     avatarUrl: '',
     avatarFrame: frames[i % frames.length],
     totalMatches: Math.floor(Math.random() * 30) + 5,
-    averageAccuracy: Math.round(95 - i * 1.5 + (Math.random() - 0.5) * 4),
-    bestTier: tiers[Math.min(i, tiers.length - 1)],
+    cumulativeAccuracy: Math.round(95 - i * 1.5 + (Math.random() - 0.5) * 4),
+    tier: tiers[Math.min(i, tiers.length - 1)],
     totalAnswered: Math.floor(Math.random() * 500) + 100,
-    isMe: i === 7, // 模拟第8名是当前用户
+    isMe: i === 7,
   }))
 }
 
@@ -2410,6 +2443,12 @@ loadCompHistory()
 }
 
 .lb-stat-matches {
+  color: #86909c;
+  min-width: 36px;
+  text-align: right;
+}
+
+.lb-stat-answered {
   color: #86909c;
   min-width: 36px;
   text-align: right;

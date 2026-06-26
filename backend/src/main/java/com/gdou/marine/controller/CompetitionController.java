@@ -1,8 +1,12 @@
 package com.gdou.marine.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gdou.marine.annotation.Log;
 import com.gdou.marine.entity.CompetitionRecord;
+import com.gdou.marine.entity.QuizQuestion;
 import com.gdou.marine.mapper.CompetitionRecordMapper;
+import com.gdou.marine.mapper.QuizQuestionMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,11 +15,10 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.*;
 
 /**
- * 竞技模式 - 提交成绩 & 排行榜
+ * 竞技模式 - 抽题 / 提交成绩 / 排行榜
  */
 @RestController
 @RequestMapping("/competition")
@@ -27,7 +30,60 @@ public class CompetitionController {
     private CompetitionRecordMapper competitionRecordMapper;
 
     @Autowired
+    private QuizQuestionMapper quizQuestionMapper;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    /**
+     * 竞技模式抽题：随机抽取指定数量已启用题目（含答案）
+     * GET /competition/questions?count=10
+     */
+    @GetMapping("/questions")
+    public Map<String, Object> getQuestions(@RequestParam(defaultValue = "10") int count,
+                                            Authentication auth) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            LambdaQueryWrapper<QuizQuestion> wrapper = new LambdaQueryWrapper<>();
+            wrapper.eq(QuizQuestion::getStatus, 1);
+            wrapper.orderByDesc(QuizQuestion::getCreatedAt);
+            List<QuizQuestion> all = quizQuestionMapper.selectList(wrapper);
+
+            if (all.isEmpty()) {
+                result.put("success", false);
+                result.put("message", "题库暂无题目");
+                return result;
+            }
+
+            Collections.shuffle(all, new Random());
+            int take = Math.min(all.size(), count);
+            List<QuizQuestion> selected = all.subList(0, take);
+
+            List<Map<String, Object>> list = new ArrayList<>();
+            for (QuizQuestion q : selected) {
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("id", q.getId());
+                item.put("questionType", q.getQuestionType());
+                item.put("stem", q.getStem());
+                item.put("optionsJson", q.getOptionsJson());
+                item.put("difficulty", q.getDifficulty());
+                item.put("correctAnswer", parseAnswerForFrontend(q.getAnswerJson()));
+                item.put("explanation", q.getExplanation());
+                list.add(item);
+            }
+
+            result.put("success", true);
+            result.put("data", list);
+        } catch (Exception e) {
+            log.error("竞技抽题失败", e);
+            result.put("success", false);
+            result.put("message", e.getMessage());
+        }
+        return result;
+    }
 
     /**
      * 提交竞技结果
@@ -51,12 +107,8 @@ public class CompetitionController {
             int correctCount = Integer.parseInt(body.getOrDefault("correctCount", "0").toString());
             long totalTimeMs = Long.parseLong(body.getOrDefault("totalTimeMs", "0").toString());
             long avgTimeMs = Long.parseLong(body.getOrDefault("avgTimeMs", "0").toString());
-            String tier = (String) body.getOrDefault("tier", "青铜");
 
-            // 计算综合排名分（与前端 getUserRanking 算法一致）
-            int rankScore = calcRankScore(userId, accuracy, totalTimeMs > 0 ? avgTimeMs : 10000);
-
-            // 保存记录
+            // 保存记录（tier 和 rankScore 由累积数据计算，不存单场值）
             CompetitionRecord record = new CompetitionRecord();
             record.setUserId(userId);
             record.setAccuracy(accuracy);
@@ -64,19 +116,21 @@ public class CompetitionController {
             record.setCorrectCount(correctCount);
             record.setTotalTimeMs(totalTimeMs);
             record.setAvgTimeMs(avgTimeMs);
-            record.setTier(tier);
-            record.setRankScore(rankScore);
+            record.setTier(""); // 单场不设段位
+            record.setRankScore(0);
             competitionRecordMapper.insert(record);
 
-            // 查询用户当前排名
-            Map<String, Object> rankInfo = queryUserRank(userId);
+            // 基于累积数据计算排名
+            Map<String, Object> cumulative = calcCumulative(userId);
 
             result.put("success", true);
             result.put("message", "成绩已保存");
             result.put("data", Map.of(
-                    "rank", rankInfo.getOrDefault("rank", 0),
-                    "tier", tier,
-                    "rankScore", rankScore
+                    "rank", cumulative.getOrDefault("rank", 0),
+                    "tier", cumulative.getOrDefault("tier", "青铜"),
+                    "totalMatches", cumulative.getOrDefault("totalMatches", 1),
+                    "totalAnswered", cumulative.getOrDefault("totalAnswered", 0),
+                    "cumulativeAccuracy", cumulative.getOrDefault("cumulativeAccuracy", accuracy)
             ));
         } catch (Exception e) {
             log.error("提交竞技成绩失败", e);
@@ -87,8 +141,8 @@ public class CompetitionController {
     }
 
     /**
-     * 获取全局排行榜（Top 50）
-     * GET /competition/leaderboard
+     * 获取全局排行榜（Top 50，按累积正确率 + 答题量综合排序）
+     * GET /competition/leaderboard?limit=50
      */
     @GetMapping("/leaderboard")
     public Map<String, Object> leaderboard(@RequestParam(defaultValue = "50") int limit,
@@ -97,7 +151,7 @@ public class CompetitionController {
         try {
             Long currentUserId = extractUserId(auth);
 
-            // 聚合查询：按 user_id 分组，计算参赛次数、平均正确率、最佳段位
+            // 累积聚合：每位用户汇总所有竞技记录
             String sql = """
                 SELECT
                     cr.user_id,
@@ -105,25 +159,20 @@ public class CompetitionController {
                     u.avatar_url,
                     u.avatar_frame,
                     COUNT(*) AS total_matches,
-                    ROUND(AVG(cr.accuracy), 1) AS avg_accuracy,
-                    MAX(cr.accuracy) AS best_accuracy,
-                    MAX(cr.rank_score) AS best_rank_score,
-                    (SELECT cr2.tier FROM competition_record cr2
-                     WHERE cr2.user_id = cr.user_id
-                     ORDER BY cr2.accuracy DESC, cr2.rank_score DESC LIMIT 1
-                    ) AS best_tier,
-                    SUM(cr.total_questions) AS total_answered
+                    COALESCE(SUM(cr.total_questions), 0) AS total_answered,
+                    COALESCE(SUM(cr.correct_count), 0) AS total_correct,
+                    ROUND(COALESCE(SUM(cr.correct_count), 0) * 100.0 / NULLIF(SUM(cr.total_questions), 0), 1) AS cumulative_accuracy,
+                    COALESCE(SUM(cr.total_time_ms), 0) AS total_time_ms
                 FROM competition_record cr
                 JOIN app_user u ON u.id = cr.user_id
                 WHERE u.status = 1
                 GROUP BY cr.user_id, u.username, u.avatar_url, u.avatar_frame
-                ORDER BY avg_accuracy DESC, total_matches DESC, best_accuracy DESC
+                ORDER BY cumulative_accuracy DESC, total_answered DESC, total_matches DESC
                 LIMIT ?
                 """;
 
             List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, limit);
 
-            // 计算排名
             List<Map<String, Object>> leaderboard = new ArrayList<>();
             for (int i = 0; i < rows.size(); i++) {
                 Map<String, Object> row = rows.get(i);
@@ -134,21 +183,25 @@ public class CompetitionController {
                 item.put("avatarUrl", row.get("avatar_url"));
                 item.put("avatarFrame", row.getOrDefault("avatar_frame", "default"));
                 item.put("totalMatches", row.get("total_matches"));
-                item.put("averageAccuracy", row.get("avg_accuracy"));
-                item.put("bestTier", row.get("best_tier"));
                 item.put("totalAnswered", row.get("total_answered"));
+
+                double cumulativeAccuracy = ((Number) row.get("cumulative_accuracy")).doubleValue();
+                item.put("cumulativeAccuracy", cumulativeAccuracy);
+
+                int totalMatches = ((Number) row.get("total_matches")).intValue();
+                int totalAnswered = ((Number) row.get("total_answered")).intValue();
+                item.put("tier", calcCumulativeTier(cumulativeAccuracy, totalMatches, totalAnswered));
+
                 item.put("isMe", currentUserId != null &&
                         currentUserId.equals(((Number) row.get("user_id")).longValue()));
                 leaderboard.add(item);
             }
 
-            // 如果当前用户不在 Top 50 中，追加当前用户信息
-            if (currentUserId != null && leaderboard.stream().noneMatch(item ->
-                    Boolean.TRUE.equals(item.get("isMe")))) {
-                Map<String, Object> myRank = queryUserRankWithDetails(currentUserId);
-                if (myRank != null) {
-                    leaderboard.add(myRank);
-                }
+            // 当前用户不在 Top 50 → 追加
+            if (currentUserId != null && leaderboard.stream().noneMatch(it ->
+                    Boolean.TRUE.equals(it.get("isMe")))) {
+                Map<String, Object> my = queryUserCumulative(currentUserId);
+                if (my != null) leaderboard.add(my);
             }
 
             result.put("success", true);
@@ -162,7 +215,7 @@ public class CompetitionController {
     }
 
     /**
-     * 获取当前用户的竞技统计
+     * 当前用户竞技统计
      * GET /competition/my-stats
      */
     @GetMapping("/my-stats")
@@ -175,10 +228,9 @@ public class CompetitionController {
                 result.put("message", "请先登录");
                 return result;
             }
-
-            Map<String, Object> rankInfo = queryUserRankWithDetails(userId);
+            Map<String, Object> info = queryUserCumulative(userId);
             result.put("success", true);
-            result.put("data", rankInfo != null ? rankInfo : Collections.emptyMap());
+            result.put("data", info != null ? info : Collections.emptyMap());
         } catch (Exception e) {
             log.error("获取竞技统计失败", e);
             result.put("success", false);
@@ -191,89 +243,121 @@ public class CompetitionController {
     // 内部方法
     // ═══════════════════════════════════════
 
-    private int calcRankScore(Long userId, BigDecimal accuracy, long avgTimeMs) {
-        double acc = accuracy.doubleValue();
-        double avgSeconds = avgTimeMs / 1000.0;
-        double speedScore = Math.max(0, Math.min(100, (10 - avgSeconds) / 8 * 100));
-
-        // 查历史数据
-        int totalAnswered = 0;
-        int participationCount = 0;
+    /**
+     * 解析 answerJson 为前端可直接比较的格式
+     * DB 存储格式为 JSON 编码，如 "A"、["A","B"]，需要去引号/解析
+     */
+    private String parseAnswerForFrontend(String answerJson) {
+        if (answerJson == null || answerJson.isEmpty()) return "";
+        String trimmed = answerJson.trim();
         try {
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT COUNT(*) AS cnt, COALESCE(SUM(total_questions), 0) AS total_ans FROM competition_record WHERE user_id = ?",
-                userId);
-            if (!rows.isEmpty()) {
-                Map<String, Object> row = rows.get(0);
-                participationCount = ((Number) row.get("cnt")).intValue();
-                totalAnswered = ((Number) row.get("total_ans")).intValue();
+            // JSON 字符串格式："A" 或 "正确"
+            if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
+                return trimmed.substring(1, trimmed.length() - 1);
             }
-        } catch (Exception ignored) {}
-
-        double volumeScore = Math.min(100, totalAnswered);
-        double expScore = Math.min(100, (participationCount + 1) * 10);
-        double totalScore = acc * 0.45 + speedScore * 0.25 + volumeScore * 0.15 + expScore * 0.15;
-        return (int) Math.round(Math.max(0, Math.min(100, totalScore)));
+            // JSON 数组格式：["A","B","C"]
+            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                List<String> arr = objectMapper.readValue(trimmed, List.class);
+                return String.join(",", arr);
+            }
+        } catch (Exception ignored) {
+        }
+        return trimmed;
     }
 
-    private Map<String, Object> queryUserRank(Long userId) {
+    /**
+     * 累积段位算法：兼顾正确率 + 答题量
+     * 单场高分不能直接王者，必须有足够的场次和题量支撑
+     */
+    private String calcCumulativeTier(double accuracy, int totalMatches, int totalAnswered) {
+        double volumeBonus = Math.min(totalAnswered / 50.0, 10);   // 答题量最多加 10 分
+        double matchBonus = Math.min(totalMatches * 1.5, 10);      // 参赛次数最多加 10 分
+        double score = accuracy * 0.8 + volumeBonus + matchBonus;
+        if (score >= 95) return "王者";
+        if (score >= 82) return "钻石";
+        if (score >= 68) return "黄金";
+        if (score >= 50) return "白银";
+        return "青铜";
+    }
+
+    private Map<String, Object> calcCumulative(Long userId) {
         try {
-            String sql = """
-                SELECT COUNT(*) + 1 AS rank_num FROM (
-                    SELECT cr.user_id, ROUND(AVG(cr.accuracy), 1) AS avg_acc, COUNT(*) AS cnt
-                    FROM competition_record cr
-                    GROUP BY cr.user_id
-                ) t
-                WHERE t.avg_acc > (
-                    SELECT COALESCE(ROUND(AVG(cr2.accuracy), 1), 0)
-                    FROM competition_record cr2 WHERE cr2.user_id = ?
-                )
-                """;
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, userId);
-            int rank = rows.isEmpty() ? 1 : ((Number) rows.get(0).get("rank_num")).intValue();
-            return Map.of("rank", rank);
+            Map<String, Object> row = queryUserCumulativeRaw(userId);
+            if (row == null) return Map.of("rank", 1, "tier", "青铜", "totalMatches", 0, "totalAnswered", 0, "cumulativeAccuracy", 0);
+
+            double acc = ((Number) row.getOrDefault("cumulative_accuracy", 0)).doubleValue();
+            int matches = ((Number) row.getOrDefault("total_matches", 0)).intValue();
+            int answered = ((Number) row.getOrDefault("total_answered", 0)).intValue();
+            String tier = calcCumulativeTier(acc, matches, answered);
+
+            int rank = queryCumulativeRank(userId, acc, answered, matches);
+
+            return Map.of("rank", rank, "tier", tier, "totalMatches", matches, "totalAnswered", answered, "cumulativeAccuracy", Math.round(acc * 10) / 10.0);
         } catch (Exception e) {
-            return Map.of("rank", 1);
+            return Map.of("rank", 1, "tier", "青铜", "totalMatches", 1, "totalAnswered", 0, "cumulativeAccuracy", 0);
         }
     }
 
-    private Map<String, Object> queryUserRankWithDetails(Long userId) {
+    private Map<String, Object> queryUserCumulativeRaw(Long userId) {
+        String sql = """
+            SELECT
+                COUNT(*) AS total_matches,
+                COALESCE(SUM(total_questions), 0) AS total_answered,
+                COALESCE(SUM(correct_count), 0) AS total_correct,
+                ROUND(COALESCE(SUM(correct_count), 0) * 100.0 / NULLIF(SUM(total_questions), 0), 1) AS cumulative_accuracy
+            FROM competition_record WHERE user_id = ?
+            """;
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, userId);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    private int queryCumulativeRank(Long userId, double accuracy, int totalAnswered, int totalMatches) {
         try {
             String sql = """
-                SELECT
-                    u.username,
-                    u.avatar_url,
-                    u.avatar_frame,
-                    COUNT(*) AS total_matches,
-                    ROUND(AVG(cr.accuracy), 1) AS avg_accuracy,
-                    COALESCE(SUM(cr.total_questions), 0) AS total_answered,
-                    (SELECT cr2.tier FROM competition_record cr2
-                     WHERE cr2.user_id = cr.user_id
-                     ORDER BY cr2.accuracy DESC LIMIT 1
-                    ) AS best_tier
-                FROM competition_record cr
-                JOIN app_user u ON u.id = cr.user_id
-                WHERE cr.user_id = ?
-                GROUP BY cr.user_id, u.username, u.avatar_url, u.avatar_frame
+                SELECT COUNT(*) + 1 AS rank_num FROM (
+                    SELECT cr.user_id,
+                        ROUND(COALESCE(SUM(cr.correct_count), 0) * 100.0 / NULLIF(SUM(cr.total_questions), 0), 1) AS acc,
+                        COALESCE(SUM(cr.total_questions), 0) AS ans,
+                        COUNT(*) AS cnt
+                    FROM competition_record cr GROUP BY cr.user_id
+                ) t
+                WHERE t.acc > ? OR (t.acc = ? AND t.ans > ?) OR (t.acc = ? AND t.ans = ? AND t.cnt > ?)
                 """;
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, userId);
-            if (rows.isEmpty()) return null;
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql,
+                    accuracy, accuracy, totalAnswered, accuracy, totalAnswered, totalMatches);
+            return rows.isEmpty() ? 1 : ((Number) rows.get(0).get("rank_num")).intValue();
+        } catch (Exception e) {
+            return 1;
+        }
+    }
 
-            Map<String, Object> row = rows.get(0);
+    private Map<String, Object> queryUserCumulative(Long userId) {
+        try {
+            Map<String, Object> raw = queryUserCumulativeRaw(userId);
+            if (raw == null) return null;
+
+            double acc = ((Number) raw.get("cumulative_accuracy")).doubleValue();
+            int matches = ((Number) raw.get("total_matches")).intValue();
+            int answered = ((Number) raw.get("total_answered")).intValue();
+
+            String tier = calcCumulativeTier(acc, matches, answered);
+            int rank = queryCumulativeRank(userId, acc, answered, matches);
+
+            // 用户名等信息
+            List<Map<String, Object>> users = jdbcTemplate.queryForList(
+                    "SELECT username, avatar_url, avatar_frame FROM app_user WHERE id = ?", userId);
+
             Map<String, Object> item = new LinkedHashMap<>();
+            item.put("rank", rank);
             item.put("userId", userId);
-            item.put("username", row.get("username"));
-            item.put("avatarUrl", row.get("avatar_url"));
-            item.put("avatarFrame", row.getOrDefault("avatar_frame", "default"));
-            item.put("totalMatches", row.get("total_matches"));
-            item.put("averageAccuracy", row.get("avg_accuracy"));
-            item.put("bestTier", row.get("best_tier"));
-            item.put("totalAnswered", row.get("total_answered"));
+            item.put("username", users.isEmpty() ? "" : users.get(0).get("username"));
+            item.put("avatarUrl", users.isEmpty() ? "" : users.get(0).get("avatar_url"));
+            item.put("avatarFrame", users.isEmpty() ? "default" : users.get(0).getOrDefault("avatar_frame", "default"));
+            item.put("totalMatches", matches);
+            item.put("totalAnswered", answered);
+            item.put("cumulativeAccuracy", Math.round(acc * 10) / 10.0);
+            item.put("tier", tier);
             item.put("isMe", true);
-
-            Map<String, Object> rankInfo = queryUserRank(userId);
-            item.put("rank", rankInfo.get("rank"));
-
             return item;
         } catch (Exception e) {
             return null;

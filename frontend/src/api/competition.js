@@ -13,6 +13,10 @@ export const submitCompetitionResult = (data) =>
 export const getLeaderboard = (limit = 50) =>
     http.get("/competition/leaderboard", { params: { limit } });
 
+// 竞技模式抽题（含答案，默认10道）
+export const getCompetitionQuestions = (count = 10) =>
+    http.get("/competition/questions", { params: { count } });
+
 // 获取当前用户竞技统计
 export const getMyCompetitionStats = () =>
     http.get("/competition/my-stats");
