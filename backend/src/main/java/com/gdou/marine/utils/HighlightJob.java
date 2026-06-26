@@ -1,6 +1,6 @@
 package com.gdou.marine.utils;
 
-import com.gdou.marine.service.HighLightBroadcastService;
+import com.gdou.marine.service.HighlightBroadcastService;
 import org.quartz.DisallowConcurrentExecution;
 import org.quartz.Job;
 import org.quartz.JobExecutionContext;
@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 @DisallowConcurrentExecution // 防止任务并发执行
 public class HighlightJob implements Job{
     @Autowired
-    private HighLightBroadcastService highlightBroadcastService;
+    private HighlightBroadcastService highlightBroadcastService;
 
     @Override
     public void execute(JobExecutionContext context) throws JobExecutionException {

@@ -16,8 +16,8 @@ import java.util.Map;
  * @Description UGC 高光提炼服务
  */
 @Service
-public class HighLightBroadcastService {
-    private static final Logger log = LoggerFactory.getLogger(HighLightBroadcastService.class);
+public class HighlightBroadcastService {
+    private static final Logger log = LoggerFactory.getLogger(HighlightBroadcastService.class);
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -76,7 +76,6 @@ public class HighLightBroadcastService {
             log.info("AI生成的高光广播: {}", aiContent);
 
             // 4. 将 AI 生成的推荐语作为全站广播发送
-            // 重点：这次的 post_id 不再是 0，而是具体的帖子 ID，这样前端点击铃铛就能直接跳过去看帖！
             String insertSql = """
                 INSERT INTO system_notification (receiver_id, sender_id, type, target_id, post_id, content)
                 SELECT id, 0, 'broadcast_link', 0, ?, ? 

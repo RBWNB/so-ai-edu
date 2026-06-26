@@ -1,7 +1,7 @@
 package com.gdou.marine.controller;
 
 import com.gdou.marine.annotation.Log;
-import com.gdou.marine.service.HighLightBroadcastService;
+import com.gdou.marine.service.HighlightBroadcastService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,7 +25,7 @@ public class NotificationController {
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
-    private HighLightBroadcastService highlightBroadcastService;
+    private HighlightBroadcastService highlightBroadcastService;
 
     /**
      * 获取当前登录用户的未读通知数量
