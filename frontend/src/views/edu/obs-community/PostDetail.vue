@@ -88,7 +88,7 @@
 
       <!-- ===== 评论区区块 ===== -->
       <div class="glass-pill">
-        <div class="detail-comments">
+        <div id="comments" class="detail-comments">
           <div class="comment-header-bar">
             <span class="comment-heading">评论 ({{ data.commentCount || 0 }})</span>
             <div class="comment-sort-tabs">
@@ -334,9 +334,14 @@ const loadDetail = async (obsId) => {
 
   if (data.value) {
     await loadDetailComments();
-    // 等评论区渲染完成后确保在页面顶端
+    // 等评论区渲染完成后定位页面位置
     await nextTick();
-    window.scrollTo(0, 0);
+    if (route.hash === '#comments') {
+      const el = document.getElementById('comments');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      window.scrollTo(0, 0);
+    }
   }
 };
 
