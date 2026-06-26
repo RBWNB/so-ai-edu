@@ -105,9 +105,16 @@
                     <el-avatar :size="32" :src="item.senderAvatar" />
                     <div class="noti-content">
                       <div class="noti-title">
-                        <span class="sender-name">{{ item.senderName }}</span>
+                        <span class="sender-name">
+                          {{ item.type === 'broadcast' ? '【系统广播】' : item.senderName }}
+                        </span>
+
                         <span class="action-text">
-                          {{ item.type.includes('like') ? '赞了你的内容' : '回复了你' }}
+                          {{
+                            item.type === 'broadcast' ? item.content
+                                : item.type.includes('like') ? '赞了你的内容'
+                                    : '回复了你'
+                          }}
                         </span>
                       </div>
                       <div class="noti-time">{{ item.createdAt }}</div>
@@ -302,12 +309,17 @@ const onBellLeave = () => {
 const goToPost = async (item) => {
   try {
     if (item.isRead === 0) {
-      await markNotificationRead(item.id);
+      await markNotificationRead(item.id); // 标为已读API
       item.isRead = 1;
       unreadCount.value = Math.max(0, unreadCount.value - 1);
     }
+
+    // 如果是广播消息，点完红点消失即可，不需要跳转
+    if (item.type === 'broadcast') {
+      return;
+    }
+
     bellVisible.value = false;
-    // 精准跳转去海友社区的帖子详情页
     $router.push(`/obs-community/detail/${item.postId}`);
   } catch (err) {
     ElMessage.error("操作失败，请重试");
