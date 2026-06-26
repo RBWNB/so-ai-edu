@@ -49,6 +49,9 @@ public class UserObservationController {
     @Autowired
     private com.gdou.marine.mapper.UserBookmarkMapper userBookmarkMapper;
 
+    @Autowired
+    private com.gdou.marine.service.TaskProgressService taskProgressService;
+
     private static final long MAX_PHOTO_SIZE = 10 * 1024 * 1024; // 10MB
 
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of("jpg", "jpeg", "png", "gif", "webp");
@@ -203,6 +206,9 @@ public class UserObservationController {
             obs.setStatus((byte) 2); // 默认待审核
 
             userObservationMapper.insert(obs);
+
+            // 推进每日任务「发布观察记录」进度
+            taskProgressService.incrementProgress(userId, "upload_observation");
 
             result.put("success", true);
             result.put("message", "观察记录提交成功，等待审核");

@@ -1451,6 +1451,7 @@ const TASK_ROUTE_MAP = {
   ask_ai:             "/ai-assistant",
   read_species:       "/encyclopedia",
   bookmark:           "/encyclopedia",
+  upload_observation: "/observation/publish",
 };
 
 const goDoTask = async (task) => {

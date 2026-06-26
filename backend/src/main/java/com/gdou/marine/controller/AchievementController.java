@@ -52,6 +52,9 @@ public class AchievementController {
     @Autowired
     private UserPointAccountService userPointAccountService;
 
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
     /**
      * 勋章墙：已获得勋章 + 全量勋章定义（前端区分灰显）
      * 已获得：user_badge  WHERE user_id = ?
@@ -169,6 +172,41 @@ public class AchievementController {
                         ? Math.min(100, (rec != null ? rec.getProgressValue() : 0) * 100 / task.getTargetValue())
                         : 0);
                 list.add(item);
+            }
+
+            // 自动检测：发布观察记录任务 — 如果用户今天在社区已有帖子，自动补登进度
+            for (Map<String, Object> item : list) {
+                if (!"upload_observation".equals(item.get("taskType"))) continue;
+                if ((Boolean) item.get("completed")) continue; // 已完成的不再处理
+
+                Long todayCount = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM user_observation WHERE user_id = ? AND DATE(created_at) = CURDATE()",
+                    Long.class, userId);
+                if (todayCount != null && todayCount > 0) {
+                    // 调用 incrementProgress 自动创建/更新 task_record
+                    taskProgressService.incrementProgress(userId, "upload_observation", todayCount.intValue());
+                    // 刷新当前 item 的状态
+                    item.put("progressValue", todayCount);
+                    item.put("completed", true);
+                    item.put("progressPercent", 100);
+                }
+            }
+
+            // 自动检测：收藏任务 — 如果用户今天已有收藏，自动补登进度
+            for (Map<String, Object> item : list) {
+                if (!"bookmark".equals(item.get("taskType"))) continue;
+                if ((Boolean) item.get("completed")) continue;
+
+                Long todayCount = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM user_bookmark WHERE user_id = ? AND DATE(created_at) = CURDATE()",
+                    Long.class, userId);
+                if (todayCount != null && todayCount > 0) {
+                    taskProgressService.incrementProgress(userId, "bookmark", todayCount.intValue());
+                    item.put("progressValue", todayCount);
+                    item.put("completed", todayCount.intValue() >= (Integer) item.get("targetValue"));
+                    item.put("progressPercent", Math.min(100,
+                        todayCount.intValue() * 100 / Math.max(1, (Integer) item.get("targetValue"))));
+                }
             }
 
             result.put("success", true);

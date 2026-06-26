@@ -35,6 +35,9 @@ public class UserBookmarkController {
     @Autowired
     private com.gdou.marine.mapper.MediaAssetMapper mediaAssetMapper;
 
+    @Autowired
+    private com.gdou.marine.service.TaskProgressService taskProgressService;
+
     /**
      * 取消收藏
      * DELETE /bookmark/{targetType}/{targetId}
@@ -109,6 +112,9 @@ public class UserBookmarkController {
             bookmark.setTargetType(targetType);
             bookmark.setTargetId(targetId);
             userBookmarkMapper.insert(bookmark);
+
+            // 推进每日任务「收藏物种或知识」进度
+            taskProgressService.incrementProgress(userId, "bookmark");
 
             result.put("success", true);
             result.put("message", "收藏成功");
