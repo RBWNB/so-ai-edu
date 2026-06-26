@@ -332,7 +332,8 @@ const goToPost = async (item) => {
 
     bellVisible.value = false;
     // broadcast_link 或者 like/reply，只要有 postId，就跳转
-    $router.push(`/obs-community/detail/${item.postId}`);
+    // 用 String() 包裹防止雪花 ID 精度丢失
+    $router.push(`/obs-community/detail/${String(item.postId)}`);
   } catch (err) {
     ElMessage.error("操作失败，请重试");
   }

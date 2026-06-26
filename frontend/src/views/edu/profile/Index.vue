@@ -1641,7 +1641,7 @@ const goToObservation = (item) => {
   sessionStorage.setItem('profile_scroll_top', window.scrollY);
   sessionStorage.setItem('profile_tab', activeTab.value);
   sessionStorage.setItem('profile_fav_subtab', favSubTab.value);
-  router.push({ name: 'EduObservationDetail', params: { id: item.targetId } });
+  router.push({ name: 'EduObservationDetail', params: { id: String(item.targetId || item.id) } });
 };
 
 const handleFavCardClick = (item) => {
