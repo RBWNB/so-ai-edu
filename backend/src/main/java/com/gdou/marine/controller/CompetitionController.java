@@ -38,6 +38,9 @@ public class CompetitionController {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private com.gdou.marine.service.UserPointAccountService userPointAccountService;
+
     /**
      * 竞技模式抽题：随机抽取指定数量已启用题目（含答案）
      * GET /competition/questions?count=10
@@ -108,19 +111,32 @@ public class CompetitionController {
             long totalTimeMs = Long.parseLong(body.getOrDefault("totalTimeMs", "0").toString());
             long avgTimeMs = Long.parseLong(body.getOrDefault("avgTimeMs", "0").toString());
 
-            // 保存记录（tier 和 rankScore 由累积数据计算，不存单场值）
+            // 计算本场积分：答对 1 题 2 分 + 全对额外 20 分
+            int score = correctCount * 2 + (correctCount == totalQuestions ? 20 : 0);
+
+            // 保存记录
             CompetitionRecord record = new CompetitionRecord();
             record.setUserId(userId);
             record.setAccuracy(accuracy);
             record.setTotalQuestions(totalQuestions);
             record.setCorrectCount(correctCount);
+            record.setScore(score);
             record.setTotalTimeMs(totalTimeMs);
             record.setAvgTimeMs(avgTimeMs);
-            record.setTier(""); // 单场不设段位
+            record.setTier("");
             record.setRankScore(0);
             competitionRecordMapper.insert(record);
 
-            // 基于累积数据计算排名
+            // 同步到全局积分系统（个人中心积分明细可见）
+            try {
+                userPointAccountService.earnPoints(userId, score,
+                        "competition", record.getId(),
+                        "竞技模式答题（" + correctCount + "/" + totalQuestions + "）");
+            } catch (Exception e) {
+                log.error("竞技积分同步到全局积分失败", e);
+            }
+
+            // 基于累积数据计算排名（含累计积分）
             Map<String, Object> cumulative = calcCumulative(userId);
 
             result.put("success", true);
@@ -130,7 +146,9 @@ public class CompetitionController {
                     "tier", cumulative.getOrDefault("tier", "青铜"),
                     "totalMatches", cumulative.getOrDefault("totalMatches", 1),
                     "totalAnswered", cumulative.getOrDefault("totalAnswered", 0),
-                    "cumulativeAccuracy", cumulative.getOrDefault("cumulativeAccuracy", accuracy)
+                    "cumulativeAccuracy", cumulative.getOrDefault("cumulativeAccuracy", accuracy),
+                    "totalScore", cumulative.getOrDefault("totalScore", 0),
+                    "matchScore", score
             ));
         } catch (Exception e) {
             log.error("提交竞技成绩失败", e);
@@ -141,7 +159,7 @@ public class CompetitionController {
     }
 
     /**
-     * 获取全局排行榜（Top 50，按累积正确率 + 答题量综合排序）
+     * 获取全局排行榜（Top 50，按积分 > 正确率 > 答题量排序）
      * GET /competition/leaderboard?limit=50
      */
     @GetMapping("/leaderboard")
@@ -151,7 +169,7 @@ public class CompetitionController {
         try {
             Long currentUserId = extractUserId(auth);
 
-            // 累积聚合：每位用户汇总所有竞技记录
+            // 累积聚合：每位用户汇总所有竞技记录，积分优先
             String sql = """
                 SELECT
                     cr.user_id,
@@ -161,13 +179,14 @@ public class CompetitionController {
                     COUNT(*) AS total_matches,
                     COALESCE(SUM(cr.total_questions), 0) AS total_answered,
                     COALESCE(SUM(cr.correct_count), 0) AS total_correct,
+                    COALESCE(SUM(cr.score), 0) AS total_score,
                     ROUND(COALESCE(SUM(cr.correct_count), 0) * 100.0 / NULLIF(SUM(cr.total_questions), 0), 1) AS cumulative_accuracy,
                     COALESCE(SUM(cr.total_time_ms), 0) AS total_time_ms
                 FROM competition_record cr
                 JOIN app_user u ON u.id = cr.user_id
                 WHERE u.status = 1
                 GROUP BY cr.user_id, u.username, u.avatar_url, u.avatar_frame
-                ORDER BY cumulative_accuracy DESC, total_answered DESC, total_matches DESC
+                ORDER BY total_score DESC, cumulative_accuracy DESC, total_answered DESC
                 LIMIT ?
                 """;
 
@@ -184,6 +203,9 @@ public class CompetitionController {
                 item.put("avatarFrame", row.getOrDefault("avatar_frame", "default"));
                 item.put("totalMatches", row.get("total_matches"));
                 item.put("totalAnswered", row.get("total_answered"));
+
+                int totalScore = ((Number) row.get("total_score")).intValue();
+                item.put("totalScore", totalScore);
 
                 double cumulativeAccuracy = ((Number) row.get("cumulative_accuracy")).doubleValue();
                 item.put("cumulativeAccuracy", cumulativeAccuracy);
@@ -283,18 +305,19 @@ public class CompetitionController {
     private Map<String, Object> calcCumulative(Long userId) {
         try {
             Map<String, Object> row = queryUserCumulativeRaw(userId);
-            if (row == null) return Map.of("rank", 1, "tier", "青铜", "totalMatches", 0, "totalAnswered", 0, "cumulativeAccuracy", 0);
+            if (row == null) return Map.of("rank", 1, "tier", "青铜", "totalMatches", 0, "totalAnswered", 0, "cumulativeAccuracy", 0, "totalScore", 0);
 
             double acc = ((Number) row.getOrDefault("cumulative_accuracy", 0)).doubleValue();
             int matches = ((Number) row.getOrDefault("total_matches", 0)).intValue();
             int answered = ((Number) row.getOrDefault("total_answered", 0)).intValue();
+            int totalScore = ((Number) row.getOrDefault("total_score", 0)).intValue();
             String tier = calcCumulativeTier(acc, matches, answered);
 
-            int rank = queryCumulativeRank(userId, acc, answered, matches);
+            int rank = queryCumulativeRank(userId, totalScore, acc, answered, matches);
 
-            return Map.of("rank", rank, "tier", tier, "totalMatches", matches, "totalAnswered", answered, "cumulativeAccuracy", Math.round(acc * 10) / 10.0);
+            return Map.of("rank", rank, "tier", tier, "totalMatches", matches, "totalAnswered", answered, "cumulativeAccuracy", Math.round(acc * 10) / 10.0, "totalScore", totalScore);
         } catch (Exception e) {
-            return Map.of("rank", 1, "tier", "青铜", "totalMatches", 1, "totalAnswered", 0, "cumulativeAccuracy", 0);
+            return Map.of("rank", 1, "tier", "青铜", "totalMatches", 1, "totalAnswered", 0, "cumulativeAccuracy", 0, "totalScore", 0);
         }
     }
 
@@ -304,6 +327,7 @@ public class CompetitionController {
                 COUNT(*) AS total_matches,
                 COALESCE(SUM(total_questions), 0) AS total_answered,
                 COALESCE(SUM(correct_count), 0) AS total_correct,
+                COALESCE(SUM(score), 0) AS total_score,
                 ROUND(COALESCE(SUM(correct_count), 0) * 100.0 / NULLIF(SUM(total_questions), 0), 1) AS cumulative_accuracy
             FROM competition_record WHERE user_id = ?
             """;
@@ -311,20 +335,24 @@ public class CompetitionController {
         return rows.isEmpty() ? null : rows.get(0);
     }
 
-    private int queryCumulativeRank(Long userId, double accuracy, int totalAnswered, int totalMatches) {
+    private int queryCumulativeRank(Long userId, int totalScore, double accuracy, int totalAnswered, int totalMatches) {
         try {
             String sql = """
                 SELECT COUNT(*) + 1 AS rank_num FROM (
                     SELECT cr.user_id,
+                        COALESCE(SUM(cr.score), 0) AS ts,
                         ROUND(COALESCE(SUM(cr.correct_count), 0) * 100.0 / NULLIF(SUM(cr.total_questions), 0), 1) AS acc,
                         COALESCE(SUM(cr.total_questions), 0) AS ans,
                         COUNT(*) AS cnt
                     FROM competition_record cr GROUP BY cr.user_id
                 ) t
-                WHERE t.acc > ? OR (t.acc = ? AND t.ans > ?) OR (t.acc = ? AND t.ans = ? AND t.cnt > ?)
+                WHERE t.ts > ?
+                   OR (t.ts = ? AND t.acc > ?)
+                   OR (t.ts = ? AND t.acc = ? AND t.ans > ?)
+                   OR (t.ts = ? AND t.acc = ? AND t.ans = ? AND t.cnt > ?)
                 """;
             List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql,
-                    accuracy, accuracy, totalAnswered, accuracy, totalAnswered, totalMatches);
+                    totalScore, totalScore, accuracy, totalScore, accuracy, totalAnswered, totalScore, accuracy, totalAnswered, totalMatches);
             return rows.isEmpty() ? 1 : ((Number) rows.get(0).get("rank_num")).intValue();
         } catch (Exception e) {
             return 1;
@@ -339,9 +367,10 @@ public class CompetitionController {
             double acc = ((Number) raw.get("cumulative_accuracy")).doubleValue();
             int matches = ((Number) raw.get("total_matches")).intValue();
             int answered = ((Number) raw.get("total_answered")).intValue();
+            int totalScore = ((Number) raw.get("total_score")).intValue();
 
             String tier = calcCumulativeTier(acc, matches, answered);
-            int rank = queryCumulativeRank(userId, acc, answered, matches);
+            int rank = queryCumulativeRank(userId, totalScore, acc, answered, matches);
 
             // 用户名等信息
             List<Map<String, Object>> users = jdbcTemplate.queryForList(
@@ -355,6 +384,7 @@ public class CompetitionController {
             item.put("avatarFrame", users.isEmpty() ? "default" : users.get(0).getOrDefault("avatar_frame", "default"));
             item.put("totalMatches", matches);
             item.put("totalAnswered", answered);
+            item.put("totalScore", totalScore);
             item.put("cumulativeAccuracy", Math.round(acc * 10) / 10.0);
             item.put("tier", tier);
             item.put("isMe", true);

@@ -31,6 +31,9 @@ public class CompetitionRecord implements Serializable {
     @TableField("correct_count")
     private Integer correctCount;
 
+    @TableField("score")
+    private Integer score;
+
     @TableField("total_time_ms")
     private Long totalTimeMs;
 

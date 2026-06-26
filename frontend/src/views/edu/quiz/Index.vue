@@ -553,6 +553,14 @@
             <span class="stat-value">{{ compAvgTime }}s</span>
             <span class="stat-label">平均耗时/题</span>
           </div>
+          <div class="comp-stat-card stat-score">
+            <span class="stat-value score-value">+{{ compMatchScore }}</span>
+            <span class="stat-label">本轮得分</span>
+          </div>
+          <div class="comp-stat-card">
+            <span class="stat-value">{{ compTotalScore }}</span>
+            <span class="stat-label">累计积分</span>
+          </div>
         </div>
 
         <!-- 本轮详情 -->
@@ -682,10 +690,10 @@
             <span class="lb-username">{{ item.username }}</span>
             <span v-if="item.isMe" class="lb-me-tag">我</span>
 
-            <!-- 右侧统计 -->
-            <span class="lb-stat lb-stat-matches">{{ item.totalMatches }}场</span>
-            <span class="lb-stat lb-stat-answered">{{ item.totalAnswered }}题</span>
+            <!-- 右侧统计：积分优先 -->
+            <span class="lb-stat lb-stat-score">{{ item.totalScore || 0 }}分</span>
             <span class="lb-stat lb-stat-accuracy">{{ item.cumulativeAccuracy }}%</span>
+            <span class="lb-stat lb-stat-answered">{{ item.totalAnswered }}题</span>
             <span class="lb-tier-badge-sm" :class="'tier-sm-' + item.tier">{{ item.tier }}</span>
           </div>
         </div>
@@ -754,6 +762,8 @@ const compParticipationCount = ref(0)
 const compTotalAnsweredCount = ref(0)
 const compAvgTime = ref(0)
 const compTotalTime = ref(0)
+const compMatchScore = ref(0)
+const compTotalScore = ref(0)
 const compWrongDetails = ref([])
 const compHistory = ref([]) // 竞技历史记录（localStorage）
 
@@ -1321,6 +1331,10 @@ const finishCompetition = async () => {
   // 加载竞技历史
   loadCompHistory()
 
+  // 计算本轮积分
+  const matchScore = compCorrectCount.value * 2 + (compCorrectCount.value === compTotalCount.value ? 20 : 0)
+  compMatchScore.value = matchScore
+
   const avgTimeMsVal = answeredList.length > 0 ? Math.round(totalTimeMs / answeredList.length) : 10000
 
   // 提交成绩到后端，获取累积排名
@@ -1338,6 +1352,7 @@ const finishCompetition = async () => {
       compRankTier.value = d.tier
       compParticipationCount.value = d.totalMatches
       compTotalAnsweredCount.value = d.totalAnswered
+      compTotalScore.value = d.totalScore || 0
     } else {
       throw new Error('submit failed')
     }
@@ -1345,6 +1360,7 @@ const finishCompetition = async () => {
     // 后端不可用 → 降级使用本地计算
     compParticipationCount.value = compHistory.value.length + 1
     compTotalAnsweredCount.value = compHistory.value.reduce((s, h) => s + (h.total || 0), 0) + compTotalCount.value
+    compTotalScore.value = compHistory.value.reduce((s, h) => s + (h.score || 0), 0) + matchScore
     const localTier = calcTierFromAccuracy(compAccuracy.value, avgTimeMsVal / 1000)
     try {
       const ranking = await getUserRanking({
@@ -1381,6 +1397,7 @@ const saveCompHistory = () => {
     time: new Date().toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
     accuracy: compAccuracy.value,
     total: compTotalCount.value,
+    score: compMatchScore.value,
     tier: compRankTier.value,
     rank: compRank.value,
   }
@@ -1455,6 +1472,7 @@ const mockLeaderboard = () => {
     username: name,
     avatarUrl: '',
     avatarFrame: frames[i % frames.length],
+    totalScore: Math.floor((25 - i) * 20 + Math.random() * 50),
     totalMatches: Math.floor(Math.random() * 30) + 5,
     cumulativeAccuracy: Math.round(95 - i * 1.5 + (Math.random() - 0.5) * 4),
     tier: tiers[Math.min(i, tiers.length - 1)],
@@ -2283,6 +2301,15 @@ loadCompHistory()
   font-weight: 600;
 }
 
+.stat-score {
+  background: linear-gradient(135deg, rgba(247, 181, 0, 0.06), rgba(247, 181, 0, 0.02));
+  border-color: rgba(247, 181, 0, 0.2);
+}
+
+.score-value {
+  color: #f7b500;
+}
+
 /* 环形进度图 */
 .accuracy-ring {
   width: 120px;
@@ -2617,6 +2644,13 @@ loadCompHistory()
   font-size: 13px;
   font-weight: 600;
   flex-shrink: 0;
+}
+
+.lb-stat-score {
+  color: #f7b500;
+  font-weight: 700;
+  min-width: 44px;
+  text-align: right;
 }
 
 .lb-stat-matches {

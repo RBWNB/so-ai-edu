@@ -603,6 +603,7 @@ public class PointsController {
         if (bizType == null) return "未知";
         return switch (bizType) {
             case "quiz" -> "答题奖励";
+            case "competition" -> "竞技模式";
             case "task" -> "任务奖励";
             case "shop" -> "兑换消耗";
             case "admin" -> "系统调整";
