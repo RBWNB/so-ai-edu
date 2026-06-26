@@ -593,4 +593,54 @@ const vReveal = {
 .rings-container.is-visible .pr-2 { animation: pulseOut 3s infinite cubic-bezier(0.21, 0.53, 0.56, 0.8) 1s; }
 .rings-container.is-visible .pr-3 { animation: pulseOut 3s infinite cubic-bezier(0.21, 0.53, 0.56, 0.8) 2s; }
 @keyframes pulseOut { 0% { width: 100px; height: 100px; opacity: 1; border-width: 4px; } 100% { width: 800px; height: 800px; opacity: 0; border-width: 0px; } }
+
+/* 深色模式：首页 Banner 保护区 — 保留深蓝发光，仅调整文字和浅色元素 */
+[data-theme="dark"] .section-title { color: #e2e8f0; }
+[data-theme="dark"] .section-title span:first-child { color: #e2e8f0; }
+[data-theme="dark"] .section-desc { color: #b0bec5; }
+[data-theme="dark"] .hero-subtitle { color: #94a3b8; }
+
+/* 深色模式：outline-btn → 暗色发光 */
+[data-theme="dark"] .outline-btn {
+  background: rgba(64, 128, 255, 0.1);
+  border-color: rgba(64, 128, 255, 0.5);
+  color: #6aa1ff;
+}
+[data-theme="dark"] .outline-btn:hover {
+  background: rgba(64, 128, 255, 0.2);
+  border-color: #6aa1ff;
+  color: #a0c4ff;
+}
+
+/* 深色模式：depth-tracker → 暗色半透明 */
+[data-theme="dark"] .depth-tracker {
+  background: rgba(255, 255, 255, 0.05);
+  color: #b0bec5;
+}
+
+/* 深色模式：气泡 → 降低白色，提升蓝色发光 */
+[data-theme="dark"] .bubble {
+  background: radial-gradient(circle at 30% 30%, rgba(64, 128, 255, 0.3), rgba(45, 212, 191, 0.08));
+}
+
+/* 深色模式：spark → 青蓝光点 */
+[data-theme="dark"] .c-spark {
+  background: #4080ff;
+  box-shadow: 0 0 8px #4080ff, 0 0 16px #00d2ff;
+}
+
+/* 深色模式：雷达 → 增强发光 */
+[data-theme="dark"] .radar-circle {
+  border-color: rgba(64, 128, 255, 0.35);
+  box-shadow: 0 0 20px rgba(64, 128, 255, 0.12);
+}
+[data-theme="dark"] .radar-container.is-visible .radar-scanner {
+  background: conic-gradient(from 0deg, transparent 60%, rgba(64, 128, 255, 0.45) 100%);
+}
+
+/* 深色模式：脉冲环 → 增强青蓝发光 */
+[data-theme="dark"] .pulse-ring {
+  border-color: rgba(64, 128, 255, 0.8);
+  box-shadow: 0 0 20px rgba(64, 128, 255, 0.35), inset 0 0 20px rgba(64, 128, 255, 0.35);
+}
 </style>

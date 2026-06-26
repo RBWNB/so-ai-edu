@@ -71,6 +71,14 @@
 
         <!-- 右侧用户区 -->
         <div class="user-area">
+          <!-- 主题切换按钮 -->
+          <div class="theme-toggle" @click="themeStore.toggle()" :title="themeStore.isDark() ? '切换为正常模式' : '切换为护眼模式'">
+            <el-icon :size="18">
+              <Sunny v-if="themeStore.isDark()" />
+              <Moon v-else />
+            </el-icon>
+          </div>
+
           <!--  消息铃铛  -->
           <div
               v-if="authStore.isLoggedIn"
@@ -254,14 +262,16 @@ import { useRoute, useRouter } from "vue-router";
 import * as THREE from "three";
 import { useAuthStore } from "@/store/auth";
 import { ElMessageBox, ElMessage } from "element-plus";
-import { ArrowDown, Bell, ChatDotRound, Close, Setting, Ship, SwitchButton, User } from "@element-plus/icons-vue";
+import { ArrowDown, Bell, ChatDotRound, Close, Moon, Setting, Ship, Sunny, SwitchButton, User } from "@element-plus/icons-vue";
 import RagChatWindow from "@/components/RagChatWindow.vue";
 import AgentFloatWidget from "@/components/AgentFloatWidget.vue";
 import { getUnreadCount, getNotificationList, markNotificationRead, markAllRead, deleteNotification, clearAllNotifications } from "@/utils/notification";
+import { useThemeStore } from "@/store/theme";
 
 const route = useRoute();
 const $router = useRouter();
 const authStore = useAuthStore();
+const themeStore = useThemeStore();
 const ragChatRef = ref(null);
 const threeCanvas = ref(null);
 
@@ -1155,7 +1165,7 @@ const handleUserCommand = (command) => {
   position: relative;
   overflow: visible; /* 关键：子元素面板可溢出导航栏不被裁剪 */
   /* 视觉样式：从 .edu-header 迁移至此 */
-  max-width: 1000px;
+  max-width: 1280px;
   margin: 0 auto;
   background: rgba(10, 20, 42, 0.75);
   backdrop-filter: blur(20px) saturate(150%);
@@ -1323,6 +1333,28 @@ const handleUserCommand = (command) => {
   align-items: center;
   gap: 18px;
 }
+
+/* 主题切换按钮 */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  cursor: pointer;
+  color: rgba(230, 245, 255, 0.85);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: all 0.3s ease;
+}
+.theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(64, 128, 255, 0.3);
+}
+
 /* 下拉菜单容器 */
 .user-dropdown-wrapper {
   position: relative;

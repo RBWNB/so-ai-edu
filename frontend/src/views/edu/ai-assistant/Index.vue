@@ -52,4 +52,9 @@ import AiIdentifyUp from "@/components/AiIdentifyUp.vue";
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* 深色模式：副标题改为浅色 */
+[data-theme="dark"] .page-subtitle {
+  color: #b0bec5;
+}
 </style>
