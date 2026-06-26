@@ -1,5 +1,41 @@
 <template>
   <div class="dashboard-page" v-loading="loading">
+    <div style="display: flex; justify-content: flex-end; margin-bottom: 16px;">
+      <el-button
+          v-if="canExport"
+          type="primary"
+          :icon="Bell"
+          @click="broadcastDialogVisible = true"
+      >
+        发布全站广播
+      </el-button>
+    </div>
+
+    <el-row :gutter="16" class="summary-row">
+    </el-row>
+    <el-dialog v-model="broadcastDialogVisible" title="发布全站广播" width="450px" destroy-on-close>
+      <el-form :model="broadcastForm" label-width="80px">
+        <el-form-item label="广播内容" required>
+          <el-input
+              v-model="broadcastForm.content"
+              type="textarea"
+              :rows="4"
+              maxlength="200"
+              show-word-limit
+              placeholder="请输入要发送给所有用户的系统通知..."
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="broadcastDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitBroadcast" :loading="broadcasting">
+            确认发送
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
+
     <el-row :gutter="16" class="summary-row">
       <el-col :xs="12" :sm="12" :lg="6" v-for="card in kpiCards" :key="card.label">
         <el-card shadow="hover" class="summary-card">
@@ -92,7 +128,7 @@
 <script setup>
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
-import { User, Cpu, Document, EditPen } from "@element-plus/icons-vue";
+import { User, Cpu, Document, EditPen, Bell } from "@element-plus/icons-vue";
 import * as echarts from "echarts";
 import dayjs from "dayjs";
 import jsPDF from "jspdf";
@@ -107,7 +143,8 @@ import {
   getSpeciesProtectionStats,
   getSpeciesRawList,
   getSpeciesTaxonomyStats,
-  getEcosystemStats
+  getEcosystemStats,
+  sendSystemBroadcast
 } from "@/api/visual";
 
 const authStore = useAuthStore();
@@ -140,6 +177,32 @@ let trendChart, aiSceneChart, pieChart, taxChart, ecosystemChart;
 
 const GALLERY_PALETTE = ["#165DFF", "#36CFC9", "#FF7D00", "#52C41A", "#722ED1", "#F53F3F"];
 
+// ════════ 广播逻辑 ════════
+const broadcastDialogVisible = ref(false);
+const broadcasting = ref(false);
+const broadcastForm = reactive({ content: "" });
+
+const submitBroadcast = async () => {
+  if (!broadcastForm.content.trim()) {
+    ElMessage.warning("广播内容不能为空");
+    return;
+  }
+  broadcasting.value = true;
+  try {
+    const res = await sendSystemBroadcast({ content: broadcastForm.content });
+    if (res?.data?.success) {
+      ElMessage.success(res.data.message || "广播发送成功");
+      broadcastDialogVisible.value = false;
+      broadcastForm.content = ""; // 清空表单
+    } else {
+      ElMessage.error(res?.data?.message || "发送失败");
+    }
+  } catch (e) {
+    ElMessage.error("系统异常");
+  } finally {
+    broadcasting.value = false;
+  }
+};
 // ============ 数据处理工具 ============
 
 const extractList = (payload) => {

@@ -1,5 +1,6 @@
 package com.gdou.marine.controller;
 
+import com.gdou.marine.annotation.Log;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -205,4 +206,42 @@ public class NotificationController {
         return result;
     }
 
+    /* B端管理员：发布全站系统广播
+     * POST /notification/admin/broadcast
+     * body: { "content": "广播内容" }
+     */
+    @Log(module = "运营管理", description = "发布全站广播消息")
+    @PostMapping("/admin/broadcast")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    public Map<String, Object> sendBroadcast(@RequestBody Map<String, String> body, Authentication auth) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            Long adminId = extractUserId(auth);
+            String content = body.get("content");
+
+            if (content == null || content.trim().isEmpty()) {
+                result.put("success", false);
+                result.put("message", "广播内容不能为空");
+                return result;
+            }
+
+            // 核心逻辑：利用 INSERT INTO ... SELECT 语句，一次性给所有启用的用户 (status=1) 发送通知
+            // post_id 和 target_id 设为 0，代表这是一个无具体绑定的系统消息
+            String sql = """
+                INSERT INTO system_notification (receiver_id, sender_id, type, target_id, post_id, content)
+                SELECT id, ?, 'broadcast', 0, 0, ? 
+                FROM app_user WHERE status = 1
+                """;
+
+            int rowsAffected = jdbcTemplate.update(sql, adminId, content.trim());
+
+            result.put("success", true);
+            result.put("message", "广播发送成功，覆盖 " + rowsAffected + " 名用户");
+        } catch (Exception e) {
+            log.error("发送全站广播失败", e);
+            result.put("success", false);
+            result.put("message", "发送失败: " + e.getMessage());
+        }
+        return result;
+    }
 }

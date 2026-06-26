@@ -38,3 +38,7 @@ export const getAiWordCloud = () =>
 /** 获取近7天活跃度(答题)趋势 */
 export const getActivityTrend = () =>
     http.get("/visual/admin/activity-trend");
+
+// 发送全站广播
+export const sendSystemBroadcast = (data) =>
+    http.post("/notification/admin/broadcast", data);
