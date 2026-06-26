@@ -123,15 +123,28 @@
             >
               {{ diffLabel(currentQuestion.difficulty) }}
             </el-tag>
-            <el-button
-              class="tts-btn"
-              size="small"
-              circle
-              :loading="currentQuestion._ttsLoading"
-              @click="playTts(currentQuestion)"
-            >
-              🔊
-            </el-button>
+            <span class="q-header-right">
+              <el-button
+                class="star-btn"
+                size="small"
+                circle
+                :type="bookmarkedQuestionIds.has(currentQuestion.id) ? 'warning' : 'default'"
+                @click="toggleBookmark(currentQuestion)"
+              >
+                <el-icon :size="16">
+                  <component :is="bookmarkedQuestionIds.has(currentQuestion.id) ? StarFilled : Star" />
+                </el-icon>
+              </el-button>
+              <el-button
+                class="tts-btn"
+                size="small"
+                circle
+                :loading="currentQuestion._ttsLoading"
+                @click="playTts(currentQuestion)"
+              >
+                🔊
+              </el-button>
+            </span>
           </div>
 
           <div class="q-stem">{{ currentQuestion.stem }}</div>
@@ -314,8 +327,12 @@
             <span class="comp-progress-total">{{ compQuestions.length }}</span>
           </div>
 
-          <!-- 倒计时 -->
-          <div class="comp-countdown" :class="countdownClass">
+          <div class="comp-top-right">
+            <el-button class="comp-exit-btn" size="small" type="danger" plain @click="confirmCompExit">
+              退出答题
+            </el-button>
+            <!-- 倒计时 -->
+            <div class="comp-countdown" :class="countdownClass">
             <svg class="countdown-ring" viewBox="0 0 56 56">
               <circle cx="28" cy="28" r="24" fill="none" stroke="rgba(0,0,0,0.06)" stroke-width="4" />
               <circle
@@ -332,6 +349,7 @@
             </svg>
             <span class="countdown-number">{{ countdown }}</span>
             <span class="countdown-unit">秒</span>
+          </div>
           </div>
         </div>
 
@@ -356,6 +374,17 @@
             >
               {{ diffLabel(compCurrentQ.difficulty) }}
             </el-tag>
+            <el-button
+              class="star-btn"
+              size="small"
+              circle
+              :type="bookmarkedQuestionIds.has(compCurrentQ.id) ? 'warning' : 'default'"
+              @click="toggleBookmark(compCurrentQ)"
+            >
+              <el-icon :size="16">
+                <component :is="bookmarkedQuestionIds.has(compCurrentQ.id) ? StarFilled : Star" />
+              </el-icon>
+            </el-button>
           </div>
 
           <div class="q-stem">{{ compCurrentQ.stem }}</div>
@@ -706,10 +735,11 @@
 <script setup>
 import { ref, reactive, computed, nextTick, onBeforeUnmount, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { User } from '@element-plus/icons-vue'
+import { User, Star, StarFilled } from '@element-plus/icons-vue'
 import { startExam, submitExam, getExamHistory, examTts } from '@/api/exam'
 import { getLearningProfile } from '@/api/learning'
 import { submitCompetitionResult, getLeaderboard, getCompetitionQuestions } from '@/api/competition'
+import { addBookmark, removeBookmark, getBookmarkList } from '@/api/bookmark'
 import LevelUpPopup from "@/components/LevelUpPopup.vue";
 
 // ==================== 模式切换 ====================
@@ -766,6 +796,9 @@ const compMatchScore = ref(0)
 const compTotalScore = ref(0)
 const compWrongDetails = ref([])
 const compHistory = ref([]) // 竞技历史记录（localStorage）
+
+// 收藏状态
+const bookmarkedQuestionIds = ref(new Set())
 
 // 排行榜状态
 const lbVisible = ref(false)
@@ -873,6 +906,7 @@ const handleStart = async () => {
       userAnswers.value = new Array(list.length).fill(null)
       currentIndex.value = 0
       phase.value = 'answering'
+      fetchBookmarkedIds()
       fetchHistory()
     } else {
       ElMessage.warning(res.data.message || '获取题目失败')
@@ -1069,6 +1103,45 @@ const confirmExit = () => {
     }).catch(() => {})
   } else {
     resetExam()
+  }
+}
+
+// ==================== 收藏相关 ====================
+const fetchBookmarkedIds = async () => {
+  try {
+    const res = await getBookmarkList()
+    if (res.data.success) {
+      const quizList = res.data.data?.quiz_question || []
+      bookmarkedQuestionIds.value = new Set(quizList.map(item => item.targetId))
+    }
+  } catch {
+    // 静默失败
+  }
+}
+
+const toggleBookmark = async (question) => {
+  if (!question || !question.id) return
+  const isBookmarked = bookmarkedQuestionIds.value.has(question.id)
+  try {
+    if (isBookmarked) {
+      const res = await removeBookmark('quiz_question', question.id)
+      if (res.data.success) {
+        const next = new Set(bookmarkedQuestionIds.value)
+        next.delete(question.id)
+        bookmarkedQuestionIds.value = next
+        ElMessage.success('已取消收藏')
+      }
+    } else {
+      const res = await addBookmark('quiz_question', question.id)
+      if (res.data.success) {
+        const next = new Set(bookmarkedQuestionIds.value)
+        next.add(question.id)
+        bookmarkedQuestionIds.value = next
+        ElMessage.success('已收藏')
+      }
+    }
+  } catch {
+    ElMessage.error('操作失败')
   }
 }
 
@@ -1288,6 +1361,7 @@ const startCompetition = async () => {
     compMultiSelected.value = []
     compTimeoutFlag.value = false
     compStage.value = 'PLAYING'
+    fetchBookmarkedIds()
 
     await nextTick()
     startCountdown()
@@ -1412,6 +1486,16 @@ const backToStart = () => {
   compQuestions.value = []
   compCurrentIndex.value = 0
   compUserAnswers.value = []
+}
+
+const confirmCompExit = () => {
+  ElMessageBox.confirm(
+    '确定退出竞技吗？退出后本次答题不结算，成绩不会保存',
+    '提示',
+    { confirmButtonText: '确定退出', cancelButtonText: '继续答题', type: 'warning' }
+  ).then(() => {
+    backToStart()
+  }).catch(() => {})
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1792,7 +1876,7 @@ loadCompHistory()
 
 .q-header { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
 .tts-btn {
-  margin-left: auto; font-size: 16px;
+  font-size: 16px;
   background: rgba(255, 255, 255, 0.8) !important;
   border: 1px solid #e5e6eb !important;
   color: #86909c !important;
@@ -1802,6 +1886,26 @@ loadCompHistory()
   background: rgba(22, 93, 255, 0.05) !important;
   border-color: #165dff !important;
   color: #165dff !important;
+}
+
+.q-header-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.star-btn {
+  font-size: 16px;
+  background: rgba(255, 255, 255, 0.8) !important;
+  border: 1px solid #e5e6eb !important;
+  color: #f5a623 !important;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+  transition: all 0.2s;
+}
+.star-btn:hover {
+  background: rgba(245, 166, 35, 0.08) !important;
+  border-color: #f5a623 !important;
+  transform: scale(1.1);
 }
 
 .q-stem {
@@ -2000,6 +2104,16 @@ loadCompHistory()
   justify-content: space-between;
   margin-bottom: 16px;
   padding: 0 4px;
+}
+
+.comp-top-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.comp-exit-btn {
+  font-size: 12px;
+  padding: 4px 10px;
 }
 
 .comp-progress-info {

@@ -1,6 +1,7 @@
 package com.gdou.marine.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gdou.marine.annotation.Log;
 import com.gdou.marine.entity.UserBookmark;
 import com.gdou.marine.mapper.UserBookmarkMapper;
@@ -31,6 +32,9 @@ public class UserBookmarkController {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Autowired
     private com.gdou.marine.mapper.MediaAssetMapper mediaAssetMapper;
@@ -224,14 +228,22 @@ public class UserBookmarkController {
                         .map(UserBookmark::getTargetId).collect(Collectors.toList());
                 if (!ids.isEmpty()) {
                     String inClause = ids.stream().map(String::valueOf).collect(Collectors.joining(","));
-                    String sql = "SELECT id, LEFT(stem, 30) AS title FROM quiz_question WHERE id IN (" + inClause + ")";
+                    String sql = "SELECT id, stem, stem AS title, question_type, difficulty, options_json, answer_json, explanation FROM quiz_question WHERE id IN (" + inClause + ")";
                     List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql);
                     Map<Long, Map<String, Object>> rowMap = new HashMap<>();
                     for (Map<String, Object> row : rows) {
                         rowMap.put(((Number) row.get("id")).longValue(), row);
                     }
                     for (UserBookmark bm : grouped.get("quiz_question")) {
-                        Map<String, Object> item = buildItem(bm, rowMap.get(bm.getTargetId()));
+                        Map<String, Object> row = rowMap.get(bm.getTargetId());
+                        Map<String, Object> item = buildItem(bm, row);
+                        if (row != null) {
+                            item.put("questionType", row.get("question_type"));
+                            item.put("difficulty", row.get("difficulty"));
+                            item.put("optionsJson", row.get("options_json"));
+                            item.put("correctAnswer", parseAnswerJson((String) row.get("answer_json")));
+                            item.put("explanation", row.get("explanation"));
+                        }
                         quizList.add(item);
                     }
                 }
@@ -287,6 +299,22 @@ public class UserBookmarkController {
             result.put("message", e.getMessage());
         }
         return result;
+    }
+
+    private String parseAnswerJson(String answerJson) {
+        if (answerJson == null || answerJson.isEmpty()) return "";
+        String trimmed = answerJson.trim();
+        try {
+            if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
+                return trimmed.substring(1, trimmed.length() - 1);
+            }
+            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                List<String> arr = objectMapper.readValue(trimmed, List.class);
+                return String.join(",", arr);
+            }
+        } catch (Exception ignored) {
+        }
+        return trimmed;
     }
 
     private Map<String, Object> buildItem(UserBookmark bm, Map<String, Object> joinRow) {

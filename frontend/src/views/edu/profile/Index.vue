@@ -422,11 +422,14 @@
                     <el-col :xs="24" :sm="12" :md="8" v-for="item in currentFavList" :key="item.bookmarkId">
                       <div
                         class="fav-card"
-                        :class="{ 'fav-card-clickable': favSubTab === 'user_observation' }"
-                        @click="favSubTab === 'user_observation' && goToObservation(item)"
+                        :class="{ 'fav-card-clickable': favSubTab === 'user_observation' || favSubTab === 'quiz_question' }"
+                        @click="handleFavCardClick(item)"
                       >
                         <div class="fav-thumb">
-                          <img :src="getFavImageUrl(item.thumbnail)" :alt="item.title" @error="handleFavImgError" />
+                          <img v-if="item.thumbnail" :src="getFavImageUrl(item.thumbnail)" :alt="item.title" @error="handleFavImgError" />
+                          <div v-else class="fav-thumb-placeholder">
+                            <span>📝</span>
+                          </div>
                         </div>
                         <div class="fav-info">
                           <div class="fav-title">{{ item.title }}</div>
@@ -759,6 +762,51 @@
       <el-button @click="obsEditVisible = false">取消</el-button>
       <el-button type="primary" :loading="obsEditSaving" @click="submitEditObservation">保存修改</el-button>
     </template>
+  </el-dialog>
+
+  <!-- 题目详情弹窗 -->
+  <el-dialog
+    v-model="questionDetailVisible"
+    title="题目详情"
+    width="560px"
+    :close-on-click-modal="true"
+    :close-on-press-escape="true"
+    class="question-detail-dialog"
+  >
+    <div v-if="questionDetail" class="question-detail-body">
+      <div class="qd-tags">
+        <el-tag :type="qdTypeTag(questionDetail.questionType)" size="small" effect="dark">
+          {{ qdTypeLabel(questionDetail.questionType) }}
+        </el-tag>
+        <el-tag
+          :type="questionDetail.difficulty === 'easy' ? 'success' : questionDetail.difficulty === 'hard' ? 'danger' : 'warning'"
+          effect="plain"
+          size="small"
+        >
+          {{ qdDiffLabel(questionDetail.difficulty) }}
+        </el-tag>
+      </div>
+
+      <div class="qd-stem">{{ questionDetail.title || questionDetail.stem || '暂无题目' }}</div>
+
+      <div v-if="qdParsedOptions.length" class="qd-options">
+        <div v-for="opt in qdParsedOptions" :key="opt.label" class="qd-option-item">
+          <span class="qd-opt-label">{{ opt.label }}.</span>
+          <span class="qd-opt-text">{{ opt.text }}</span>
+        </div>
+      </div>
+
+      <div class="qd-answer">
+        <span class="qd-answer-label">正确答案：</span>
+        <el-tag type="success" size="small">{{ questionDetail.correctAnswer || '未知' }}</el-tag>
+      </div>
+
+      <div v-if="questionDetail.explanation" class="qd-explanation">
+        <span class="qd-exp-label">解析：</span>
+        <span>{{ questionDetail.explanation }}</span>
+      </div>
+    </div>
+    <el-empty v-else description="加载失败" :image-size="80" />
   </el-dialog>
 </template>
 
@@ -1493,6 +1541,36 @@ const favDataMap = reactive({
   user_observation: [],
 });
 
+// 题目详情弹窗
+const questionDetailVisible = ref(false)
+const questionDetail = ref(null)
+
+const qdTypeLabel = (type) => {
+  const map = { single: '单选题', multiple: '多选题', judge: '判断题' }
+  return map[type] || type || '未知'
+}
+const qdTypeTag = (type) => {
+  const map = { single: 'primary', multiple: 'success', judge: 'warning' }
+  return map[type] || ''
+}
+const qdDiffLabel = (diff) => {
+  const map = { easy: '简单', normal: '普通', hard: '困难' }
+  return map[diff] || diff || '未知'
+}
+const qdParsedOptions = computed(() => {
+  if (!questionDetail.value?.optionsJson) return []
+  try {
+    const raw = questionDetail.value.optionsJson
+    if (typeof raw === 'string') {
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed : []
+    }
+    return Array.isArray(raw) ? raw : []
+  } catch {
+    return []
+  }
+})
+
 /** 处理收藏列表中图片URL（兼容七牛云完整URL和本地相对路径） */
 const getFavImageUrl = (url) => {
   if (!url) return '';
@@ -1537,6 +1615,19 @@ const goToObservation = (item) => {
   sessionStorage.setItem('profile_fav_subtab', favSubTab.value);
   router.push({ name: 'EduObservationDetail', params: { id: item.targetId } });
 };
+
+const handleFavCardClick = (item) => {
+  if (favSubTab.value === 'user_observation') {
+    goToObservation(item)
+  } else if (favSubTab.value === 'quiz_question') {
+    openQuestionDetail(item)
+  }
+}
+
+const openQuestionDetail = (item) => {
+  questionDetail.value = item
+  questionDetailVisible.value = true
+}
 
 const removeBookmark = async (item) => {
   // DELETE /bookmark/{targetType}/{targetId} ✅
@@ -2479,6 +2570,15 @@ watch(activeTab, (tab) => {
 .fav-thumb { width: 100%; height: 140px; overflow: hidden; background: #f2f3f5; }
 .fav-thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s;}
 .fav-card:hover .fav-thumb img { transform: scale(1.05); }
+.fav-thumb-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #e8f0fe, #d4e4fc);
+  font-size: 36px;
+}
 .fav-info { padding: 16px; }
 .fav-title { font-size: 15px; font-weight: 600; color: #1d2129; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fav-time { font-size: 12px; color: #86909c; margin-top: 6px; }
@@ -2486,6 +2586,66 @@ watch(activeTab, (tab) => {
 .fav-card:hover .fav-remove-btn { opacity: 1; }
 .fav-card-clickable { cursor: pointer; }
 .fav-card-clickable:hover { border-color: #409eff; }
+
+/* 题目详情弹窗 */
+.question-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.qd-tags {
+  display: flex;
+  gap: 8px;
+}
+.qd-stem {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.7;
+  color: #1d2129;
+}
+.qd-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: #f7f8fa;
+  border-radius: 10px;
+}
+.qd-option-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #1d2129;
+}
+.qd-opt-label {
+  font-weight: 700;
+  color: #165dff;
+  min-width: 24px;
+}
+.qd-answer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.qd-answer-label {
+  font-weight: 600;
+  color: #4e5969;
+}
+.qd-explanation {
+  padding: 12px;
+  background: #f0f9eb;
+  border-left: 3px solid #67c23a;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #4e5969;
+  line-height: 1.6;
+}
+.qd-exp-label {
+  font-weight: 700;
+  color: #67c23a;
+}
 
 /* ── Tab 7：我的观察 ── */
 .obs-header { display: flex; justify-content: flex-end; margin-bottom: 20px; }
