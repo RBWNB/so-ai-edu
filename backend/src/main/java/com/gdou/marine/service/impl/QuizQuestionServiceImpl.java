@@ -4,8 +4,10 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.gdou.marine.dto.AiGenerateDTO;
 import com.gdou.marine.entity.KbDocument;
 import com.gdou.marine.entity.QuizQuestion;
+import com.gdou.marine.entity.Species;
 import com.gdou.marine.mapper.KbDocumentMapper;
 import com.gdou.marine.mapper.QuizQuestionMapper;
+import com.gdou.marine.mapper.SpeciesMapper;
 import com.gdou.marine.service.QuizQuestionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,24 +28,43 @@ public class QuizQuestionServiceImpl extends ServiceImpl<QuizQuestionMapper, Qui
 
     private final ZhipuAiServiceImpl zhipuAiService;
     private final KbDocumentMapper kbDocumentMapper;
+    private final SpeciesMapper speciesMapper;
 
     public QuizQuestionServiceImpl(ZhipuAiServiceImpl zhipuAiService,
-                                   KbDocumentMapper kbDocumentMapper) {
+                                   KbDocumentMapper kbDocumentMapper,
+                                   SpeciesMapper speciesMapper) {
         this.zhipuAiService = zhipuAiService;
         this.kbDocumentMapper = kbDocumentMapper;
+        this.speciesMapper = speciesMapper;
     }
 
     @Override
     public List<QuizQuestion> generateByAi(AiGenerateDTO dto, Long userId) {
-        // 1. 获取知识库文档内容
-        KbDocument doc = kbDocumentMapper.selectById(dto.getDocumentId());
-        if (doc == null) {
-            throw new RuntimeException("知识库文档不存在，ID=" + dto.getDocumentId());
-        }
+        String sourceType = dto.getSourceType() != null ? dto.getSourceType() : "kb";
+        String contentTitle;
+        String content;
 
-        String content = doc.getContent();
-        if (content == null || content.trim().isEmpty()) {
-            throw new RuntimeException("知识库文档内容为空，无法生成题目");
+        if ("species".equals(sourceType)) {
+            // 1a. 获取海洋百科物种内容
+            Species species = speciesMapper.selectById(dto.getSpeciesId());
+            if (species == null) {
+                throw new RuntimeException("海洋百科物种不存在，ID=" + dto.getSpeciesId());
+            }
+
+            contentTitle = species.getChineseName();
+            content = buildSpeciesContent(species);
+        } else {
+            // 1b. 获取知识库文档内容
+            KbDocument doc = kbDocumentMapper.selectById(dto.getDocumentId());
+            if (doc == null) {
+                throw new RuntimeException("知识库文档不存在，ID=" + dto.getDocumentId());
+            }
+
+            content = doc.getContent();
+            if (content == null || content.trim().isEmpty()) {
+                throw new RuntimeException("知识库文档内容为空，无法生成题目");
+            }
+            contentTitle = doc.getTitle();
         }
 
         // 截取过长内容（防止token超限）
@@ -78,8 +99,9 @@ public class QuizQuestionServiceImpl extends ServiceImpl<QuizQuestionMapper, Qui
                 + "explanation (解析), "
                 + "difficulty (easy/normal/hard)";
 
+        String sourceLabel = "species".equals(sourceType) ? "海洋百科" : "知识库";
         String userPrompt = String.format("""
-                请根据以下知识库内容，生成%d道%s（难度：%s）。
+                请根据以下%s内容，生成%d道%s（难度：%s）。
 
                 要求：
                 1. 题目必须严格基于给定内容，不要编造内容
@@ -89,13 +111,13 @@ public class QuizQuestionServiceImpl extends ServiceImpl<QuizQuestionMapper, Qui
                 5. 每道题需包含解析（explanation）
                 6. 正确选项字母用英文大写
 
-                知识库标题：%s
-                知识库内容：
+                %s标题：%s
+                %s内容：
                 %s
-                """, count, typeDesc, diffDesc, doc.getTitle(), truncatedContent);
+                """, sourceLabel, count, typeDesc, diffDesc, sourceLabel, contentTitle, sourceLabel, truncatedContent);
 
-        log.info("AI生成题目请求：documentId={}, count={}, type={}, difficulty={}",
-                dto.getDocumentId(), count, dto.getQuestionType(), dto.getDifficulty());
+        log.info("AI生成题目请求：sourceType={}, documentId={}, speciesId={}, count={}, type={}, difficulty={}",
+                sourceType, dto.getDocumentId(), dto.getSpeciesId(), count, dto.getQuestionType(), dto.getDifficulty());
 
         // 3. 调用智谱 AI
         String aiResponse;
@@ -113,7 +135,37 @@ public class QuizQuestionServiceImpl extends ServiceImpl<QuizQuestionMapper, Qui
         log.debug("AI原始响应：{}", aiResponse);
 
         // 4. 解析 AI 响应
-        return parseQuestions(aiResponse, doc, userId);
+        KbDocument dummyDoc = new KbDocument();
+        dummyDoc.setTitle(contentTitle);
+        return parseQuestions(aiResponse, dummyDoc, userId);
+    }
+
+    /**
+     * 将海洋百科物种的各字段拼接成纯文本内容
+     */
+    private String buildSpeciesContent(Species species) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("中文名：").append(nullToEmpty(species.getChineseName())).append("\n");
+        sb.append("学名：").append(nullToEmpty(species.getScientificName())).append("\n");
+        sb.append("别名：").append(nullToEmpty(species.getAliasNames())).append("\n");
+        sb.append("分类：")
+                .append(nullToEmpty(species.getKingdom())).append(" / ")
+                .append(nullToEmpty(species.getPhylum())).append(" / ")
+                .append(nullToEmpty(species.getClassName())).append(" / ")
+                .append(nullToEmpty(species.getOrderName())).append(" / ")
+                .append(nullToEmpty(species.getFamilyName())).append(" / ")
+                .append(nullToEmpty(species.getGenusName())).append("\n");
+        sb.append("保护 status：").append(nullToEmpty(species.getConservationStatus())).append("\n");
+        sb.append("栖息地：").append(nullToEmpty(species.getHabitat())).append("\n");
+        sb.append("分布区域：").append(nullToEmpty(species.getDistributionArea())).append("\n");
+        sb.append("形态特征：").append(nullToEmpty(species.getMorphologyDesc())).append("\n");
+        sb.append("生活习性：").append(nullToEmpty(species.getHabitDesc())).append("\n");
+        sb.append("趣味知识：").append(nullToEmpty(species.getFunFact())).append("\n");
+        return sb.toString();
+    }
+
+    private String nullToEmpty(String s) {
+        return s != null ? s : "";
     }
 
     /**

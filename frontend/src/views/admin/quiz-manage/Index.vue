@@ -302,7 +302,16 @@
     >
       <template v-if="aiDialog.step === 'config'">
         <el-form :model="aiForm" label-width="140px">
-          <el-form-item label="选择知识库帖子" required>
+          <!-- 来源类型切换 -->
+          <el-form-item label="来源类型">
+            <el-radio-group v-model="aiForm.sourceType" @change="onSourceTypeChange">
+              <el-radio value="kb">知识库帖子</el-radio>
+              <el-radio value="species">海洋百科物种</el-radio>
+            </el-radio-group>
+          </el-form-item>
+
+          <!-- 选择知识库帖子 -->
+          <el-form-item v-if="aiForm.sourceType === 'kb'" label="选择知识库帖子" required>
             <div style="display: flex; gap: 8px; width: 100%;">
               <el-select
                 v-model="aiForm.documentId"
@@ -329,10 +338,46 @@
             </div>
           </el-form-item>
 
-          <el-form-item v-if="selectedDocument" label="已选帖子">
+          <el-form-item v-if="aiForm.sourceType === 'kb' && selectedDocument" label="已选帖子">
             <el-card shadow="hover" class="doc-card">
               <div class="doc-title">{{ selectedDocument.title }}</div>
               <div class="doc-preview">{{ selectedDocument.content?.slice(0, 200) }}...</div>
+            </el-card>
+          </el-form-item>
+
+          <!-- 选择海洋百科物种 -->
+          <el-form-item v-if="aiForm.sourceType === 'species'" label="选择海洋百科物种" required>
+            <div style="display: flex; gap: 8px; width: 100%;">
+              <el-select
+                v-model="aiForm.speciesId"
+                filterable
+                remote
+                reserve-keyword
+                placeholder="输入关键词搜索海洋百科物种"
+                :remote-method="searchSpecies"
+                :loading="speciesSearchLoading"
+                style="flex: 1;"
+                @change="onSpeciesSelect"
+              >
+                <el-option
+                  v-for="sp in speciesList"
+                  :key="sp.id"
+                  :label="sp.chineseName"
+                  :value="sp.id"
+                >
+                  <span>{{ sp.chineseName }}</span>
+                  <span class="kb-option-desc" v-if="sp.scientificName">（{{ sp.scientificName }}）</span>
+                </el-option>
+              </el-select>
+              <el-button @click="openSpeciesBrowseDialog">浏览全部</el-button>
+            </div>
+          </el-form-item>
+
+          <el-form-item v-if="aiForm.sourceType === 'species' && selectedSpecies" label="已选物种">
+            <el-card shadow="hover" class="doc-card">
+              <div class="doc-title">{{ selectedSpecies.chineseName }}</div>
+              <div class="doc-preview" v-if="selectedSpecies.habitDesc">{{ selectedSpecies.habitDesc?.slice(0, 200) }}...</div>
+              <div class="doc-preview" v-else-if="selectedSpecies.morphologyDesc">{{ selectedSpecies.morphologyDesc?.slice(0, 200) }}...</div>
             </el-card>
           </el-form-item>
 
@@ -369,7 +414,7 @@
           <el-button
             type="warning"
             :loading="aiDialog.generating"
-            :disabled="!aiForm.documentId"
+            :disabled="aiForm.sourceType === 'kb' ? !aiForm.documentId : !aiForm.speciesId"
             @click="handleAiGenerate"
           >
             {{ aiDialog.generating ? 'AI生成中...' : '开始生成' }}
@@ -507,6 +552,57 @@
       </template>
     </el-dialog>
 
+    <!-- 浏览海洋百科物种对话框 -->
+    <el-dialog
+      v-model="speciesBrowseDialog.visible"
+      title="选择海洋百科物种"
+      width="700px"
+      :close-on-click-modal="false"
+    >
+      <el-form :model="speciesQueryForm" inline>
+        <el-form-item label="关键词">
+          <el-input v-model="speciesQueryForm.keyword" placeholder="搜索物种名称" clearable style="width:200px" @keyup.enter="handleSpeciesSearch" />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="handleSpeciesSearch">搜索</el-button>
+        </el-form-item>
+      </el-form>
+
+      <el-table
+        v-loading="speciesTableLoading"
+        :data="speciesTableData"
+        border
+        stripe
+        highlight-current-row
+        @current-change="handleSpeciesRowSelect"
+      >
+        <el-table-column type="index" label="#" width="50" />
+        <el-table-column prop="chineseName" label="中文名" width="140" show-overflow-tooltip />
+        <el-table-column prop="scientificName" label="学名" width="180" show-overflow-tooltip />
+        <el-table-column prop="familyName" label="科" width="100" show-overflow-tooltip />
+        <el-table-column prop="habitat" label="栖息地" min-width="150" show-overflow-tooltip />
+      </el-table>
+      <div class="pager">
+        <el-pagination
+          v-model:current-page="speciesPagination.current"
+          v-model:page-size="speciesPagination.size"
+          :total="speciesTotal"
+          :page-sizes="[5, 10, 20]"
+          layout="total, sizes, prev, pager, next"
+          size="small"
+          @size-change="fetchSpeciesList"
+          @current-change="fetchSpeciesList"
+        />
+      </div>
+
+      <template #footer>
+        <el-button @click="speciesBrowseDialog.visible = false">取消</el-button>
+        <el-button type="primary" :disabled="!speciesSelectedId" @click="confirmSpeciesSelect">
+          选择此物种
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- 预览题目对话框 -->
     <el-dialog
       v-model="previewDialog.visible"
@@ -580,6 +676,7 @@ import {
   getKbDocumentPage,
   getKbCategoryList,
 } from '@/api/quiz'
+import { getSpeciesPage } from '@/api/species'
 import { useAuthStore } from '@/store/auth'
 
 const authStore = useAuthStore()
@@ -970,7 +1067,9 @@ const aiDialog = reactive({
 })
 
 const aiForm = reactive({
+  sourceType: 'kb',
   documentId: null,
+  speciesId: null,
   count: 5,
   questionType: 'mixed',
   difficulty: 'normal',
@@ -985,12 +1084,15 @@ const selectedQuestions = computed(() => {
 const openAiDialog = () => {
   aiDialog.visible = true
   aiDialog.step = 'config'
+  aiForm.sourceType = 'kb'
   aiForm.documentId = null
+  aiForm.speciesId = null
   aiForm.count = 5
   aiForm.questionType = 'mixed'
   aiForm.difficulty = 'normal'
   aiGeneratedQuestions.value = []
   selectedDocument.value = null
+  selectedSpecies.value = null
   fetchKbDocuments()
   fetchKbCategories()
 }
@@ -1029,6 +1131,108 @@ const onKbDocumentSelect = async (docId) => {
   if (found) {
     selectedDocument.value = found
   }
+}
+
+// 搜索海洋百科物种
+const speciesSearchLoading = ref(false)
+const speciesList = ref([])
+const selectedSpecies = ref(null)
+
+const searchSpecies = async (keyword) => {
+  if (!keyword) {
+    speciesList.value = []
+    return
+  }
+  speciesSearchLoading.value = true
+  try {
+    const res = await getSpeciesPage({ keyword, pageSize: 20, current: 1 })
+    speciesList.value = res.data.records || []
+  } catch (err) {
+    console.error('搜索海洋百科物种失败', err)
+  } finally {
+    speciesSearchLoading.value = false
+  }
+}
+
+const onSpeciesSelect = async (speciesId) => {
+  if (!speciesId) {
+    selectedSpecies.value = null
+    return
+  }
+  const found = speciesList.value.find(s => s.id === speciesId)
+  if (found) {
+    selectedSpecies.value = found
+  }
+}
+
+const onSourceTypeChange = () => {
+  aiForm.documentId = null
+  aiForm.speciesId = null
+  selectedDocument.value = null
+  selectedSpecies.value = null
+}
+
+// 浏览全部海洋百科物种
+const speciesBrowseDialog = reactive({
+  visible: false,
+})
+
+const speciesQueryForm = reactive({
+  keyword: '',
+})
+
+const speciesTableLoading = ref(false)
+const speciesTableData = ref([])
+const speciesTotal = ref(0)
+const speciesPagination = reactive({ current: 1, size: 10 })
+const speciesSelectedId = ref(null)
+
+const openSpeciesBrowseDialog = () => {
+  speciesBrowseDialog.visible = true
+  speciesSelectedId.value = null
+  fetchSpeciesList()
+}
+
+const fetchSpeciesList = async () => {
+  speciesTableLoading.value = true
+  try {
+    const params = {
+      current: speciesPagination.current,
+      size: speciesPagination.size,
+    }
+    if (speciesQueryForm.keyword) params.keyword = speciesQueryForm.keyword
+
+    const res = await getSpeciesPage(params)
+    speciesTableData.value = res.data.records || []
+    speciesTotal.value = res.data.total || 0
+  } catch (err) {
+    console.error('获取海洋百科列表失败', err)
+  } finally {
+    speciesTableLoading.value = false
+  }
+}
+
+const handleSpeciesSearch = () => {
+  speciesPagination.current = 1
+  fetchSpeciesList()
+}
+
+const handleSpeciesRowSelect = (row) => {
+  if (row) {
+    speciesSelectedId.value = row.id
+  }
+}
+
+const confirmSpeciesSelect = () => {
+  const sp = speciesTableData.value.find(s => s.id === speciesSelectedId.value)
+  if (sp) {
+    aiForm.speciesId = sp.id
+    selectedSpecies.value = sp
+    if (!speciesList.value.find(s => s.id === sp.id)) {
+      speciesList.value.push(sp)
+    }
+  }
+  speciesBrowseDialog.visible = false
 }
 
 // 浏览全部知识库
@@ -1114,18 +1318,28 @@ const confirmKbSelect = () => {
 
 // AI生成
 const handleAiGenerate = async () => {
-  if (!aiForm.documentId) {
+  if (aiForm.sourceType === 'kb' && !aiForm.documentId) {
     ElMessage.warning('请先选择知识库帖子')
+    return
+  }
+  if (aiForm.sourceType === 'species' && !aiForm.speciesId) {
+    ElMessage.warning('请先选择海洋百科物种')
     return
   }
   aiDialog.generating = true
   try {
-    const res = await aiGenerateQuestions({
-      documentId: aiForm.documentId,
+    const params = {
+      sourceType: aiForm.sourceType,
       count: aiForm.count,
       questionType: aiForm.questionType,
       difficulty: aiForm.difficulty,
-    })
+    }
+    if (aiForm.sourceType === 'species') {
+      params.speciesId = aiForm.speciesId
+    } else {
+      params.documentId = aiForm.documentId
+    }
+    const res = await aiGenerateQuestions(params)
 
     if (res.data.success) {
       const questions = res.data.data || []

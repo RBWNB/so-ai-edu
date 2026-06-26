@@ -8,9 +8,19 @@ import lombok.Data;
 @Data
 public class AiGenerateDTO {
     /**
-     * 知识库文档ID
+     * 知识库文档ID（sourceType=kb时使用）
      */
     private Long documentId;
+
+    /**
+     * 海洋百科物种ID（sourceType=species时使用）
+     */
+    private Long speciesId;
+
+    /**
+     * 来源类型：kb知识库 / species海洋百科
+     */
+    private String sourceType;
 
     /**
      * 题目数量
