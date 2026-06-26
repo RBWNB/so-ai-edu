@@ -227,7 +227,7 @@ const goToComment = (post) => {
   sessionStorage.setItem('community_page_num', String(pageNum.value));
   sessionStorage.setItem('community_sort', sortMode.value);
   sessionStorage.setItem('community_keyword', searchKeyword.value);
-  router.push({ name: 'EduObservationDetail', params: { id: post.id }, hash: '#comments' });
+  router.push({ name: 'EduObservationDetail', params: { id: String(post.id) }, hash: '#comments' });
 };
 
 // 点击帖子 → 跳转到独立详情页面，并保存滚动位置
@@ -236,7 +236,7 @@ const openDetail = (post) => {
   sessionStorage.setItem('community_page_num', String(pageNum.value));
   sessionStorage.setItem('community_sort', sortMode.value);
   sessionStorage.setItem('community_keyword', searchKeyword.value);
-  router.push({ name: 'EduObservationDetail', params: { id: post.id } });
+  router.push({ name: 'EduObservationDetail', params: { id: String(post.id) } });
 };
 
 // 页面完全重新加载时：恢复上次浏览位置
@@ -273,7 +273,7 @@ onMounted(async () => {
   // 兼容旧版 detail 查询参数 → 跳转到新详情页
   const detailId = route.query.detail;
   if (detailId) {
-    router.replace({ name: 'EduObservationDetail', params: { id: detailId } });
+    router.replace({ name: 'EduObservationDetail', params: { id: String(detailId) } });
   }
 });
 </script>

@@ -333,7 +333,7 @@ const openDetail = (post) => {
   sessionStorage.setItem('community_scroll_top', window.scrollY)
   sessionStorage.setItem('community_page_num', String(pageNum.value))
   sessionStorage.setItem('community_keyword', searchKeyword.value)
-  router.push({ name: 'EduObservationDetail', params: { id: post.id } })
+  router.push({ name: 'EduObservationDetail', params: { id: String(post.id) } })
 }
 
 const restoreScroll = async () => {
@@ -362,7 +362,7 @@ onMounted(async () => {
 
   const detailId = route.query.detail
   if (detailId) {
-    router.replace({ name: 'EduObservationDetail', params: { id: detailId } })
+    router.replace({ name: 'EduObservationDetail', params: { id: String(detailId) } })
   }
 })
 </script>

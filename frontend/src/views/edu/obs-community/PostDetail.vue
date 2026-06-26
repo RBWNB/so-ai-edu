@@ -529,7 +529,7 @@ const deleteDetailReply = async (comment, reply) => {
 };
 
 onMounted(() => {
-  const obsId = route.params.id;
+  const obsId = String(route.params.id || '');
   if (obsId) {
     loadDetail(obsId);
   }
@@ -538,6 +538,7 @@ onMounted(() => {
 // 路由参数变化时重新加载（解决从详情A返回再进详情B时组件复用的问题）
 watch(() => route.params.id, (newId) => {
   if (newId) {
+    newId = String(newId);
     // 重置评论状态
     detailComments.value = [];
     detailReplying.value = null;
@@ -582,7 +583,7 @@ const openUserProfile = async (userId) => {
 const goToUserPost = (postId) => {
   userProfileVisible.value = false;
   // 跳转到对应的详情页
-  router.push(`/obs-community/detail/${postId}`);
+  router.push(`/obs-community/detail/${String(postId)}`);
 };
 
 watch(() => route.params.id, (newId, oldId) => {
