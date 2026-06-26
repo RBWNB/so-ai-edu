@@ -63,7 +63,7 @@
           </div>
           <div class="feed-user-info">
             <div class="feed-user-name">
-              <span class="username">{{ post.username }}</span>
+              <span class="username">{{ post.realName || post.username }}</span>
               <span v-if="post.userTitle" class="user-badge">{{ post.userTitle }}</span>
             </div>
             <div class="feed-time">
@@ -96,7 +96,7 @@
             热评
           </div>
           <div class="hc-text">
-            <span class="hc-user">@{{ post.hotComment.username }}</span>：{{ post.hotComment.content }}
+            <span class="hc-user">@{{ post.hotComment.realName || post.hotComment.username }}</span>：{{ post.hotComment.content }}
           </div>
         </div>
 

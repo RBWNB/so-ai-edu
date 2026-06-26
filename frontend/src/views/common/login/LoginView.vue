@@ -399,7 +399,7 @@ const handleLogin = async () => {
     loading.value = true;
     try {
       const res = await loginApi(loginForm);
-      authStore.setAuth(res.data.token, res.data.username, res.data.roles || [], res.data.avatarUrl || '');
+      authStore.setAuth(res.data.token, res.data.username, res.data.roles || [], res.data.avatarUrl || '', res.data.avatarFrame || 'default', res.data.userTitle || '', res.data.realName || '');
       ElMessage.success('登录成功');
       const redirect = route.query?.redirect;
       if (redirect && typeof redirect === 'string' && redirect !== '/login') {

@@ -105,7 +105,7 @@
               <el-icon :size="20"><User /></el-icon>
             </el-avatar>
           </div>
-          <span class="text-username">{{ post.username }}</span>
+          <span class="text-username">{{ post.realName || post.username }}</span>
           <p class="text-excerpt">{{ firstSentence(post.description || post.title) }}</p>
         </div>
 
@@ -123,7 +123,7 @@
                   <el-icon :size="12"><User /></el-icon>
                 </el-avatar>
               </div>
-              <span class="author-name">{{ post.username }}</span>
+              <span class="author-name">{{ post.realName || post.username }}</span>
             </div>
             <div class="footer-stats">
               <span

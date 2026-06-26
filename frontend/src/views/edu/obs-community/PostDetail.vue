@@ -25,7 +25,7 @@
           </div>
           <div class="detail-user-info">
             <div class="detail-user-row">
-              <span class="detail-username">{{ data.username }}</span>
+              <span class="detail-username">{{ data.realName || data.username }}</span>
               <span v-if="data.userTitle" class="detail-usertitle">{{ data.userTitle }}</span>
             </div>
             <div class="detail-time">
@@ -117,7 +117,7 @@
                 </div>
                 <div class="cbody">
                   <div class="cmeta">
-                    <span class="cuser">{{ c.username }}</span>
+                    <span class="cuser">{{ c.realName || c.username }}</span>
                     <span v-if="c.title" class="ctitle">{{ c.title }}</span>
                   </div>
                   <div class="ctext">{{ c.content }}</div>
@@ -141,11 +141,11 @@
                       </div>
                       <div class="cbody">
                         <div class="cmeta">
-                          <span class="cuser">{{ topReply(c).username }}</span>
+                          <span class="cuser">{{ topReply(c).realName || topReply(c).username }}</span>
                           <span v-if="topReply(c).title" class="ctitle">{{ topReply(c).title }}</span>
                         </div>
                         <div class="ctext">
-                          <span class="reply-to">回复 <em>@{{ c.username }}</em>：</span>
+                          <span class="reply-to">回复 <em>@{{ c.realName || c.username }}</em>：</span>
                           {{ topReply(c).content }}
                         </div>
                         <div class="cbar">
@@ -166,11 +166,11 @@
                         </div>
                         <div class="cbody">
                           <div class="cmeta">
-                            <span class="cuser">{{ r.username }}</span>
+                            <span class="cuser">{{ r.realName || r.username }}</span>
                             <span v-if="r.title" class="ctitle">{{ r.title }}</span>
                           </div>
                           <div class="ctext">
-                            <span class="reply-to">回复 <em>@{{ c.username }}</em>：</span>
+                            <span class="reply-to">回复 <em>@{{ c.realName || c.username }}</em>：</span>
                             {{ r.content }}
                           </div>
                           <div class="cbar">
@@ -205,7 +205,7 @@
 
           <div class="cinput-area">
             <div v-if="detailReplying" class="cinput-hint">
-              回复 <strong>{{ detailReplying.username }}</strong>
+              回复 <strong>{{ (detailReplying.realName || detailReplying.username) }}</strong>
               <a class="cancel-reply" @click="cancelDetailReply">取消</a>
             </div>
             <div class="cinput-row">
@@ -213,7 +213,7 @@
                   v-model="detailCommentInput"
                   type="textarea"
                   :rows="2"
-                  :placeholder="detailReplying ? `回复 ${detailReplying.username}...` : '写下你的评论...'"
+                  :placeholder="detailReplying ? `回复 ${(detailReplying.realName || detailReplying.username)}...` : '写下你的评论...'"
                   maxlength="1000"
                   show-word-limit
                   resize="none"
@@ -244,7 +244,7 @@
         </div>
         <div class="up-info">
           <div class="up-name">
-            {{ userProfileData.username }}
+            {{ userProfileData.realName || userProfileData.username }}
             <span class="up-level">Lv.{{ userProfileData.level }}</span>
           </div>
 
@@ -476,7 +476,7 @@ const startDetailReply = (comment) => {
     cancelDetailReply();
     return;
   }
-  detailReplying.value = { id: comment.id, username: comment.username };
+  detailReplying.value = { id: comment.id, username: comment.username, realName: comment.realName };
   loadDetailReplies(comment);
   nextTick(() => {
     document.querySelector(".cinput textarea")?.focus();

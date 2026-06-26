@@ -638,9 +638,11 @@ public class UserObservationController {
                             cMap.put("content", bestComment.getContent());
 
                             List<Map<String, Object>> uRows = jdbcTemplate.queryForList(
-                                    "SELECT username FROM app_user WHERE id = ?", bestComment.getUserId());
+                                    "SELECT username, real_name FROM app_user WHERE id = ?", bestComment.getUserId());
                             String cUsername = uRows.isEmpty() ? "未知用户" : (String) uRows.get(0).get("username");
+                            String cRealName = uRows.isEmpty() ? "" : (String) uRows.get(0).get("real_name");
                             cMap.put("username", cUsername);
+                            cMap.put("realName", cRealName);
 
                             hotCommentMap.put(oid, cMap);
                         }
@@ -689,6 +691,7 @@ public class UserObservationController {
                 Map<String, Object> uInfo = userInfoMap.getOrDefault(obs.getUserId(), new LinkedHashMap<>());
                 item.put("userId", obs.getUserId());
                 item.put("username", uInfo.getOrDefault("username", "未知用户"));
+                item.put("realName", uInfo.getOrDefault("real_name", ""));
                 item.put("avatarUrl", uInfo.getOrDefault("avatar_url", ""));
                 item.put("avatarFrame", uInfo.getOrDefault("avatar_frame", "default"));
                 item.put("userTitle", userTitle(uInfo, userBadgeMap.getOrDefault(obs.getUserId(), "")));
@@ -834,7 +837,7 @@ public class UserObservationController {
         try {
             // 1. 查基础信息 (app_user 表)
             List<Map<String, Object>> users = jdbcTemplate.queryForList(
-                    "SELECT username, avatar_url, avatar_frame, user_title FROM app_user WHERE id = ?", userId);
+                    "SELECT username, real_name, avatar_url, avatar_frame, user_title FROM app_user WHERE id = ?", userId);
 
             if (users.isEmpty()) {
                 result.put("success", false);
@@ -878,6 +881,7 @@ public class UserObservationController {
             // 5. 组装数据返回
             Map<String, Object> data = new HashMap<>();
             data.put("username", user.get("username"));
+            data.put("realName", user.get("real_name"));
             data.put("avatarUrl", user.get("avatar_url"));
             data.put("avatarFrame", user.get("avatar_frame"));
             data.put("userTitle", user.get("user_title"));
@@ -1006,6 +1010,7 @@ public class UserObservationController {
                 Map<String, Object> uInfo = userInfoMap.getOrDefault(obs.getUserId(), new LinkedHashMap<>());
                 item.put("userId", obs.getUserId());
                 item.put("username", uInfo.getOrDefault("username", "未知用户"));
+                item.put("realName", uInfo.getOrDefault("real_name", ""));
                 item.put("avatarUrl", uInfo.getOrDefault("avatar_url", ""));
                 item.put("userTitle", userTitle(uInfo, userBadgeMap.getOrDefault(obs.getUserId(), "")));
 
@@ -1082,7 +1087,7 @@ public class UserObservationController {
         if (userIds.isEmpty()) return map;
         String inClause = userIds.stream().map(String::valueOf).collect(Collectors.joining(","));
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT id, username, avatar_url, avatar_frame, user_title FROM app_user WHERE id IN (" + inClause + ")");
+                "SELECT id, username, real_name, avatar_url, avatar_frame, user_title FROM app_user WHERE id IN (" + inClause + ")");
         for (Map<String, Object> row : rows) {
             map.put(((Number) row.get("id")).longValue(), row);
         }

@@ -159,7 +159,7 @@
                     <el-icon><User /></el-icon>
                   </el-avatar>
                 </div>
-                <span class="username">{{ authStore.username }}</span>
+                <span class="username">{{ authStore.displayName }}</span>
                 <el-icon class="arrow-icon"><ArrowDown /></el-icon>
               </div>
 
@@ -180,7 +180,7 @@
 
                     <div class="popover-body">
                       <div class="popover-user-info">
-                        <div class="pop-username">{{ authStore.username }}</div>
+                        <div class="pop-username">{{ authStore.displayName }}</div>
                         <div class="pop-role">
                           <el-tag size="small" class="custom-tag">{{ isAdmin ? '系统管理员' : '深海探索者' }}</el-tag>
                         </div>

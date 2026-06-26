@@ -43,7 +43,7 @@ CREATE TABLE app_user_role (
 
 -- 4.媒体资源表
 CREATE TABLE media_asset (
-                             id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+                             id BIGINT UNSIGNED PRIMARY KEY,
                              provider VARCHAR(32) NOT NULL DEFAULT 'qiniu' COMMENT 'qiniu/local/minio',
                              bucket VARCHAR(128),
                              object_key VARCHAR(500) NOT NULL,
@@ -57,7 +57,7 @@ CREATE TABLE media_asset (
 
 -- 5.海洋物种百科表
 CREATE TABLE marine_species (
-                                id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+                                id BIGINT UNSIGNED PRIMARY KEY,
                                 chinese_name VARCHAR(128) NOT NULL,
                                 scientific_name VARCHAR(191) NOT NULL UNIQUE,
                                 alias_names VARCHAR(500),
@@ -91,7 +91,7 @@ CREATE TABLE marine_species (
 
 -- 6.海洋生态系统表
 CREATE TABLE marine_ecosystem (
-                                  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+                                  id BIGINT UNSIGNED PRIMARY KEY,
                                   name VARCHAR(128) NOT NULL,
                                   description TEXT,
                                   typical_species VARCHAR(500),
@@ -211,7 +211,7 @@ CREATE TABLE point_transaction (
 
 -- 15.AI 对话历史
 CREATE TABLE conversation_message (
-                                      id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+                                      id BIGINT UNSIGNED PRIMARY KEY,
                                       user_id BIGINT UNSIGNED,
                                       session_id VARCHAR(64) NOT NULL,
                                       role VARCHAR(32) NOT NULL COMMENT 'user/assistant/system',
@@ -334,7 +334,7 @@ CREATE TABLE point_exchange_order (
 
 -- 24.用户收藏表
 CREATE TABLE user_bookmark (
-                               id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+                               id BIGINT UNSIGNED PRIMARY KEY,
                                user_id BIGINT UNSIGNED NOT NULL,
                                target_type VARCHAR(64) NOT NULL COMMENT 'species/ecosystem/kb_document/quiz_question',
                                target_id BIGINT UNSIGNED NOT NULL,
@@ -402,7 +402,7 @@ CREATE TABLE kg_relation (
 
 -- 29.用户观察分享表
 CREATE TABLE user_observation (
-                                  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+                                  id BIGINT UNSIGNED PRIMARY KEY,
                                   user_id BIGINT UNSIGNED NOT NULL,
                                   species_id BIGINT UNSIGNED,
                                   title VARCHAR(128),
@@ -425,7 +425,7 @@ CREATE TABLE user_observation (
 
 -- 30.评论
 CREATE TABLE content_comment (
-                                 id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+                                 id BIGINT UNSIGNED PRIMARY KEY,
                                  user_id BIGINT UNSIGNED NOT NULL,
                                  target_type VARCHAR(64) NOT NULL COMMENT 'species/ecosystem/user_observation/kb_document',
                                  target_id BIGINT UNSIGNED NOT NULL,
@@ -439,7 +439,7 @@ CREATE TABLE content_comment (
 
 -- 31.点赞
 CREATE TABLE content_like (
-                              id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+                              id BIGINT UNSIGNED PRIMARY KEY,
                               user_id BIGINT UNSIGNED NOT NULL,
                               target_type VARCHAR(64) NOT NULL COMMENT 'species/ecosystem/user_observation/comment',
                               target_id BIGINT UNSIGNED NOT NULL,
@@ -476,7 +476,7 @@ CREATE TABLE species_browse_record (
 
 -- 34.竞技模式答题记录
 CREATE TABLE IF NOT EXISTS competition_record (
-                                                  id              BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+                                                  id              BIGINT UNSIGNED PRIMARY KEY,
                                                   user_id         BIGINT UNSIGNED NOT NULL COMMENT '用户ID',
                                                   accuracy        DECIMAL(5,2)    NOT NULL COMMENT '正确率百分比',
                                                   total_questions INT             NOT NULL DEFAULT 10 COMMENT '总题数',
@@ -495,7 +495,7 @@ CREATE TABLE IF NOT EXISTS competition_record (
 
 -- 35.用户消息通知表
 CREATE TABLE system_notification (
-                                     id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+                                     id BIGINT UNSIGNED PRIMARY KEY,
                                      receiver_id BIGINT UNSIGNED NOT NULL COMMENT '接收通知的用户ID',
                                      sender_id BIGINT UNSIGNED NOT NULL COMMENT '触发通知的用户ID',
                                      type VARCHAR(32) NOT NULL COMMENT '通知类型: like_post, like_comment, reply_post, reply_comment',

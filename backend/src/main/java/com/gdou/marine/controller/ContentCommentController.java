@@ -98,6 +98,7 @@ public class ContentCommentController {
                 // 用户信息
                 Map<String, Object> userInfo = userInfoMap.getOrDefault(c.getUserId(), new LinkedHashMap<>());
                 item.put("username", userInfo.getOrDefault("username", "未知用户"));
+                item.put("realName", userInfo.getOrDefault("real_name", ""));
                 item.put("avatarUrl", userInfo.getOrDefault("avatar_url", ""));
                 item.put("avatarFrame", userInfo.getOrDefault("avatar_frame", "default"));
                 item.put("title", commentUserTitle(userInfo, userBadgeMap.getOrDefault(c.getUserId(), "")));
@@ -187,6 +188,7 @@ public class ContentCommentController {
 
                 Map<String, Object> userInfo = userInfoMap.getOrDefault(r.getUserId(), new LinkedHashMap<>());
                 item.put("username", userInfo.getOrDefault("username", "未知用户"));
+                item.put("realName", userInfo.getOrDefault("real_name", ""));
                 item.put("avatarUrl", userInfo.getOrDefault("avatar_url", ""));
                 item.put("avatarFrame", userInfo.getOrDefault("avatar_frame", "default"));
                 item.put("title", commentUserTitle(userInfo, userBadgeMap.getOrDefault(r.getUserId(), "")));
@@ -350,7 +352,7 @@ public class ContentCommentController {
         if (userIds.isEmpty()) return map;
         String inClause = userIds.stream().map(String::valueOf).collect(Collectors.joining(","));
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT id, username, avatar_url, avatar_frame, user_title FROM app_user WHERE id IN (" + inClause + ")");
+                "SELECT id, username, real_name, avatar_url, avatar_frame, user_title FROM app_user WHERE id IN (" + inClause + ")");
         for (Map<String, Object> row : rows) {
             map.put(((Number) row.get("id")).longValue(), row);
         }

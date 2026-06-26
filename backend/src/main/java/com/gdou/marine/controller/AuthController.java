@@ -77,6 +77,7 @@ public class AuthController {
         response.put("message", "登录成功");
         response.put("userId", user.getId());
         response.put("username", user.getUsername());
+        response.put("realName", user.getRealName() != null ? user.getRealName() : "");
         response.put("token", token);
         response.put("roles", roles);
 

@@ -52,7 +52,7 @@
               <el-avatar :size="32" :src="userAvatar">
                 <el-icon><User /></el-icon>
               </el-avatar>
-              <span class="username-text">{{ authStore.username }}</span>
+              <span class="username-text">{{ authStore.displayName }}</span>
               <el-icon class="el-icon--right"><ArrowDown /></el-icon>
             </div>
             <template #dropdown>
