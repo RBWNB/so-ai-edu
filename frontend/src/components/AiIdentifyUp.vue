@@ -1,86 +1,117 @@
 <template>
-  <el-card class="identify-card" shadow="hover">
-    <template #header>
-      <div class="header-row">
-        <span class="title">海洋生物图像识别</span>
-        <el-button type="primary" :loading="loading" :disabled="!file" @click="handleIdentify">
-          开始识别
-        </el-button>
+  <div class="scanner-container">
+    <div class="scanner-viewport" :class="{ 'is-analyzing': loading, 'has-image': previewUrl }">
+
+      <div class="hud-corner top-left"></div>
+      <div class="hud-corner top-right"></div>
+      <div class="hud-corner bottom-left"></div>
+      <div class="hud-corner bottom-right"></div>
+
+      <el-upload
+          v-if="!previewUrl"
+          class="scanner-upload"
+          drag
+          action="#"
+          :auto-upload="false"
+          :show-file-list="false"
+          :on-change="handleFileChange"
+          :on-remove="handleRemove"
+          accept="image/*"
+      >
+        <div class="upload-content">
+          <div class="upload-icon-pulse">
+            <el-icon><UploadFilled /></el-icon>
+          </div>
+          <div class="upload-title">投放图像样本</div>
+          <div class="upload-sub">点击或拖拽至此区域 (Max: 10MB)</div>
+        </div>
+      </el-upload>
+
+      <div v-else class="viewport-image-wrap">
+        <img :src="previewUrl" alt="探测样本" class="viewport-img" />
+
+        <button v-if="!loading && !result" class="reselect-btn" @click="handleRemove">
+          <el-icon><Close /></el-icon> 重新选择
+        </button>
+
+        <template v-if="loading">
+          <div class="laser-beam"></div>
+          <div class="scan-grid"></div>
+          <div class="analysis-status">
+            <div class="status-icon"><el-icon class="is-loading"><Loading /></el-icon></div>
+            <div class="status-text">
+              <span class="glitch-text" data-text="正在提取生物特征...">正在提取生物特征...</span>
+              <span class="status-sub">匹配海洋学堂基因库</span>
+            </div>
+          </div>
+        </template>
       </div>
-    </template>
-
-    <el-upload
-      class="upload"
-      drag
-      action="#"
-      :auto-upload="false"
-      :show-file-list="false"
-      :on-change="handleFileChange"
-      :on-remove="handleRemove"
-      accept="image/*"
-    >
-      <el-icon class="upload-icon"><UploadFilled /></el-icon>
-      <div class="el-upload__text">将图片拖到此处，或 <em>点击上传</em></div>
-      <template #tip>
-        <div class="el-upload__tip">支持常见图片格式，建议小于 10MB</div>
-      </template>
-    </el-upload>
-
-    <div v-if="previewUrl" class="preview-wrap">
-      <img :src="previewUrl" alt="预览图" class="preview-img" />
     </div>
 
-    <el-empty v-if="!result && !loading" description="上传图片后可进行AI识别" />
+    <div class="scanner-console" v-if="previewUrl && !result && !loading">
+      <button class="ignition-btn" @click="handleIdentify">
+        <el-icon class="ignition-icon"><Aim /></el-icon>
+        启动智能分析
+      </button>
+    </div>
 
-    <el-skeleton v-if="loading" :rows="4" animated style="margin-top: 14px" />
+    <Transition name="slide-up">
+      <div v-if="result && !loading" class="report-card">
+        <div class="report-header">
+          <div class="report-title-area">
+            <div class="report-tag">
+              <el-icon><DataLine /></el-icon> 鉴定报告
+            </div>
+            <h2 class="species-title">{{ result.speciesName || "未知物种" }}</h2>
+            <div class="species-latin" v-if="result.scientificName">{{ result.scientificName }}</div>
+          </div>
 
-    <el-card v-if="result && !loading" class="result-card" shadow="never">
-      <div class="result-head">
-        <div>
-          <div class="species-name">{{ result.speciesName || "未知物种" }}</div>
-          <div class="scientific-name" v-if="result.scientificName">{{ result.scientificName }}</div>
+          <div class="confidence-badge" :class="confidenceTagType(result.confidence)">
+            <svg class="ring-chart" viewBox="0 0 36 36">
+              <path class="ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              <path class="ring-fill" :stroke-dasharray="(result.confidence > 1 ? result.confidence : result.confidence * 100) + ', 100'" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+            </svg>
+            <div class="badge-content">
+              <span class="badge-num">{{ confidenceText(result.confidence) }}</span>
+              <span class="badge-label">置信度</span>
+            </div>
+          </div>
         </div>
-        <el-tag :type="confidenceTagType(result.confidence)">
-          置信度：{{ confidenceText(result.confidence) }}
-        </el-tag>
-      </div>
 
-      <div class="result-content">
-        <div class="result-desc">{{ result.summary || "暂无描述" }}</div>
-      </div>
-
-      <!-- 物种匹配结果 -->
-      <div v-if="matchedSpecies !== null" class="match-section">
-        <div v-if="matchedSpecies" class="match-found">
-          <el-tag type="success" effect="plain" class="match-tag">该物种已收录</el-tag>
-          <el-button
-            type="success"
-            size="small"
-            @click="goToDetail(matchedSpecies.id)"
-          >
-            🔍 查看该物种详情
-          </el-button>
-          <el-button type="warning" size="small" @click="goToPublish">
-            📝 发布到观察帖子
-          </el-button>
+        <div class="report-summary">
+          <p>{{ result.summary || "特征数据不足，无法生成详细描述。" }}</p>
         </div>
-        <div v-else class="match-not-found">
-          <el-tag type="info" effect="plain" class="match-tag">该物种暂未收录</el-tag>
-          <el-button type="warning" size="small" @click="goToPublish">
-            📝 发布到观察帖子
-          </el-button>
+
+        <div class="report-actions">
+          <div v-if="matchedSpecies !== null" class="action-panel">
+            <div v-if="matchedSpecies" class="match-status success">
+              <el-icon class="status-dot"><Check /></el-icon> 基因库匹配成功
+            </div>
+            <div v-else class="match-status warning">
+              <el-icon class="status-dot"><WarningFilled /></el-icon> 未收录此物种
+            </div>
+
+            <div class="action-btns">
+              <button v-if="matchedSpecies" class="btn-hologram primary" @click="goToDetail(matchedSpecies.id)">
+                <el-icon><Reading /></el-icon> 查阅图鉴
+              </button>
+              <button class="btn-hologram secondary" @click="goToPublish">
+                <el-icon><EditPen /></el-icon> 记录观察
+              </button>
+              <button class="btn-hologram outline" @click="handleRemove">
+                重新识别
+              </button>
+            </div>
+          </div>
+
+          <div v-else-if="lookingUp" class="action-panel loading">
+            <el-icon class="is-loading"><Loading /></el-icon> 正在与知识图谱进行基因核对...
+          </div>
         </div>
       </div>
-      <div v-else-if="lookingUp" class="match-section">
-        <el-tag type="info" effect="plain" class="match-tag lookup-tag">
-          <el-icon class="loading-icon"><Loading /></el-icon>
-          正在查询物种库...
-        </el-tag>
-      </div>
-    </el-card>
-
-    <!-- 物种详情弹窗 -->
-    <el-dialog
+    </Transition>
+  </div>
+  <el-dialog
       v-model="detailVisible"
       title="物种详情"
       width="720px"
@@ -88,75 +119,71 @@
       append-to-body
       class="ai-detail-dialog"
       :close-on-click-modal="true"
-    >
-      <div v-loading="detailLoading" class="detail-content">
-        <template v-if="detailData">
-          <!-- 头图区 -->
-          <div class="detail-hero">
-            <div class="hero-image-wrap">
-              <el-image
+  >
+    <div v-loading="detailLoading" class="detail-content">
+      <template v-if="detailData">
+        <div class="detail-hero">
+          <div class="hero-image-wrap">
+            <el-image
                 v-if="detailData.imageUrl"
                 :src="getImageUrl(detailData.imageUrl)"
                 fit="cover"
                 class="hero-image"
-              >
-                <template #error><div class="hero-placeholder"><el-icon :size="60"><Picture /></el-icon></div></template>
-              </el-image>
-              <div v-else class="hero-placeholder hero-full"><el-icon :size="60"><Picture /></el-icon></div>
-              <div class="hero-gradient"></div>
-            </div>
-            <div class="hero-info">
-              <h2 class="hero-name">{{ detailData.chineseName || '未命名物种' }}</h2>
-              <p class="hero-latin">{{ detailData.scientificName || '' }}</p>
-              <div class="hero-tags">
-                <el-tag v-if="detailData.conservationStatus" :type="conservationTagType(detailData.conservationStatus)" effect="dark" round size="small">
-                  {{ detailData.conservationStatus }}
-                </el-tag>
-                <el-tag v-if="detailData.phylum" type="info" effect="plain" round size="small">{{ detailData.phylum }}</el-tag>
-                <el-tag v-if="detailData.habitat" type="" effect="plain" round size="small">{{ detailData.habitat }}</el-tag>
-              </div>
+            >
+              <template #error><div class="hero-placeholder"><el-icon :size="60"><Picture /></el-icon></div></template>
+            </el-image>
+            <div v-else class="hero-placeholder hero-full"><el-icon :size="60"><Picture /></el-icon></div>
+            <div class="hero-gradient"></div>
+          </div>
+          <div class="hero-info">
+            <h2 class="hero-name">{{ detailData.chineseName || '未命名物种' }}</h2>
+            <p class="hero-latin">{{ detailData.scientificName || '' }}</p>
+            <div class="hero-tags">
+              <el-tag v-if="detailData.conservationStatus" :type="conservationTagType(detailData.conservationStatus)" effect="dark" round size="small">
+                {{ detailData.conservationStatus }}
+              </el-tag>
+              <el-tag v-if="detailData.phylum" type="info" effect="plain" round size="small">{{ detailData.phylum }}</el-tag>
+              <el-tag v-if="detailData.habitat" type="" effect="plain" round size="small">{{ detailData.habitat }}</el-tag>
             </div>
           </div>
+        </div>
 
-          <!-- 信息面板 -->
-          <div class="detail-info">
-            <el-descriptions :column="2" border size="small" class="desc-table">
-              <el-descriptions-item label="界">{{ detailData.kingdom || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="门">{{ detailData.phylum || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="纲">{{ detailData.className || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="目">{{ detailData.orderName || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="科">{{ detailData.familyName || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="属">{{ detailData.genusName || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="分布区域" :span="2">{{ detailData.distributionArea || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="数据来源">{{ detailData.dataSource || '-' }}</el-descriptions-item>
-            </el-descriptions>
+        <div class="detail-info">
+          <el-descriptions :column="2" border size="small" class="desc-table">
+            <el-descriptions-item label="界">{{ detailData.kingdom || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="门">{{ detailData.phylum || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="纲">{{ detailData.className || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="目">{{ detailData.orderName || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="科">{{ detailData.familyName || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="属">{{ detailData.genusName || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="分布区域" :span="2">{{ detailData.distributionArea || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="数据来源">{{ detailData.dataSource || '-' }}</el-descriptions-item>
+          </el-descriptions>
+        </div>
+
+        <div class="detail-sections" v-if="detailData.morphologyDesc || detailData.habitDesc">
+          <div v-if="detailData.morphologyDesc" class="detail-section">
+            <h4 class="section-title"><el-icon><EditPen /></el-icon>形态特征</h4>
+            <p class="section-body">{{ detailData.morphologyDesc }}</p>
           </div>
-
-          <!-- 特征描述 -->
-          <div class="detail-sections" v-if="detailData.morphologyDesc || detailData.habitDesc">
-            <div v-if="detailData.morphologyDesc" class="detail-section">
-              <h4 class="section-title"><el-icon><EditPen /></el-icon>形态特征</h4>
-              <p class="section-body">{{ detailData.morphologyDesc }}</p>
-            </div>
-            <div v-if="detailData.habitDesc" class="detail-section">
-              <h4 class="section-title"><el-icon><Sunny /></el-icon>生活习性</h4>
-              <p class="section-body">{{ detailData.habitDesc }}</p>
-            </div>
+          <div v-if="detailData.habitDesc" class="detail-section">
+            <h4 class="section-title"><el-icon><Sunny /></el-icon>生活习性</h4>
+            <p class="section-body">{{ detailData.habitDesc }}</p>
           </div>
-        </template>
-      </div>
-
-      <template #footer>
-        <el-button @click="detailVisible = false">关闭</el-button>
+        </div>
       </template>
-    </el-dialog>
-  </el-card>
+    </div>
+
+    <template #footer>
+      <el-button class="glass-btn-close" @click="detailVisible = false">关闭图鉴</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup>
 import { ref } from "vue";
 import { ElMessage } from "element-plus";
-import { Loading, UploadFilled, Picture, EditPen, Sunny } from "@element-plus/icons-vue";
+import { Loading, UploadFilled, Picture, EditPen, Sunny, View, Check, Aim, DataLine, Close, WarningFilled, Reading } from "@element-plus/icons-vue";
 import { useRouter } from "vue-router";
 import { identifySpecies, identifySpeciesByImage } from "@/api/ai";
 import { suggestSpecies, getSpeciesById } from "@/api/species";
@@ -381,373 +408,431 @@ const goToPublish = async () => {
 </script>
 
 <style scoped>
-.identify-card {
-  border-radius: 12px;
+ .scanner-container {
+   display: flex;
+   flex-direction: column;
+   gap: 24px;
+ }
+
+/* ════════ 1. 全息探测视口 (HUD Viewport) ════════ */
+.scanner-viewport {
+  position: relative;
+  width: 100%;
+  min-height: 300px;
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  padding: 16px;
+  box-shadow: 0 12px 32px rgba(0, 50, 150, 0.05), inset 0 0 0 1px rgba(255, 255, 255, 0.8);
+  transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+  overflow: hidden;
 }
 
-.header-row {
+.scanner-viewport.has-image {
+  background: #f7f9fc; /* 有图片时背景变深一点点凸显图片 */
+  padding: 8px;
+}
+
+.scanner-viewport.is-analyzing {
+  box-shadow: 0 12px 40px rgba(0, 210, 255, 0.15), inset 0 0 0 2px rgba(0, 210, 255, 0.4);
+}
+
+/* 科技感四角瞄准框 */
+.hud-corner {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border: 3px solid #c9cdd4;
+  border-radius: 4px;
+  z-index: 10;
+  transition: all 0.5s ease;
+  pointer-events: none;
+}
+.top-left { top: 16px; left: 16px; border-right: none; border-bottom: none; }
+.top-right { top: 16px; right: 16px; border-left: none; border-bottom: none; }
+.bottom-left { bottom: 16px; left: 16px; border-right: none; border-top: none; }
+.bottom-right { bottom: 16px; right: 16px; border-left: none; border-top: none; }
+
+.scanner-viewport.is-analyzing .hud-corner {
+  border-color: #00d2ff;
+  box-shadow: 0 0 12px rgba(0, 210, 255, 0.6);
+  width: 40px; height: 40px; /* 扫描时角框变大瞄准 */
+}
+
+ /* 有图片时，让四个角贴近边缘 */
+ .scanner-viewport.has-image .top-left { top: 8px; left: 8px; }
+ .scanner-viewport.has-image .top-right { top: 8px; right: 8px; }
+ .scanner-viewport.has-image .bottom-left { bottom: 8px; left: 8px; }
+ .scanner-viewport.has-image .bottom-right { bottom: 8px; right: 8px; }
+
+/* 自定义拖拽上传区 */
+.scanner-upload { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+:deep(.el-upload-dragger) {
+  background: transparent !important;
+  border: none !important;
+  height: 100%;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.title {
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.upload {
-  margin-bottom: 14px;
-}
-
-.upload-icon {
-  font-size: 34px;
-  color: #409eff;
-}
-
-.preview-wrap {
-  margin: 10px 0 16px;
-  display: flex;
+  flex-direction: column;
   justify-content: center;
 }
+.upload-content {
+  text-align: center;
+  padding: 40px;
+}
+.upload-icon-pulse {
+  width: 80px; height: 80px;
+  margin: 0 auto 20px;
+  background: linear-gradient(135deg, rgba(22, 93, 255, 0.1), rgba(0, 210, 255, 0.2));
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 40px;
+  color: #165dff;
+  box-shadow: 0 0 0 0 rgba(22, 93, 255, 0.2);
+  animation: pulseIcon 2s infinite;
+  transition: transform 0.3s;
+}
+:deep(.el-upload-dragger:hover) .upload-icon-pulse { transform: scale(1.1); }
 
-.preview-img {
+@keyframes pulseIcon {
+  0% { box-shadow: 0 0 0 0 rgba(22, 93, 255, 0.4); }
+  70% { box-shadow: 0 0 0 20px rgba(22, 93, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(22, 93, 255, 0); }
+}
+
+.upload-title { font-size: 20px; font-weight: 800; color: #1d2129; margin-bottom: 8px; }
+.upload-sub { font-size: 14px; color: #86909c; }
+
+/* 图像预览区 */
+.viewport-image-wrap {
+  position: relative;
   width: 100%;
-  max-height: 260px;
-  object-fit: cover;
-  border-radius: 10px;
-  border: 1px solid #e5e7eb;
+  height: 400px;
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.viewport-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 12px;
+  z-index: 1;
 }
 
-.result-card {
-  margin-top: 6px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
-  border: 1px solid #e7efff;
+.reselect-btn {
+  position: absolute;
+  top: 16px; right: 16px;
+  z-index: 20;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  border: none;
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex; align-items: center; gap: 6px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.reselect-btn:hover { background: rgba(245, 63, 63, 0.8); }
+
+/* ── 超酷的激光扫描特效 ── */
+.scan-grid {
+  position: absolute; inset: 0; z-index: 2;
+  background-image:
+      linear-gradient(rgba(0, 210, 255, 0.1) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 210, 255, 0.1) 1px, transparent 1px);
+  background-size: 30px 30px;
+  opacity: 0;
+  animation: gridFade 0.5s forwards;
+}
+.laser-beam {
+  position: absolute; top: 0; left: 0; right: 0; height: 6px; z-index: 3;
+  background: #00d2ff;
+  box-shadow: 0 0 20px 4px #00d2ff, 0 100px 50px -50px rgba(0, 210, 255, 0.2) inset;
+  animation: laserScan 2.5s ease-in-out infinite alternate;
 }
 
-.result-head {
+.analysis-status {
+  position: absolute; z-index: 5;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  background: rgba(10, 20, 42, 0.85);
+  backdrop-filter: blur(12px);
+  padding: 20px 32px;
+  border-radius: 24px;
+  border: 1px solid rgba(0, 210, 255, 0.4);
+  display: flex; align-items: center; gap: 16px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4), 0 0 0 4px rgba(0, 210, 255, 0.1);
+}
+.status-icon { font-size: 28px; color: #00d2ff; }
+.status-text { display: flex; flex-direction: column; }
+.glitch-text { font-size: 16px; font-weight: 700; color: #fff; letter-spacing: 1px; }
+.status-sub { font-size: 12px; color: rgba(0, 210, 255, 0.7); margin-top: 4px; }
+
+@keyframes laserScan {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(394px); }
+}
+@keyframes gridFade { to { opacity: 1; } }
+
+/* ════════ 2. 点火控制台 (启动按钮) ════════ */
+.scanner-console {
+  display: flex; justify-content: center;
+}
+.ignition-btn {
+  background: linear-gradient(135deg, #165dff, #00d2ff);
+  border: none; color: #fff;
+  font-size: 18px; font-weight: 800; letter-spacing: 2px;
+  padding: 18px 48px; border-radius: 40px;
+  display: flex; align-items: center; gap: 10px;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(22, 93, 255, 0.3), inset 0 2px 2px rgba(255,255,255,0.4);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.ignition-btn:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 16px 32px rgba(22, 93, 255, 0.4), inset 0 2px 2px rgba(255,255,255,0.4);
+}
+.ignition-icon { font-size: 24px; animation: spinIcon 6s linear infinite; }
+@keyframes spinIcon { 100% { transform: rotate(360deg); } }
+
+/* ════════ 3. 鉴定报告档案卡 (SSR 展示) ════════ */
+.report-card {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(24px);
+  border: 1px solid #fff;
+  border-radius: 24px;
+  padding: 32px;
+  box-shadow: 0 24px 48px rgba(0, 50, 150, 0.08);
+}
+
+.report-header {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
   align-items: flex-start;
-  margin-bottom: 12px;
+  margin-bottom: 24px;
 }
 
-.species-name {
-  font-size: 20px;
-  font-weight: 700;
-  color: #1f2937;
+.report-tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 700; color: #165dff;
+  background: rgba(22, 93, 255, 0.08);
+  padding: 6px 12px; border-radius: 8px; margin-bottom: 12px;
 }
 
-.scientific-name {
-  color: #6b7280;
-  margin-top: 3px;
+.species-title { font-size: 32px; font-weight: 900; color: #1d2129; margin: 0 0 4px; letter-spacing: 1px; }
+.species-latin { font-size: 16px; font-style: italic; color: #86909c; font-weight: 500; }
+
+/* 环形置信度徽章 */
+.confidence-badge {
+  position: relative; width: 80px; height: 80px; flex-shrink: 0;
+}
+.ring-chart { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring-bg { fill: none; stroke: rgba(0,0,0,0.05); stroke-width: 3; }
+.ring-fill { fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; transition: stroke-dasharray 1s ease-out; }
+
+.badge-content {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.badge-num { font-size: 18px; font-weight: 900; color: #1d2129; line-height: 1.1; }
+.badge-label { font-size: 11px; color: #86909c; font-weight: 600; }
+
+.confidence-badge.success { color: #00b42a; }
+.confidence-badge.warning { color: #ff7d00; }
+.confidence-badge.danger { color: #f53f3f; }
+
+.report-summary {
+  background: #f7f9fc;
+  border-left: 4px solid #165dff;
+  padding: 20px 24px;
+  border-radius: 0 16px 16px 0;
+  font-size: 16px; color: #4e5969; line-height: 1.8; font-weight: 500;
+  margin-bottom: 24px;
 }
 
-.result-content {
-  margin-top: 4px;
+/* 底部操作台 */
+.report-actions {
+  border-top: 1px dashed rgba(0,0,0,0.1);
+  padding-top: 24px;
 }
-
-.result-desc {
-  line-height: 1.8;
-  color: #374151;
-  font-size: 14px;
-  text-align: justify;
+.action-panel {
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;
 }
+.match-status { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.match-status.success { color: #00b42a; }
+.match-status.warning { color: #ff7d00; }
+.status-dot { font-size: 18px; }
 
-.match-section {
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px dashed #e5e7eb;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+.action-btns { display: flex; gap: 12px; }
+
+/* 胶囊幻彩按钮 */
+.btn-hologram {
+  border: none; padding: 10px 24px; border-radius: 20px; font-size: 14px; font-weight: 600;
+  display: flex; align-items: center; gap: 6px; cursor: pointer; transition: all 0.3s;
 }
+.btn-hologram.primary { background: linear-gradient(135deg, #165dff, #00d2ff); color: #fff; box-shadow: 0 4px 12px rgba(22, 93, 255, 0.3); }
+.btn-hologram.primary:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(22, 93, 255, 0.4); }
+.btn-hologram.secondary { background: rgba(22, 93, 255, 0.1); color: #165dff; }
+.btn-hologram.secondary:hover { background: rgba(22, 93, 255, 0.15); transform: translateY(-2px); }
+.btn-hologram.outline { background: transparent; border: 1px solid #c9cdd4; color: #4e5969; }
+.btn-hologram.outline:hover { background: #f2f3f5; color: #1d2129; }
 
-.match-found {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
+/* 过渡动画 */
+.slide-up-enter-active, .slide-up-leave-active { transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.slide-up-enter-from { opacity: 0; transform: translateY(30px); }
+.slide-up-leave-to { opacity: 0; transform: translateY(-30px); }
 
-.match-not-found {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.match-tag {
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.lookup-tag {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.loading-icon {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+/* 响应式 */
+@media (max-width: 768px) {
+  .scanner-viewport { min-height: 250px; }
+  .viewport-image-wrap { height: 300px; }
+  .report-header { flex-direction: column; gap: 16px; }
+  .action-panel { flex-direction: column; align-items: flex-start; }
+  .action-btns { width: 100%; flex-wrap: wrap; }
+  .btn-hologram { flex: 1; justify-content: center; }
 }
 </style>
 
-<!-- ═════════ 全局弹窗样式（dialog 被 Teleport 到 body 下） ═════════ -->
 <style>
 .ai-detail-dialog {
-  border-radius: 20px !important;
+  border-radius: 24px !important;
   overflow: hidden;
-  background: rgb(8, 22, 38) !important;
-  --el-dialog-bg-color: rgb(8, 22, 38) !important;
-  --el-bg-color: rgb(8, 22, 38) !important;
-  --el-bg-color-overlay: rgb(8, 22, 38) !important;
-  backdrop-filter: blur(28px);
-  border: 1px solid rgba(0, 180, 216, 0.3) !important;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6) !important;
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(30px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(150%) !important;
+  border: 1px solid rgba(255, 255, 255, 1) !important;
+  box-shadow: 0 24px 60px rgba(0, 50, 150, 0.15) !important;
 }
 
 .ai-detail-dialog .el-dialog__header {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 18px 24px 14px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  padding: 20px 24px;
   margin: 0;
-  background: rgb(8, 22, 38) !important;
+  background: transparent !important;
 }
 
 .ai-detail-dialog .el-dialog__title {
-  font-weight: 700;
+  font-weight: 800;
   font-size: 18px;
-  color: #ffffff !important;
+  color: #1d2129 !important;
 }
 
 .ai-detail-dialog .el-dialog__headerbtn .el-dialog__close {
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 16px;
+  color: #86909c;
+  font-size: 18px;
 }
 
 .ai-detail-dialog .el-dialog__headerbtn .el-dialog__close:hover {
-  color: #ffffff;
+  color: #165dff;
 }
 
 .ai-detail-dialog .el-dialog__body {
   padding: 0 !important;
-  background: rgb(8, 22, 38) !important;
+  background: transparent !important;
 }
 
 .ai-detail-dialog .el-dialog__footer {
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  padding: 14px 24px 18px;
-  background: rgb(8, 22, 38) !important;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  padding: 16px 24px;
+  background: transparent !important;
 }
 
 .ai-detail-dialog .detail-content {
   max-height: 70vh;
   overflow-y: auto;
   padding: 24px;
-  background: rgb(6, 18, 32) !important;
 }
 
-.ai-detail-dialog .detail-content::-webkit-scrollbar {
-  width: 5px;
-}
+.ai-detail-dialog .detail-content::-webkit-scrollbar { width: 6px; }
+.ai-detail-dialog .detail-content::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.15); border-radius: 10px; }
 
-.ai-detail-dialog .detail-content::-webkit-scrollbar-thumb {
-  background: rgba(0, 180, 216, 0.35);
-  border-radius: 4px;
-}
-
-.ai-detail-dialog .detail-hero {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 20px;
-}
+.ai-detail-dialog .detail-hero { display: flex; gap: 24px; margin-bottom: 24px; }
 
 .ai-detail-dialog .hero-image-wrap {
   width: 220px;
-  height: 150px;
-  border-radius: 14px;
+  height: 160px;
+  border-radius: 16px;
   overflow: hidden;
   flex-shrink: 0;
   position: relative;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.06);
 }
-
-.ai-detail-dialog .hero-image {
-  width: 100%;
-  height: 100%;
-}
+.ai-detail-dialog .hero-image { width: 100%; height: 100%; }
 
 .ai-detail-dialog .hero-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(255, 255, 255, 0.15);
-  background: linear-gradient(145deg, rgba(0, 50, 80, 0.4), rgba(0, 90, 130, 0.25));
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  color: #c9cdd4;
+  background: #f7f8fa;
 }
 
-.ai-detail-dialog .hero-placeholder.hero-full {
-  border-radius: 14px;
-}
+.ai-detail-dialog .hero-info { display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+.ai-detail-dialog .hero-name { font-size: 24px; font-weight: 800; margin: 0; color: #1d2129; }
+.ai-detail-dialog .hero-latin { font-size: 15px; font-style: italic; color: #86909c; margin: 0; }
+.ai-detail-dialog .hero-tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px;}
 
-.ai-detail-dialog .hero-gradient {
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
-  height: 40%;
-  background: linear-gradient(to top, rgba(0, 20, 40, 0.5), transparent);
-  pointer-events: none;
-}
-
-.ai-detail-dialog .hero-info {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 6px;
-}
-
-.ai-detail-dialog .hero-name {
-  font-size: 22px;
-  font-weight: 800;
-  margin: 0;
-  color: #f1f5f9;
-}
-
-.ai-detail-dialog .hero-latin {
-  font-size: 14px;
-  font-style: italic;
-  color: #48cae4;
-  margin: 0;
-}
-
-.ai-detail-dialog .hero-tags {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.ai-detail-dialog .detail-info {
-  margin-bottom: 18px;
-}
-
-.ai-detail-dialog .detail-sections {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
+.ai-detail-dialog .detail-sections { display: flex; flex-direction: column; gap: 16px; margin-top: 20px; }
 .ai-detail-dialog .detail-section {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 16px 18px;
-  transition: all 0.25s ease;
-}
-
-.ai-detail-dialog .detail-section:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(0, 180, 216, 0.3);
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 16px;
+  padding: 16px 20px;
+  box-shadow: 0 4px 12px rgba(0, 50, 150, 0.02);
 }
 
 .ai-detail-dialog .section-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #48cae4;
-  margin: 0 0 8px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  font-size: 15px; font-weight: 700; color: #165dff; margin: 0 0 10px; display: flex; align-items: center; gap: 6px;
 }
+.ai-detail-dialog .section-body { font-size: 14px; line-height: 1.8; color: #4e5969; margin: 0; white-space: pre-wrap; }
 
-.ai-detail-dialog .section-body {
-  font-size: 13.5px;
-  line-height: 1.75;
-  color: #e2e8f0;
-  margin: 0;
-  white-space: pre-wrap;
-}
-
-/* el-descriptions 深色覆盖 */
+/* el-descriptions 浅色玻璃覆盖 */
 .ai-detail-dialog .detail-info .el-descriptions {
-  --el-descriptions-table-border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  --el-fill-color-blank: transparent !important;
-  --el-border-color: rgba(255, 255, 255, 0.1) !important;
-  --el-text-color-primary: rgba(255, 255, 255, 0.9) !important;
-  --el-text-color-regular: rgba(255, 255, 255, 0.85) !important;
-  --el-bg-color: transparent !important;
-  --el-bg-color-overlay: transparent !important;
-  background: transparent !important;
-  border-radius: 12px;
+  --el-descriptions-table-border: 1px solid rgba(0, 0, 0, 0.04) !important;
+  background: rgba(255, 255, 255, 0.6) !important;
+  border-radius: 16px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.9) !important;
+  box-shadow: 0 4px 12px rgba(0, 50, 150, 0.02);
 }
-
-.ai-detail-dialog .detail-info .el-descriptions table {
-  background: transparent !important;
-  border-collapse: collapse;
-}
-
+.ai-detail-dialog .detail-info .el-descriptions table { background: transparent !important; }
 .ai-detail-dialog .detail-info .el-descriptions table th,
 .ai-detail-dialog .detail-info .el-descriptions table td {
   background: transparent !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
-  color: rgba(255, 255, 255, 0.88) !important;
-  transition: background 0.2s;
+  border-color: rgba(0, 0, 0, 0.04) !important;
 }
-
 .ai-detail-dialog .detail-info .el-descriptions__label {
-  background: rgba(0, 110, 170, 0.18) !important;
-  color: #48cae4 !important;
-  font-weight: 650 !important;
-  font-size: 13px !important;
+  background: rgba(22, 93, 255, 0.03) !important;
+  color: #1d2129 !important;
+  font-weight: 700 !important;
   width: 90px;
-  padding: 10px 14px !important;
 }
-
 .ai-detail-dialog .detail-info .el-descriptions__content {
-  background: rgba(255, 255, 255, 0.02) !important;
-  color: rgba(255, 255, 255, 0.92) !important;
-  font-size: 13.5px !important;
-  padding: 10px 16px !important;
+  color: #4e5969 !important;
+  font-weight: 500;
 }
 
-.ai-detail-dialog .detail-info .el-descriptions table tr:hover th,
-.ai-detail-dialog .detail-info .el-descriptions table tr:hover td {
-  background: rgba(0, 180, 216, 0.06) !important;
+/* 底部关闭按钮 */
+.glass-btn-close {
+  background: rgba(0, 0, 0, 0.04);
+  border: none;
+  color: #4e5969;
+  font-weight: 600;
+  border-radius: 10px;
+  padding: 10px 24px;
+}
+.glass-btn-close:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #1d2129;
 }
 
 /* 响应式 */
 @media (max-width: 768px) {
-  .ai-detail-dialog {
-    width: 94% !important;
-    margin-top: 3vh !important;
-  }
-
-  .ai-detail-dialog .detail-hero {
-    flex-direction: column;
-    gap: 14px;
-  }
-
-  .ai-detail-dialog .hero-image-wrap {
-    width: 100%;
-    height: 200px;
-  }
-
-  .ai-detail-dialog .detail-info .el-descriptions__label {
-    width: 70px !important;
-    padding: 8px 10px !important;
-    font-size: 12px !important;
-  }
-
-  .ai-detail-dialog .detail-info .el-descriptions__content {
-    padding: 8px 10px !important;
-    font-size: 12.5px !important;
-  }
+  .ai-detail-dialog { width: 94% !important; margin-top: 5vh !important; }
+  .ai-detail-dialog .detail-hero { flex-direction: column; gap: 16px; }
+  .ai-detail-dialog .hero-image-wrap { width: 100%; height: 200px; }
 }
 </style>

@@ -250,6 +250,42 @@ public class ContentCommentController {
             comment.setStatus((byte) 1);
 
             contentCommentMapper.insert(comment);
+            //发送评论/回复互动消息通知
+            try {
+                if ("user_observation".equals(targetType)) {
+                    if (comment.getParentId() == 0L) {
+                        // 1. 直评帖子：通知发帖主人 (type = reply_post)
+                        List<Map<String, Object>> obsRows = jdbcTemplate.queryForList(
+                                "SELECT user_id FROM user_observation WHERE id = ?", targetId);
+                        if (!obsRows.isEmpty()) {
+                            Long receiverId = ((Number) obsRows.get(0).get("user_id")).longValue();
+                            if (!receiverId.equals(userId)) {
+                                jdbcTemplate.update(
+                                        "INSERT INTO system_notification (receiver_id, sender_id, type, target_id, post_id, content) VALUES (?, ?, 'reply_post', ?, ?, ?)",
+                                        receiverId, userId, comment.getId(), targetId,
+                                        content.length() > 40 ? content.substring(0, 40) + "..." : content
+                                );
+                            }
+                        }
+                    } else {
+                        // 2. 楼中楼回复：通知前任评论主 (type = reply_comment)
+                        List<Map<String, Object>> pCommentRows = jdbcTemplate.queryForList(
+                                "SELECT user_id FROM content_comment WHERE id = ?", comment.getParentId());
+                        if (!pCommentRows.isEmpty()) {
+                            Long receiverId = ((Number) pCommentRows.get(0).get("user_id")).longValue();
+                            if (!receiverId.equals(userId)) {
+                                jdbcTemplate.update(
+                                        "INSERT INTO system_notification (receiver_id, sender_id, type, target_id, post_id, content) VALUES (?, ?, 'reply_comment', ?, ?, ?)",
+                                        receiverId, userId, comment.getId(), targetId,
+                                        content.length() > 40 ? content.substring(0, 40) + "..." : content
+                                );
+                            }
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                log.error("写入评论通知消息失败", ex);
+            }
 
             result.put("success", true);
             result.put("message", "评论成功");

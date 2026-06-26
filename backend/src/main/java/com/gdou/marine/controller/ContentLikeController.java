@@ -7,10 +7,12 @@ import com.gdou.marine.mapper.ContentLikeMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -27,6 +29,9 @@ public class ContentLikeController {
 
     @Autowired
     private ContentLikeMapper contentLikeMapper;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     /**
      * 切换点赞状态（已赞→取消，未赞→点赞）
@@ -75,6 +80,41 @@ public class ContentLikeController {
                 like.setTargetId(targetId);
                 contentLikeMapper.insert(like);
                 liked = true;
+
+                // 发送点赞互动消息通知
+                try {
+                    if ("user_observation".equals(targetType)) {
+                        List<Map<String, Object>> obsRows = jdbcTemplate.queryForList(
+                                "SELECT user_id FROM user_observation WHERE id = ?", targetId);
+                        if (!obsRows.isEmpty()) {
+                            Long receiverId = ((Number) obsRows.get(0).get("user_id")).longValue();
+                            // 自己给自己点赞不触发通知
+                            if (!receiverId.equals(userId)) {
+                                jdbcTemplate.update(
+                                        "INSERT INTO system_notification (receiver_id, sender_id, type, target_id, post_id, content) VALUES (?, ?, 'like_post', ?, ?, '')",
+                                        receiverId, userId, like.getId(), targetId
+                                );
+                            }
+                        }
+                    } else if ("comment".equals(targetType)) {
+                        List<Map<String, Object>> commentRows = jdbcTemplate.queryForList(
+                                "SELECT user_id, target_id, target_type FROM content_comment WHERE id = ?", targetId);
+                        if (!commentRows.isEmpty()) {
+                            Long receiverId = ((Number) commentRows.get(0).get("user_id")).longValue();
+                            Long postId = ((Number) commentRows.get(0).get("target_id")).longValue();
+                            String tType = (String) commentRows.get(0).get("target_type");
+                            // 仅当评论属于社区观察帖子，且不是自己给自己点赞时触发
+                            if (!receiverId.equals(userId) && "user_observation".equals(tType)) {
+                                jdbcTemplate.update(
+                                        "INSERT INTO system_notification (receiver_id, sender_id, type, target_id, post_id, content) VALUES (?, ?, 'like_comment', ?, ?, '')",
+                                        receiverId, userId, like.getId(), postId
+                                );
+                            }
+                        }
+                    }
+                } catch (Exception ex) {
+                    log.error("写入点赞通知消息失败", ex);
+                }
             }
 
             // 统计点赞数
