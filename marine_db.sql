@@ -481,6 +481,7 @@ CREATE TABLE IF NOT EXISTS competition_record (
                                                   accuracy        DECIMAL(5,2)    NOT NULL COMMENT '正确率百分比',
                                                   total_questions INT             NOT NULL DEFAULT 10 COMMENT '总题数',
                                                   correct_count   INT             NOT NULL DEFAULT 0  COMMENT '答对题数',
+                                                  score           INT             NOT NULL DEFAULT 0  COMMENT '本场积分（答对1题2分 + 全对额外20分）',
                                                   total_time_ms   BIGINT          NOT NULL DEFAULT 0  COMMENT '总耗时(毫秒)',
                                                   avg_time_ms     BIGINT          NOT NULL DEFAULT 0  COMMENT '平均每题耗时(毫秒)',
                                                   tier            VARCHAR(16)     NOT NULL DEFAULT '青铜' COMMENT '段位: 王者/钻石/黄金/白银/青铜',
