@@ -325,15 +325,27 @@ const goToPost = async (item) => {
       unreadCount.value = Math.max(0, unreadCount.value - 1);
     }
 
+    // 判断 postId 是否有效（不跳转）：雪花 ID 精度敏感，统一用字符串比较
+    // 后端广播 post_id=0，可能序列化为数字 0 或字符串 "0"，都需要拦截
+    const pidStr = String(item.postId ?? '');
+    const isInvalidPid = !pidStr || pidStr === '0' || pidStr === 'null' || pidStr === 'undefined';
 
-    if (item.type === 'broadcast' && (!item.postId || item.postId === 0)) {
+    // 纯广播 / 广播链接 且无有效跳转目标：仅关闭面板
+    const isBroadcastType = item.type === 'broadcast' || item.type === 'broadcast_link';
+    if (isBroadcastType && isInvalidPid) {
+      bellVisible.value = false;
+      return;
+    }
+
+    // 兜底：任何类型的通知，postId 无效都不跳转
+    if (isInvalidPid) {
+      bellVisible.value = false;
       return;
     }
 
     bellVisible.value = false;
-    // broadcast_link 或者 like/reply，只要有 postId，就跳转
-    // 用 String() 包裹防止雪花 ID 精度丢失
-    $router.push(`/obs-community/detail/${String(item.postId)}`);
+    // broadcast_link / like / reply，用 String() 包裹防止雪花 ID 精度丢失
+    $router.push(`/obs-community/detail/${pidStr}`);
   } catch (err) {
     ElMessage.error("操作失败，请重试");
   }

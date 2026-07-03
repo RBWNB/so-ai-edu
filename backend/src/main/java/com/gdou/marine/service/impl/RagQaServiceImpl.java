@@ -236,7 +236,6 @@ public class RagQaServiceImpl implements RagQaService {
                 .collect(Collectors.joining("\n---\n"));
 
         List<ChatMessage> messages = new ArrayList<>();
-        // 核心修改：强约束仅用知识库 + 固定回答格式
         messages.add(SystemMessage.from("""
             你是专业的海洋科学知识助手，必须严格遵守以下所有规则：
             1. 绝对禁止使用上下文以外的任何知识、常识、推断或脑补内容，所有回答必须完全来自下方【知识库上下文】。

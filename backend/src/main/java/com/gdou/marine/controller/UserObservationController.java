@@ -808,6 +808,7 @@ public class UserObservationController {
 
             item.put("userId", obs.getUserId());
             item.put("username", uInfo.getOrDefault("username", "未知用户"));
+            item.put("realName", uInfo.getOrDefault("real_name", ""));
             item.put("avatarUrl", uInfo.getOrDefault("avatar_url", ""));
             item.put("avatarFrame", uInfo.getOrDefault("avatar_frame", "default"));
             item.put("userTitle", userTitle(uInfo, badgeMap.getOrDefault(obs.getUserId(), "")));
