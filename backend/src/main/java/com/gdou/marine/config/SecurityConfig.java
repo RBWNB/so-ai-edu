@@ -87,6 +87,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/kb/**").hasAnyRole("ADMIN", "MANAGER")
                         .requestMatchers(HttpMethod.DELETE, "/kb/**").hasAnyRole("ADMIN", "MANAGER")
 
+                        // API documentation (Swagger UI / Knife4j)
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**", "/doc.html").permitAll()
+
                         // Public static resources (uploads, images, etc.)
                         .requestMatchers("/uploads/**").permitAll()
 
