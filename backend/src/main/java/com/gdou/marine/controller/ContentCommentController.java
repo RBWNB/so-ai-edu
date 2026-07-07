@@ -16,7 +16,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * @author so-ai-edu
+ * @author FlnyXx
  * @version 1.0
  * @date 2026/6/24
  * @Description 评论 Controller

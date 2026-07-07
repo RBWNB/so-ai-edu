@@ -5,7 +5,7 @@ import com.gdou.marine.entity.ContentLike;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * @author so-ai-edu
+ * @author FlnyXx
  * @version 1.0
  * @date 2026/6/24
  * @Description 点赞Mapper

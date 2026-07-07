@@ -9,7 +9,7 @@ import org.apache.ibatis.annotations.Mapper;
  * 系统角色表 Mapper 接口
  * </p>
  *
- * @author codex
+ * @author FlnyXx
  * @since 2026-04-27 00:43:11
  */
 @Mapper
