@@ -34,17 +34,23 @@ public class HighlightBroadcastService {
      */
     public void generateAndSendHighlight() {
         try {
-            // 1. 找出昨天点赞数最高，且已经审核通过的观察记录
+            // 1. 找出 48 小时内有过互动（收到点赞或评论）且已过审的帖子，按总点赞数排序
             String sql = """
-                SELECT o.id, o.title, o.description, o.location_name, 
+                SELECT o.id, o.title, o.description, o.location_name,
                        u.username, s.chinese_name, s.conservation_status,
                        COUNT(l.id) as like_count
                 FROM user_observation o
                 JOIN app_user u ON o.user_id = u.id
                 LEFT JOIN marine_species s ON o.species_id = s.id
                 LEFT JOIN content_like l ON l.target_type = 'user_observation' AND l.target_id = o.id
-                WHERE o.status = 1 
-                  AND DATE(o.created_at) >= CURDATE() - INTERVAL 2 DAY -- 扩大一点范围防止昨天没数据
+                WHERE o.status = 1
+                  AND o.id IN (
+                      SELECT target_id FROM content_like
+                      WHERE target_type = 'user_observation' AND created_at >= NOW() - INTERVAL 48 HOUR
+                      UNION
+                      SELECT target_id FROM content_comment
+                      WHERE target_type = 'user_observation' AND status = 1 AND created_at >= NOW() - INTERVAL 48 HOUR
+                  )
                 GROUP BY o.id, o.title, o.description, o.location_name, o.created_at, u.username, s.chinese_name, s.conservation_status
                 ORDER BY like_count DESC, o.created_at DESC
                 LIMIT 1

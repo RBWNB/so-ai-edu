@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -267,7 +268,7 @@ public class NotificationController {
      */
     @Log(module = "运营管理", description = "手动触发社区高光广播")
     @PostMapping("/admin/trigger-highlight")
-    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public Map<String, Object> triggerHighlight() {
         Map<String, Object> result = new HashMap<>();
         try {
