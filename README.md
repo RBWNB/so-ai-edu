@@ -242,7 +242,7 @@ JWT_SECRET=your-jwt-secret
 
 ## API 文档
 
-启动后端后访问 Swagger UI：`http://localhost:8080/doc.html`
+启动后端后访问 Swagger UI：` http://localhost:8080/swagger-ui/index.html`
 
 主要接口模块：
 
