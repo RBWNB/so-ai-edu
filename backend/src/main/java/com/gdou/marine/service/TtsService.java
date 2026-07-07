@@ -32,7 +32,9 @@ public class TtsService {
 
     // MiMo TTS API（Chat Completions 格式）
     private static final String MIMO_API_URL = "https://api.xiaomimimo.com/v1/chat/completions";
-    private static final String MIMO_API_KEY = "REDACTED_MIMO_TTS_KEY";
+
+    @org.springframework.beans.factory.annotation.Value("${app.tts.api-key:}")
+    private String mimoApiKey;
     private static final String MODEL = "mimo-v2.5-tts";
     private static final String DEFAULT_VOICE = "mimo_default";
     private static final String AUDIO_FORMAT = "wav";
@@ -152,7 +154,7 @@ public class TtsService {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(MIMO_API_URL))
                 .header("Content-Type", "application/json")
-                .header("api-key", MIMO_API_KEY)
+                .header("api-key", mimoApiKey)
                 .POST(HttpRequest.BodyPublishers.ofString(requestBodyStr))
                 .timeout(Duration.ofSeconds(60))
                 .build();

@@ -64,6 +64,8 @@ services:
       - QINIU_SECRET_KEY=${QINIU_SECRET_KEY}
       - QINIU_BUCKET=${QINIU_BUCKET}
       - QINIU_DOMAIN=${QINIU_DOMAIN}
+      # TTS 语音合成
+      - MIMO_API_KEY=${MIMO_API_KEY}
     volumes:
       - shared-uploads:/app/uploads
     depends_on:
