@@ -521,12 +521,15 @@ public class UserObservationController {
                         .or().like(UserObservation::getDescription, kw));
             }
             if ("hot".equalsIgnoreCase(sort)) {
-                queryWrapper.orderByDesc(UserObservation::getId);
+                // 最热：按总点赞数倒序，次按创建时间倒序
+                queryWrapper.last(
+                    "ORDER BY (SELECT COUNT(*) FROM content_like l WHERE l.target_type = 'user_observation' AND l.target_id = user_observation.id) DESC, user_observation.created_at DESC LIMIT " + offset + ", " + pageSize);
             } else {
+                // 最新：按创建时间倒序
                 queryWrapper.orderByDesc(UserObservation::getCreatedAt);
+                queryWrapper.last("LIMIT " + offset + ", " + pageSize);
             }
-            List<UserObservation> list = userObservationMapper.selectList(
-                    queryWrapper.last("LIMIT " + offset + ", " + pageSize));
+            List<UserObservation> list = userObservationMapper.selectList(queryWrapper);
 
             if (list.isEmpty()) {
                 result.put("success", true);
