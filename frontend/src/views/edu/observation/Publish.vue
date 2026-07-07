@@ -89,7 +89,7 @@
               :on-remove="handlePhotoRemove"
               :file-list="fileList"
               list-type="picture-card"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/gif,image/webp,.jpg,.jpeg,.png,.gif,.webp"
               :limit="1"
               v-loading="photoUploading"
               element-loading-text="照片上传中～很快就好"
@@ -98,6 +98,7 @@
           <div class="upload-tip">
             <el-icon :size="28"><Plus /></el-icon>
             <p class="upload-text">点击上传/拍照</p>
+            <p class="upload-format-hint">支持 JPG / PNG / GIF / WEBP，不超过 10MB</p>
           </div>
           </el-upload>
         </el-form-item>
@@ -347,6 +348,17 @@ const searchSpecies = async (query) => {
 const handlePhotoChange = async (uploadFile) => {
   const file = uploadFile.raw;
   if (!file) return;
+
+  // 前端格式校验（与后端 UserObservationController.isAllowedImage 保持一致）
+  const allowedExts = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+  const ext = (file.name || '').split('.').pop()?.toLowerCase();
+  if (!ext || !allowedExts.includes(ext)) {
+    ElMessage.error("仅支持 JPG、PNG、GIF、WEBP 格式的图片");
+    fileList.value = [];
+    form.photoFile = null;
+    uploadedMediaId.value = null;
+    return;
+  }
 
   // 1. 大小限制优化
   if (file.size / 1024 / 1024 > 10) {
@@ -601,6 +613,11 @@ const goBack = () => {
   font-size: 12px;
   color: #999;
   margin-top: 4px;
+}
+.upload-format-hint {
+  font-size: 10px;
+  color: #bbb;
+  margin-top: 2px;
 }
 
 .hide-upload-trigger :deep(.el-upload--picture-card) {

@@ -7,7 +7,7 @@ services:
     container_name: marine-mysql
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: 123456 # 你的数据库密码
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: marine_db
       TZ: Asia/Shanghai
     ports:
@@ -17,7 +17,7 @@ services:
       # 将数据库数据挂载到宿主机，防止容器重启数据丢失
       - mysql-data:/var/lib/mysql
       # 挂载初始化脚本，第一次启动时会自动建表
-      - ./marine_db.sql:/docker-entrypoint-marinedb.d/marine_db.sql
+      - ./marine_db.sql:/docker-entrypoint-initdb.d/marine_db.sql
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci
 
   # 2. Redis 缓存容器
@@ -43,14 +43,27 @@ services:
       - "8080:8080"
     environment:
       - TZ=Asia/Shanghai
-      # 数据库连接保持不变
+      # 数据库连接
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/marine_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
-      # 覆盖 Redis 主机名
+      - SPRING_DATASOURCE_USERNAME=root
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      # Redis
       - SPRING_DATA_REDIS_HOST=redis
       # 覆盖 Redis 端口,Docker 容器内互访必须用真实的 6379 端口
       - SPRING_DATA_REDIS_PORT=6379
       # 显式指定 Spring AI 向量数据库连接的 Redis 内网完整地址
       - SPRING_AI_VECTORSTORE_REDIS_URI=redis://redis:6379
+      # AI API Keys（从 .env 传入）
+      - SPRING_AI_DASHSCOPE_API_KEY=${SPRING_AI_DASHSCOPE_API_KEY}
+      - SPRING_AI_OPENAI_API_KEY=${SPRING_AI_OPENAI_API_KEY}
+      - APP_AI_API_KEY=${APP_AI_API_KEY}
+      # JWT
+      - JWT_SECRET=${JWT_SECRET}
+      # 七牛云对象存储
+      - QINIU_ACCESS_KEY=${QINIU_ACCESS_KEY}
+      - QINIU_SECRET_KEY=${QINIU_SECRET_KEY}
+      - QINIU_BUCKET=${QINIU_BUCKET}
+      - QINIU_DOMAIN=${QINIU_DOMAIN}
     volumes:
       - shared-uploads:/app/uploads
     depends_on:

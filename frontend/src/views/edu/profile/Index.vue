@@ -14,7 +14,7 @@
               :auto-upload="false"
               :show-file-list="false"
               :on-change="handleAvatarChange"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/gif,.jpg,.jpeg,.png,.gif"
               style="display:none"
             />
             <el-dropdown trigger="click" @command="handleAvatarCommand" placement="bottom" popper-class="avatar-glass-popper">
@@ -44,6 +44,8 @@
               </template>
             </el-dropdown>
           </div>
+
+          <div class="avatar-hint">支持 JPG / PNG / GIF，不超过 2MB</div>
 
           <div class="user-info-center">
             <div class="main-name">{{ profileForm.realName || profileForm.username || '未命名用户' }}</div>
@@ -905,6 +907,13 @@ const fetchProfile = async () => {
 // POST /sys-user/upload/avatar ✅ 已对接
 const handleAvatarChange = async (uploadFile) => {
   const file = uploadFile.raw;
+  // 前端格式校验（与后端 SysUserController.isAllowedImage 保持一致）
+  const allowedExts = ['jpg', 'jpeg', 'png', 'gif'];
+  const ext = (file.name || '').split('.').pop()?.toLowerCase();
+  if (!ext || !allowedExts.includes(ext)) {
+    ElMessage.error("头像仅支持 JPG、PNG、GIF 格式的图片");
+    return;
+  }
   if (file.size / 1024 / 1024 > 2) {
     ElMessage.error("头像图片大小不能超过 2MB!");
     return;
@@ -2128,6 +2137,14 @@ watch(activeTab, (tab) => {
   font-size: 11px;
   font-weight: 500;
   text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+
+.avatar-hint {
+  text-align: center;
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 4px;
+  margin-bottom: 12px;
 }
 
 /* 头像下拉菜单样式 */

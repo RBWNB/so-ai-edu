@@ -17,14 +17,11 @@ import com.qiniu.util.Auth;
  * @Description 七牛云设置
  */
 public class QiniuUtils {
-    public  static String accessKey = "REDACTED_QINIU_ACCESS_KEY";
-    public  static String secretKey = "REDACTED_QINIU_SECRET_KEY";
-    public  static String bucket = "demo-flnyxx";//空间名称
-
-    /**
-     * 七牛云 CDN 加速域名（请替换为你的实际域名）
-     */
-    public static String domainOfBucket = "http://tgig77s29.hn-bkt.clouddn.com";
+    /** 以下值由 QiniuConfig 在启动时从环境变量注入，此处仅为默认占位符 */
+    public  static String accessKey = "";
+    public  static String secretKey = "";
+    public  static String bucket = "";
+    public static String domainOfBucket = "";
 
     /**
      * 获取文件的完整访问 URL
