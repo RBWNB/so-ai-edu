@@ -22,8 +22,8 @@ public class QuartzConfig {
 
     @Bean
     public Trigger highlightJobTrigger() {
-        // 每天早上 10:00 触发
-        CronScheduleBuilder scheduleBuilder = CronScheduleBuilder.cronSchedule("0 0 10 * * ?");
+        // 每天早上 9:00 触发
+        CronScheduleBuilder scheduleBuilder = CronScheduleBuilder.cronSchedule("0 0 9 * * ?");
         return TriggerBuilder.newTrigger()
                 .forJob(highlightJobDetail())
                 .withIdentity("highlightTrigger", "marine-triggers")

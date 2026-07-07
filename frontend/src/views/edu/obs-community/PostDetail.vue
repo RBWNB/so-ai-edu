@@ -408,6 +408,12 @@ const loadDetailComments = async () => {
     });
     if (res.data.success) {
       detailComments.value = res.data.data || [];
+      // 用服务端数据重新计算评论总数（根评论 + 各自的回复数），避免手动 +1/-1 累积偏差
+      if (data.value) {
+        data.value.commentCount = detailComments.value.reduce(
+          (sum, c) => sum + 1 + Number(c.replyCount || 0), 0
+        );
+      }
       detailComments.value.forEach((c) => {
         if (c.replyCount > 0 && !detailReplies[c.id]) {
           loadDetailReplies(c);
@@ -458,9 +464,12 @@ const submitDetailComment = async () => {
     if (res.data.success) {
       detailCommentInput.value = "";
       ElMessage.success("评论成功");
-      data.value.commentCount = (data.value.commentCount || 0) + 1;
+      // 楼中楼回复后清除父评论的缓存，让 loadDetailComments 重新拉取最新回复
+      if (detailReplying.value) {
+        delete detailReplies[detailReplying.value.id];
+      }
       cancelDetailReply();
-      await loadDetailComments();
+      await loadDetailComments();  // commentCount 由 loadDetailComments 根据服务端数据重新计算
     } else {
       ElMessage.warning(res.data.message || "评论失败");
     }
@@ -508,7 +517,8 @@ const deleteDetailComment = async (comment) => {
       ElMessage.success("已删除");
       const idx = detailComments.value.findIndex((c) => c.id === comment.id);
       if (idx !== -1) detailComments.value.splice(idx, 1);
-      if (data.value) data.value.commentCount = Math.max(0, (data.value.commentCount || 0) - 1);
+      // commentCount 由 loadDetailComments 重新计算，无需手动 -1
+      await loadDetailComments();
     }
   } catch (err) { ElMessage.error("删除失败"); }
 };
@@ -523,7 +533,13 @@ const deleteDetailReply = async (comment, reply) => {
         const idx = arr.findIndex((r) => r.id === reply.id);
         if (idx !== -1) arr.splice(idx, 1);
       }
-      if (data.value) data.value.commentCount = Math.max(0, (data.value.commentCount || 0) - 1);
+      // 更新根评论的 replyCount，再整体重算 commentCount
+      if (data.value && comment.replyCount > 0) {
+        comment.replyCount = Math.max(0, Number(comment.replyCount) - 1);
+        data.value.commentCount = detailComments.value.reduce(
+          (sum, c) => sum + 1 + Number(c.replyCount || 0), 0
+        );
+      }
     }
   } catch (err) { ElMessage.error("删除失败"); }
 };
