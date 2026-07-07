@@ -114,7 +114,7 @@
                     <div class="noti-content">
                       <div class="noti-title">
                         <span class="sender-name">
-                          {{ item.type === 'broadcast' || item.type === 'broadcast_link' ? '【系统广播】' : item.senderName }}
+                          {{ item.type === 'broadcast' || item.type === 'broadcast_link' ? '【系统广播】' : (item.senderRealName || item.senderName) }}
                         </span>
 
                         <span class="action-text">

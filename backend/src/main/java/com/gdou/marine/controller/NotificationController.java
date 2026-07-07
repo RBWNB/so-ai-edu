@@ -77,7 +77,7 @@ public class NotificationController {
 
             int offset = (pageNum - 1) * pageSize;
             String sql = """
-                SELECT n.*, u.username AS sender_name, u.avatar_url AS sender_avatar
+                SELECT n.*, u.username AS sender_name, u.real_name AS sender_real_name, u.avatar_url AS sender_avatar
                 FROM system_notification n
                 LEFT JOIN app_user u ON n.sender_id = u.id
                 WHERE n.receiver_id = ?
@@ -93,6 +93,7 @@ public class NotificationController {
                 item.put("receiverId", row.get("receiver_id"));
                 item.put("senderId", row.get("sender_id"));
                 item.put("senderName", row.get("sender_name"));
+                item.put("senderRealName", row.get("sender_real_name"));
                 item.put("senderAvatar", row.get("sender_avatar"));
                 item.put("type", row.get("type"));
                 item.put("targetId", row.get("target_id"));
