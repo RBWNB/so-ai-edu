@@ -231,7 +231,7 @@ const displayPosts = computed(() => {
   let list = [...posts.value]
 
   if (activeCategory.value === 'latest') {
-    list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    list.sort((a, b) => new Date(b.lastActivityTime || b.createdAt) - new Date(a.lastActivityTime || a.createdAt))
   } else if (activeCategory.value === 'hot') {
     list.sort((a, b) => (b.likeCount + b.commentCount * 2) - (a.likeCount + a.commentCount * 2))
   }
@@ -258,6 +258,7 @@ const switchCategory = (key) => {
   if (activeCategory.value === key) return
   activeCategory.value = key
   pageNum.value = 1
+  posts.value = []   // 立即清空，避免闪现旧数据
   loadPosts()
 }
 

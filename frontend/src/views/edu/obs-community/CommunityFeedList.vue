@@ -1,3 +1,4 @@
+
 <template>
   <div class="community-page">
     <div class="community-header">
@@ -67,7 +68,7 @@
               <span v-if="post.userTitle" class="user-badge">{{ post.userTitle }}</span>
             </div>
             <div class="feed-time">
-              {{ post.createdAt }}
+              {{ post.lastActivityTime || post.createdAt }}
               <span v-if="post.locationName" class="feed-location">
                 <el-icon :size="12"><Location /></el-icon>
                 {{ post.locationName }}
@@ -163,6 +164,7 @@ const switchSort = (mode) => {
   if (sortMode.value === mode) return;
   sortMode.value = mode;
   pageNum.value = 1;
+  posts.value = [];   // 立即清空，避免闪现旧数据
   loadPosts();
 };
 

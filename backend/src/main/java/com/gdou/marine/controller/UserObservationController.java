@@ -525,9 +525,9 @@ public class UserObservationController {
                 queryWrapper.last(
                     "ORDER BY (SELECT COUNT(*) FROM content_like l WHERE l.target_type = 'user_observation' AND l.target_id = user_observation.id) DESC, user_observation.created_at DESC LIMIT " + offset + ", " + pageSize);
             } else {
-                // 最新：按创建时间倒序
-                queryWrapper.orderByDesc(UserObservation::getCreatedAt);
-                queryWrapper.last("LIMIT " + offset + ", " + pageSize);
+                // 最新：按最后活动时间（帖子创建与最新评论的较晚者）倒序
+                queryWrapper.last(
+                    "ORDER BY GREATEST(user_observation.created_at, COALESCE((SELECT MAX(created_at) FROM content_comment WHERE target_type = 'user_observation' AND target_id = user_observation.id AND status = 1), '1970-01-01 00:00:00')) DESC LIMIT " + offset + ", " + pageSize);
             }
             List<UserObservation> list = userObservationMapper.selectList(queryWrapper);
 
@@ -672,6 +672,20 @@ public class UserObservationController {
                 }
             }
 
+            // 批量查每个帖子的最新评论时间，用于列表展示"最后活跃时间"
+            Map<Long, String> latestCommentTimeMap = new HashMap<>();
+            for (Long oid : obsIds) {
+                List<Map<String, Object>> ctRows = jdbcTemplate.queryForList(
+                    "SELECT MAX(created_at) AS last_time FROM content_comment WHERE target_type = 'user_observation' AND target_id = ? AND status = 1",
+                    oid);
+                if (!ctRows.isEmpty() && ctRows.get(0).get("last_time") != null) {
+                    String t = ctRows.get(0).get("last_time").toString().replace("T", " ");
+                    int dotIdx = t.indexOf('.');
+                    if (dotIdx > 0) t = t.substring(0, dotIdx);
+                    latestCommentTimeMap.put(oid, t);
+                }
+            }
+
             List<Map<String, Object>> records = list.stream().map(obs -> {
                 Map<String, Object> item = new LinkedHashMap<>();
                 item.put("id", obs.getId());
@@ -689,6 +703,11 @@ public class UserObservationController {
                         ? mediaUrlMap.getOrDefault(obs.getPhotoMediaId(), "") : "");
                 item.put("createdAt", obs.getCreatedAt() != null
                         ? obs.getCreatedAt().toString().replace("T", " ") : "");
+                // 列表展示用：取帖子创建时间与最新评论时间中的较晚者
+                String postTime = (String) item.get("createdAt");
+                String commentTime = latestCommentTimeMap.get(obs.getId());
+                item.put("lastActivityTime",
+                    (commentTime != null && commentTime.compareTo(postTime) > 0) ? commentTime : postTime);
 
                 // 用户信息
                 Map<String, Object> uInfo = userInfoMap.getOrDefault(obs.getUserId(), new LinkedHashMap<>());
