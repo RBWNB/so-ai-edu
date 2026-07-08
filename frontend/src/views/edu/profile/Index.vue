@@ -422,18 +422,6 @@
                   <el-tab-pane label="观察帖子" name="user_observation" />
                 </el-tabs>
 
-                <!-- ═══ 知识库筛选栏（仅在 kb_document tab 显示）═══ -->
-                <div v-if="favSubTab === 'kb_document'" class="quiz-filter-bar">
-                  <div class="filter-group">
-                    <span class="filter-label">来源：</span>
-                    <div class="filter-options">
-                      <span class="filter-tag" :class="{ active: selectedKbSource === '' }" @click="selectedKbSource = ''">全部知识库</span>
-                      <span class="filter-tag" :class="{ active: selectedKbSource === 'species' }" @click="selectedKbSource = 'species'">海洋百科物种</span>
-                      <span class="filter-tag" :class="{ active: selectedKbSource !== '' && selectedKbSource !== 'species' }" @click="selectedKbSource = 'rag'">RAG 知识库</span>
-                    </div>
-                  </div>
-                </div>
-
                 <!-- ═══ 题目筛选栏（仅在 quiz_question tab 显示）═══ -->
                 <div v-if="favSubTab === 'quiz_question'" class="quiz-filter-bar">
                   <div class="filter-group">
@@ -457,21 +445,20 @@
                 </div>
 
                 <template v-if="filteredFavList.length">
-                  <!-- 🌟 知识库 tab：列表样式（显示完整内容） -->
+                  <!-- 🌟 知识库 tab：列表样式（仅显示RAG知识库文档） -->
                   <div v-if="favSubTab === 'kb_document'" class="fav-kb-list">
                     <div v-for="item in filteredFavList" :key="item.bookmarkId"
                          class="fav-kb-list-item" @click="handleKbDetailClick(item)">
-                      <div class="fav-kb-icon" :class="item.sourceType === 'species' ? 'icon-species' : 'icon-rag'">
+                      <div class="fav-kb-icon icon-rag">
                         <el-icon :size="22"><Reading /></el-icon>
                       </div>
                       <div class="fav-kb-main">
                         <div class="fav-kb-top">
-                          <el-tag v-if="item.sourceType === 'species'" type="success" size="small" effect="plain" round>🐋 物种百科</el-tag>
-                          <el-tag v-else type="primary" size="small" effect="plain" round>📚 RAG知识库</el-tag>
+                          <el-tag type="primary" size="small" effect="plain" round>📚 RAG知识库</el-tag>
                           <span class="fav-time ml-2">{{ item.createdAt }}</span>
                         </div>
                         <div class="fav-kb-title">{{ item.title }}</div>
-                        <!-- RAG知识库显示完整内容 -->
+                        <!-- 显示内容摘要 -->
                         <div v-if="item.content" class="fav-kb-content">{{ item.content }}</div>
                         <div v-else class="fav-kb-empty-hint">📝 暂无内容详情</div>
                       </div>
@@ -1987,9 +1974,6 @@ const currentFavList = computed(() => {
   return favDataMap[favSubTab.value] || [];
 });
 
-// ═══ 知识库筛选（来源：物种百科 / RAG知识库） ═══
-const selectedKbSource = ref('');
-
 // ═══ 题目筛选（难度 + 题型） ═══
 const selectedQuizDifficulty = ref('');
 const selectedQuizType = ref('');
@@ -1997,18 +1981,20 @@ const selectedQuizType = ref('');
 /** 筛选后的收藏列表 */
 const filteredFavList = computed(() => {
   let list = currentFavList.value;
-  // 知识库筛选
-  if (favSubTab.value === 'kb_document' && selectedKbSource.value) {
-    if (selectedKbSource.value === 'species') list = list.filter(item => item.sourceType === 'species');
-    else list = list.filter(item => item.sourceType !== 'species');
+
+  // 知识库筛选：只显示 RAG 知识库文档（过滤掉物种类型）
+  if (favSubTab.value === 'kb_document') {
+    list = list.filter(item => item.sourceType !== 'species');
     return list;
   }
+
   // 题目筛选（难度 + 题型可叠加）
   if (favSubTab.value === 'quiz_question') {
     if (selectedQuizDifficulty.value) list = list.filter(item => item.difficulty === selectedQuizDifficulty.value);
     if (selectedQuizType.value) list = list.filter(item => item.questionType === selectedQuizType.value);
     return list;
   }
+
   return list;
 });
 
@@ -3154,7 +3140,7 @@ watch(activeTab, (tab) => {
 .fav-card-clickable:hover { border-color: #409eff; }
 .fav-tags-row { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
 
-/* ═══ 筛选栏（题目/知识库） ═══ */
+/* ═══ 筛选栏（题目） ═══ */
 .quiz-filter-bar { display: flex; align-items: center; gap: 24px; padding: 12px 16px; margin-bottom: 16px; background: rgba(255,255,255,0.6); border-radius: 10px; backdrop-filter: blur(8px); }
 .filter-group { display: flex; align-items: center; gap: 8px; }
 .filter-group + .filter-group::before {

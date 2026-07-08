@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="edu-quiz">
     <!-- ============ 开始界面 ============ -->
     <template v-if="compStage === 'NOT_STARTED' && phase === 'start'">
@@ -311,7 +311,9 @@
                   @click.stop="handleBookmark('knowledge', d, idx)"
                 >
                   <el-icon :size="14"><Reading /></el-icon>
-                  <span v-if="!d.speciesId && !d.sourceDocumentId">暂无关联</span>
+                  <span v-if="!d.speciesId && !d.sourceDocumentId">不可收藏</span>
+                  <span v-else-if="d.speciesId && hasKbBookmarked(d)">已收藏物种</span>
+                  <span v-else-if="d.speciesId">收藏物种</span>
                   <span v-else-if="hasKbBookmarked(d)">已收藏知识库</span>
                   <span v-else>收藏知识库</span>
                 </button>
@@ -1309,7 +1311,7 @@ const handleBookmark = async (type, questionData, idx) => {
       } catch (e) { console.error('获取关联知识库失败:', e); ElMessage.error('获取关联知识库失败'); return; }
 
       if (kbDocs.length === 0) { 
-        ElMessage.warning(questionData.speciesId ? '该物种暂无关联知识库文档' : '该题目暂无关联知识库')
+        ElMessage.warning(questionData.speciesId ? '该物种暂无关联知识库文档' : '手工创建的题目无法收藏知识库，仅支持收藏题目')
         return 
       }
 
@@ -1319,8 +1321,9 @@ const handleBookmark = async (type, questionData, idx) => {
       })
 
       if (alreadyBookmarkedKb) {
-        // 取消收藏已有的知识库
-        const res = await removeBookmarkApi('kb_document', alreadyBookmarkedKb)
+        // 取消收藏已有的知识库（根据类型选择正确的 targetType）
+        const targetType = questionData.speciesId ? 'species' : 'kb_document'
+        const res = await removeBookmarkApi(targetType, alreadyBookmarkedKb)
         if (res.data?.success) {
           const s = new Set(bookmarkedKbSet.value); s.delete(alreadyBookmarkedKb)
           bookmarkedKbSet.value = s
@@ -1328,24 +1331,64 @@ const handleBookmark = async (type, questionData, idx) => {
           const syncKey = questionData.speciesId || questionData.sourceDocumentId
           syncKbStatusByKey(syncKey, false)
           _lastValidKbList = _lastValidKbList.filter(kb => kb.targetId !== alreadyBookmarkedKb)
-          ElMessage.success('已取消该知识库收藏')
+          // 根据类型显示不同的提示消息
+          if (questionData.speciesId) {
+            ElMessage.success('已取消收藏该物种')
+          } else {
+            ElMessage.success('已取消该知识库收藏')
+          }
         } else {
           ElMessage.error(res.data?.message || '取消收藏失败')
           return
         }
       } else {
-        // 收藏第一个关联的知识库文档
+        // 收藏知识库（根据来源类型选择正确的收藏方式）
         const kbToBookmark = kbDocs[0]
-        const res = await addBookmarkApi('kb_document', kbToBookmark.id)
+
+        // ✅ 关键修复：根据题目来源决定收藏类型
+        let targetType, targetId, successMessage
+
+        if (questionData.speciesId) {
+          // 🐋 物种出题 → 收藏物种本身（targetType='species'）
+          targetType = 'species'
+          targetId = questionData.speciesId  // 使用物种ID，不是文档ID
+          successMessage = `已收藏「${kbToBookmark.title}」到我的物种`
+        } else if (questionData.sourceDocumentId) {
+          // 📚 RAG知识库出题 → 收藏RAG文档（targetType='kb_document'）
+          targetType = 'kb_document'
+          targetId = kbToBookmark.id  // 使用文档ID
+          successMessage = `已将「${kbToBookmark.title}」（RAG知识库）加入知识库收藏`
+        } else {
+          ElMessage.warning('无法确定知识库类型')
+          return
+        }
+
+        const res = await addBookmarkApi(targetType, targetId)
         if (res.data?.success) {
-          const s = new Set(bookmarkedKbSet.value); s.add(kbToBookmark.id)
+          const s = new Set(bookmarkedKbSet.value); s.add(targetId)
           bookmarkedKbSet.value = s
           // 同步状态（使用 speciesId 或 sourceDocumentId 作为同步键）
           const syncKey = questionData.speciesId || questionData.sourceDocumentId
           syncKbStatusByKey(syncKey, true)
-          const newKbItem = { targetId: kbToBookmark.id, speciesId: questionData.speciesId || kbToBookmark.speciesId, title: kbToBookmark.title }
-          _lastValidKbList = [..._lastValidKbList.filter(kb => kb.targetId !== kbToBookmark.id), newKbItem]
-          ElMessage.success(res.data?.message || `已将「${kbToBookmark.title}」加入知识库收藏`)
+
+          // 构建收藏项信息（用于显示）
+          const newKbItem = {
+            targetId: targetId,
+            speciesId: questionData.speciesId || null,
+            title: kbToBookmark.title,
+            sourceType: questionData.speciesId ? 'species' : (kbToBookmark.sourceType || 'rag'),
+            knowledgeBaseType: questionData.speciesId ? 'species' : 'document'
+          }
+          _lastValidKbList = [..._lastValidKbList.filter(kb => kb.targetId !== targetId), newKbItem]
+          ElMessage.success(res.data?.message || successMessage)
+
+          // 🌟 调试日志：确认收藏类型正确
+          console.log('✅ 收藏知识库成功:', {
+            type: targetType,
+            id: targetId,
+            title: kbToBookmark.title,
+            isSpecies: !!questionData.speciesId
+          })
         } else {
           ElMessage.error(res.data?.message || '收藏失败')
           return

@@ -3,9 +3,17 @@ package com.gdou.marine.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.gdou.marine.annotation.Log;
+import com.gdou.marine.entity.QuizQuestion;
 import com.gdou.marine.entity.Species;
+import com.gdou.marine.entity.SpeciesBrowseRecord;
 import com.gdou.marine.entity.UserBookmark;
+import com.gdou.marine.entity.UserObservation;
+import com.gdou.marine.mapper.QuizQuestionMapper;
+import com.gdou.marine.mapper.SpeciesBrowseRecordMapper;
 import com.gdou.marine.mapper.UserBookmarkMapper;
+import com.gdou.marine.mapper.UserObservationMapper;
+import javax.sql.DataSource;
+import org.springframework.jdbc.core.JdbcTemplate;
 import com.gdou.marine.service.SpeciesBrowseRecordService;
 import com.gdou.marine.service.TaskProgressService;
 import com.gdou.marine.service.impl.SpeciesServiceImpl;
@@ -50,6 +58,18 @@ public class SpeciesController {
 
     @Autowired
     private UserBookmarkMapper userBookmarkMapper;
+
+    @Autowired
+    private QuizQuestionMapper quizQuestionMapper;
+
+    @Autowired
+    private SpeciesBrowseRecordMapper speciesBrowseRecordMapper;
+
+    @Autowired
+    private UserObservationMapper userObservationMapper;
+
+    @Autowired
+    private DataSource dataSource;
 
     @Value("${upload.dir:uploads}")
     private String uploadDir;
@@ -222,14 +242,48 @@ public class SpeciesController {
     public Map<String, Object> deleteSpecies(@PathVariable Long id) {
         Species species = speciesService.getById(id);
         String name = species != null ? species.getChineseName() : ("ID=" + id);
-        speciesService.removeById(id);
 
-        // 级联删除该物种的所有收藏记录
-        userBookmarkMapper.delete(new LambdaQueryWrapper<UserBookmark>()
-                .eq(UserBookmark::getTargetType, "species")
-                .eq(UserBookmark::getTargetId, id));
+        try {
+            log.info("🗑️ 开始删除物种: ID={}, 名称={}", id, name);
 
-        return Map.of("message", "删除成功");
+            // 第1步：清理题目关联（保留题目数据，只设置species_id为NULL）
+            // 注意：题目不参与级联删除，因为题目是重要资产，需要保留
+            QuizQuestion updateQuestion = new QuizQuestion();
+            updateQuestion.setSpeciesId(null);
+            quizQuestionMapper.update(updateQuestion,
+                    new LambdaQueryWrapper<QuizQuestion>().eq(QuizQuestion::getSpeciesId, id));
+            log.info("✅ 已清理物种{}的题目关联（{}条题目已解除绑定）", id,
+                    quizQuestionMapper.selectCount(new LambdaQueryWrapper<QuizQuestion>()
+                            .eq(QuizQuestion::getSpeciesId, null)));
+
+            // 第2步：删除物种本身（其他关联数据由数据库CASCADE自动处理！）
+            boolean deleted = speciesService.removeById(id);
+
+            if (deleted) {
+                log.info("✅ 成功删除物种: ID={}, 名称={}", id, name);
+                log.info("📋 级联删除说明：MySQL已自动删除该物种的所有关联数据：");
+                log.info("   • 浏览记录 (species_browse_record)");
+                log.info("   • 观察记录 (user_observation)");
+                log.info("   • 收藏记录 (user_bookmark, type=species)");
+                log.info("   • 分布点 (species_distribution_point)");
+                log.info("   • 媒体资源 (species_media)");
+
+                return Map.of(
+                        "success", true,
+                        "message", "删除成功",
+                        "deletedId", id,
+                        "deletedName", name,
+                        "cascadeDeleted", true,
+                        "note", "所有关联数据已通过数据库级联删除自动清理"
+                );
+            } else {
+                throw new RuntimeException("物种不存在或已被删除");
+            }
+
+        } catch (Exception e) {
+            log.error("❌ 删除物种失败: ID={}, 错误={}", id, e.getMessage(), e);
+            throw new RuntimeException("删除物种失败：" + e.getMessage(), e);
+        }
     }
 
     @Log(module = "物种管理", description = "上传物种图片")

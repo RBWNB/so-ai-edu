@@ -54,12 +54,6 @@ public class KbDocument implements Serializable {
     private String sourceType;
 
     /**
-     * 关联物种ID（当source_type=species时使用）
-     */
-    @TableField("species_id")
-    private Long speciesId;
-
-    /**
      * 状态：0草稿，1已发布
      */
     @TableField("status")

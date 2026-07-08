@@ -139,26 +139,14 @@ public class QuizQuestionServiceImpl extends ServiceImpl<QuizQuestionMapper, Qui
         KbDocument dummyDoc = new KbDocument();
         dummyDoc.setTitle(contentTitle);
         // 计算关联物种ID和来源文档ID：
-        // - 海洋百科物种出题：直接使用请求中的 speciesId，同时尝试查找关联的KB文档作为sourceDocumentId
+        // - 海洋百科物种出题：直接使用请求中的 speciesId
         // - 知识库文档出题：始终记录 sourceDocumentId（原始知识库文档ID）
         Long resolvedSpeciesId = dto.getSpeciesId();  // 前端传的物种ID
-        if (resolvedSpeciesId == null && doc != null) {
-            resolvedSpeciesId = doc.getSpeciesId();  // 文档自身的关联
-        }
-        
+
         Long sourceDocId;
         if (doc != null) {
             // 知识库模式：直接用选中的文档
             sourceDocId = doc.getId();
-        } else if (resolvedSpeciesId != null) {
-            // 物种模式：尝试查找该物种关联的第一个已发布的KB文档（用于收藏知识库功能）
-            com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<KbDocument> wrapper =
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<KbDocument>()
-                    .eq(KbDocument::getSpeciesId, resolvedSpeciesId)
-                    .eq(KbDocument::getStatus, 1)
-                    .last("LIMIT 1");
-            KbDocument linkedDoc = kbDocumentMapper.selectOne(wrapper);
-            sourceDocId = (linkedDoc != null) ? linkedDoc.getId() : null;
         } else {
             sourceDocId = null;
         }
