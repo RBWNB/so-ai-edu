@@ -68,7 +68,7 @@
         <el-card>
           <template #header>
             <div class="card-title-row">
-              <span class="card-title">近7天活跃答题人次趋势</span>
+              <span class="card-title">近7天活跃答题人数趋势</span>
               <el-button v-if="canExport" size="small" @click="exportChartPDF('trend', '活跃趋势')">导出报表</el-button>
             </div>
           </template>
@@ -296,12 +296,13 @@ const loadTrend = async () => {
       },
       yAxis: {
         type: "value",
+        minInterval: 1,
         splitLine: { lineStyle: { type: "dashed", color: "#E5E6EB" } },
         axisLabel: { color: "#4E5969" },
       },
       series: [
         {
-          name: "答题人次",
+          name: "答题人数",
           type: "line",
           smooth: true,
           symbolSize: 8,

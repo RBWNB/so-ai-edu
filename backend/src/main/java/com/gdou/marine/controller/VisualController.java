@@ -276,7 +276,7 @@ public class VisualController {
     }
 
     /**
-     *  近7天活跃度趋势 (答题数)
+     *  近7天活跃度趋势 (答题人数，按 userId 去重)
      */
     @GetMapping("/admin/activity-trend")
     public Map<String, Object> getActivityTrend() {
@@ -290,28 +290,33 @@ public class VisualController {
 
         // 初始化近7天的日期列表 (格式: MM-dd)
         List<String> dateLabels = new ArrayList<>();
-        Map<String, Long> dailyCounts = new LinkedHashMap<>();
+        Map<String, java.util.Set<Long>> dailyUsers = new LinkedHashMap<>();
 
         java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("MM-dd");
         for (int i = 6; i >= 0; i--) {
             String d = java.time.LocalDate.now().minusDays(i).format(fmt);
             dateLabels.add(d);
-            dailyCounts.put(d, 0L); // 默认补0
+            dailyUsers.put(d, new java.util.HashSet<>()); // 每天一个去重集合
         }
 
-        // 填充真实数据
+        // 按日期收集去重的 userId，统计每日答题人数（非答题次数）
         for (com.gdou.marine.entity.QuizAttempt att : attempts) {
-            if (att.getAttemptedAt() != null) {
+            if (att.getAttemptedAt() != null && att.getUserId() != null) {
                 String d = att.getAttemptedAt().format(fmt);
-                if (dailyCounts.containsKey(d)) {
-                    dailyCounts.put(d, dailyCounts.get(d) + 1);
+                if (dailyUsers.containsKey(d)) {
+                    dailyUsers.get(d).add(att.getUserId());
                 }
             }
         }
 
+        List<Long> quizData = new ArrayList<>();
+        for (String d : dateLabels) {
+            quizData.add((long) dailyUsers.get(d).size());
+        }
+
         Map<String, Object> result = new HashMap<>();
         result.put("dates", dateLabels);
-        result.put("quizData", new ArrayList<>(dailyCounts.values()));
+        result.put("quizData", quizData);
         return result;
     }
 
