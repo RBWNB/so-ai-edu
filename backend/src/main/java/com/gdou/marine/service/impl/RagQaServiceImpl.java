@@ -179,7 +179,7 @@ public class RagQaServiceImpl implements RagQaService {
                     try {
                         emitter.send(SseEmitter.event()
                                 .name("complete")
-                                .data(answer.toString()));
+                                .data(""));
                         emitter.complete();
                     } catch (IOException e) {
                         emitter.completeWithError(e);
