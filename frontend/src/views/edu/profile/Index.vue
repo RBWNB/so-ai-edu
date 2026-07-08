@@ -45,8 +45,6 @@
             </el-dropdown>
           </div>
 
-          <div class="avatar-hint">支持 JPG / PNG / GIF，不超过 2MB</div>
-
           <div class="user-info-center">
             <div class="main-name">{{ profileForm.realName || profileForm.username || '未命名用户' }}</div>
             <div v-if="compStats.tier" class="comp-rank-badge" :class="'tier-' + compStats.tier">
