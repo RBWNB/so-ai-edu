@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "zhipuai")
 public class ZhipuAiConfig {
 
-    private String apiKey = "REDACTED_ZHIPU_API_KEY";
+    private String apiKey;
     private String apiUrl = "https://open.bigmodel.cn/api/paas/v4";
     private String imageModel = "glm-4v-flash";
     private String textModel = "glm-4-flash";
