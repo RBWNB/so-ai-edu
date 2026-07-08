@@ -75,6 +75,8 @@ public class ExamController {
                 item.put("stem", q.getStem());
                 item.put("optionsJson", q.getOptionsJson());
                 item.put("difficulty", q.getDifficulty());
+                item.put("speciesId", q.getSpeciesId());  // 物种ID，用于关联知识库收藏
+                item.put("sourceDocumentId", q.getSourceDocumentId());  // 🌟 来源文档ID（RAG出题时）
                 // 不返回 answerJson、explanation
                 questionList.add(item);
             }
@@ -162,6 +164,7 @@ public class ExamController {
                 detail.put("correctAnswer", correctAnswer);
                 detail.put("correct", isCorrect);
                 detail.put("explanation", q.getExplanation());
+                detail.put("speciesId", q.getSpeciesId());  // 返回物种ID，用于关联知识库收藏
                 details.add(detail);
             }
 

@@ -39,6 +39,9 @@ public class QuizQuestionController {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private com.gdou.marine.mapper.UserBookmarkMapper userBookmarkMapper;
+
     /**
      * 分页查询题目列表
      */
@@ -153,6 +156,12 @@ public class QuizQuestionController {
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public Map<String, Object> deleteQuestion(@PathVariable Long id) {
         quizQuestionService.removeById(id);
+        // 级联删除：清理该题目的所有用户收藏记录（target_type=quiz_question）
+        userBookmarkMapper.delete(
+                new LambdaQueryWrapper<com.gdou.marine.entity.UserBookmark>()
+                        .eq(com.gdou.marine.entity.UserBookmark::getTargetType, "quiz_question")
+                        .eq(com.gdou.marine.entity.UserBookmark::getTargetId, id)
+        );
         return Map.of("message", "删除成功");
     }
 

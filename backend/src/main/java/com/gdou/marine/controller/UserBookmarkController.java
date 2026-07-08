@@ -42,6 +42,9 @@ public class UserBookmarkController {
     @Autowired
     private com.gdou.marine.service.TaskProgressService taskProgressService;
 
+    @Autowired
+    private com.gdou.marine.mapper.KbDocumentMapper kbDocumentMapper;
+
     /**
      * 取消收藏
      * DELETE /bookmark/{targetType}/{targetId}
@@ -122,10 +125,16 @@ public class UserBookmarkController {
 
             result.put("success", true);
             result.put("message", "收藏成功");
+        } catch (org.springframework.dao.DuplicateKeyException e) {
+            // 并发情况下可能触发唯一索引冲突，视为已收藏
+            log.warn("收藏重复插入: userId={}, targetType={}, targetId={}", 
+                    extractUserId(auth), targetType, targetId);
+            result.put("success", true);
+            result.put("message", "已收藏");
         } catch (Exception e) {
             log.error("收藏失败", e);
             result.put("success", false);
-            result.put("message", e.getMessage());
+            result.put("message", "收藏失败：" + e.getMessage());
         }
         return result;
     }
@@ -186,14 +195,19 @@ public class UserBookmarkController {
                         .map(UserBookmark::getTargetId).collect(Collectors.toList());
                 if (!ids.isEmpty()) {
                     String inClause = ids.stream().map(String::valueOf).collect(Collectors.joining(","));
-                    String sql = "SELECT id, name AS title, image_url AS thumbnail FROM marine_ecosystem WHERE id IN (" + inClause + ")";
+                    String sql = "SELECT id, name, description, typical_species, threats, protection_advice, image_url, status FROM marine_ecosystem WHERE id IN (" + inClause + ")";
                     List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql);
                     Map<Long, Map<String, Object>> rowMap = new HashMap<>();
                     for (Map<String, Object> row : rows) {
+                        row.put("title", row.getOrDefault("name", "未知生态区"));
+                        row.put("thumbnail", row.getOrDefault("image_url", ""));
                         rowMap.put(((Number) row.get("id")).longValue(), row);
                     }
                     for (UserBookmark bm : grouped.get("ecosystem")) {
                         Map<String, Object> item = buildItem(bm, rowMap.get(bm.getTargetId()));
+                        if (rowMap.get(bm.getTargetId()) != null) {
+                            item.putAll(rowMap.get(bm.getTargetId()));
+                        }
                         ecosystemList.add(item);
                     }
                 }
@@ -207,7 +221,8 @@ public class UserBookmarkController {
                         .map(UserBookmark::getTargetId).collect(Collectors.toList());
                 if (!ids.isEmpty()) {
                     String inClause = ids.stream().map(String::valueOf).collect(Collectors.joining(","));
-                    String sql = "SELECT id, title FROM kb_document WHERE id IN (" + inClause + ")";
+                    // 查询时包含 species_id、source_type、content 字段
+                    String sql = "SELECT id, title, species_id, source_type, content FROM kb_document WHERE id IN (" + inClause + ")";
                     List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql);
                     Map<Long, Map<String, Object>> rowMap = new HashMap<>();
                     for (Map<String, Object> row : rows) {
@@ -215,6 +230,12 @@ public class UserBookmarkController {
                     }
                     for (UserBookmark bm : grouped.get("kb_document")) {
                         Map<String, Object> item = buildItem(bm, rowMap.get(bm.getTargetId()));
+                        // 添加 species_id、source_type、content 字段
+                        if (rowMap.get(bm.getTargetId()) != null) {
+                            item.put("speciesId", rowMap.get(bm.getTargetId()).get("species_id"));
+                            item.put("sourceType", rowMap.get(bm.getTargetId()).get("source_type"));
+                            item.put("content", rowMap.get(bm.getTargetId()).get("content"));
+                        }
                         kbList.add(item);
                     }
                 }
@@ -228,7 +249,8 @@ public class UserBookmarkController {
                         .map(UserBookmark::getTargetId).collect(Collectors.toList());
                 if (!ids.isEmpty()) {
                     String inClause = ids.stream().map(String::valueOf).collect(Collectors.joining(","));
-                    String sql = "SELECT id, stem, stem AS title, question_type, difficulty, options_json, answer_json, explanation FROM quiz_question WHERE id IN (" + inClause + ")";
+                    // 查询时包含 species_id 字段
+                    String sql = "SELECT id, stem, stem AS title, question_type, difficulty, species_id, source_document_id, options_json, answer_json, explanation FROM quiz_question WHERE id IN (" + inClause + ")";
                     List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql);
                     Map<Long, Map<String, Object>> rowMap = new HashMap<>();
                     for (Map<String, Object> row : rows) {
@@ -240,6 +262,8 @@ public class UserBookmarkController {
                         if (row != null) {
                             item.put("questionType", row.get("question_type"));
                             item.put("difficulty", row.get("difficulty"));
+                            item.put("speciesId", row.get("species_id"));
+                            item.put("sourceDocumentId", row.get("source_document_id"));  // 🌟 返回来源文档ID
                             item.put("optionsJson", row.get("options_json"));
                             item.put("correctAnswer", parseAnswerJson((String) row.get("answer_json")));
                             item.put("explanation", row.get("explanation"));
@@ -297,6 +321,96 @@ public class UserBookmarkController {
             log.error("获取收藏列表失败", e);
             result.put("success", false);
             result.put("message", e.getMessage());
+        }
+        return result;
+    }
+
+    /**
+     * 根据物种ID查询关联的知识库文档（用于答题页收藏知识库功能）
+     * GET /bookmark/kb-by-species/{speciesId}
+     */
+    @GetMapping("/kb-by-species/{speciesId}")
+    public Map<String, Object> getKbBySpeciesId(@PathVariable Long speciesId,
+                                                 Authentication auth) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            Long userId = extractUserId(auth);
+            if (userId == null) {
+                result.put("success", false);
+                result.put("message", "请先登录");
+                return result;
+            }
+
+            // 使用 MyBatis-Plus 查询关联物种的知识库文档
+            List<com.gdou.marine.entity.KbDocument> docs = kbDocumentMapper.selectList(
+                    new LambdaQueryWrapper<com.gdou.marine.entity.KbDocument>()
+                            .eq(com.gdou.marine.entity.KbDocument::getSpeciesId, speciesId)
+                            .eq(com.gdou.marine.entity.KbDocument::getStatus, 1)
+                            .select(com.gdou.marine.entity.KbDocument::getId,
+                                    com.gdou.marine.entity.KbDocument::getTitle,
+                                    com.gdou.marine.entity.KbDocument::getSpeciesId,
+                                    com.gdou.marine.entity.KbDocument::getSourceType,
+                                    com.gdou.marine.entity.KbDocument::getStatus)
+            );
+            
+            // 转换为 Map 格式返回
+            List<Map<String, Object>> docList = new ArrayList<>();
+            for (com.gdou.marine.entity.KbDocument doc : docs) {
+                Map<String, Object> docMap = new HashMap<>();
+                docMap.put("id", doc.getId());
+                docMap.put("title", doc.getTitle());
+                docMap.put("speciesId", doc.getSpeciesId());  // 🌟 添加 speciesId 字段
+                docMap.put("source_type", doc.getSourceType());
+                docMap.put("status", doc.getStatus());
+                docList.add(docMap);
+            }
+            
+            result.put("success", true);
+            result.put("data", docList);
+        } catch (Exception e) {
+            log.error("根据物种ID查询知识库失败, speciesId={}", speciesId, e);
+            result.put("success", false);
+            result.put("message", "查询知识库失败: " + e.getMessage());
+        }
+        return result;
+    }
+
+    /**
+     * 根据文档ID获取知识库详情（用于题目无speciesId时，通过来源文档ID直接收藏）
+     * GET /bookmark/kb-by-doc/{documentId}
+     */
+    @GetMapping("/kb-by-doc/{documentId}")
+    public Map<String, Object> getKbByDocumentId(@PathVariable Long documentId,
+                                                   Authentication auth) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            Long userId = extractUserId(auth);
+            if (userId == null) {
+                result.put("success", false);
+                result.put("message", "请先登录");
+                return result;
+            }
+
+            com.gdou.marine.entity.KbDocument doc = kbDocumentMapper.selectById(documentId);
+            if (doc == null || doc.getStatus() == null || doc.getStatus() != 1) {
+                result.put("success", false);
+                result.put("message", "知识库文档不存在或未发布");
+                return result;
+            }
+
+            Map<String, Object> docMap = new HashMap<>();
+            docMap.put("id", doc.getId());
+            docMap.put("title", doc.getTitle());
+            docMap.put("speciesId", doc.getSpeciesId());
+            docMap.put("sourceType", doc.getSourceType());
+            docMap.put("status", doc.getStatus());
+            
+            result.put("success", true);
+            result.put("data", List.of(docMap));
+        } catch (Exception e) {
+            log.error("根据文档ID查询知识库失败, documentId={}", documentId, e);
+            result.put("success", false);
+            result.put("message", "查询知识库失败: " + e.getMessage());
         }
         return result;
     }

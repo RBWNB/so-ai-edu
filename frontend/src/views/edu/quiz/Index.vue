@@ -295,6 +295,27 @@
               <el-tag :type="d.correct ? 'success' : 'danger'" size="small" effect="dark">
                 {{ d.correct ? '✓ 正确' : '✗ 错误' }}
               </el-tag>
+              <!-- 🌟 收藏题目按钮 + 收藏关联知识库按钮（独立） -->
+              <div class="bookmark-btn-group">
+                <button
+                  class="bookmark-detail-btn"
+                  :class="{ 'is-bookmarked': isQuestionBookmarked(d.id) }"
+                  @click.stop="handleBookmark('question', d, idx)"
+                >
+                  <el-icon :size="14"><CollectionTag /></el-icon>
+                  <span>{{ isQuestionBookmarked(d.id) ? '已收藏题目' : '收藏题目' }}</span>
+                </button>
+                <button
+                  class="bookmark-detail-btn bookmark-kb-btn"
+                  :class="{ 'is-bookmarked': hasKbBookmarked(d), 'kb-disabled': !d.speciesId && !d.sourceDocumentId }"
+                  @click.stop="handleBookmark('knowledge', d, idx)"
+                >
+                  <el-icon :size="14"><Reading /></el-icon>
+                  <span v-if="!d.speciesId && !d.sourceDocumentId">暂无关联</span>
+                  <span v-else-if="hasKbBookmarked(d)">已收藏知识库</span>
+                  <span v-else>收藏知识库</span>
+                </button>
+              </div>
             </div>
             <div class="detail-stem">{{ d.stem }}</div>
             <div v-if="d.optionsJson" class="detail-options">
@@ -733,13 +754,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, nextTick, onBeforeUnmount, onMounted } from 'vue'
+import { ref, reactive, computed, nextTick, onBeforeUnmount, onMounted, onActivated } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { User, Star, StarFilled } from '@element-plus/icons-vue'
+import { User, Star, StarFilled, CollectionTag, Reading } from '@element-plus/icons-vue'
 import { startExam, submitExam, getExamHistory, examTts } from '@/api/exam'
 import { getLearningProfile } from '@/api/learning'
 import { submitCompetitionResult, getLeaderboard, getCompetitionQuestions } from '@/api/competition'
-import { addBookmark, removeBookmark, getBookmarkList } from '@/api/bookmark'
+import { getKbBySpeciesId, getKbByDocumentId, addBookmark as addBookmarkApi, removeBookmark as removeBookmarkApi, getBookmarkList } from '@/api/bookmark'
 import LevelUpPopup from "@/components/LevelUpPopup.vue";
 
 // ==================== 模式切换 ====================
@@ -1045,12 +1066,26 @@ const handleSubmit = async () => {
       totalCount.value = res.data.totalCount
       resultDetails.value = (res.data.details || []).map((d, idx) => ({
         ...d,
+        // 🌟 关键修复：details 返回的是 questionId 而非 id；且缺少 speciesId
+        id: d.questionId || questions.value[idx]?.id,
         stem: questions.value[idx]?.stem || '',
         optionsJson: questions.value[idx]?.optionsJson || '',
         questionType: questions.value[idx]?.questionType || 'single',
+        speciesId: questions.value[idx]?.speciesId || d.speciesId || null,
+        sourceDocumentId: questions.value[idx]?.sourceDocumentId || d.sourceDocumentId || null,  // 🌟 传递来源文档ID
       }))
 
+      // 🌟 调试日志：检查 speciesId 是否正确赋值
+      console.log('📊 resultDetails 数据:', resultDetails.value.map(q => ({
+        id: q.id,
+        speciesId: q.speciesId,
+        stem: q.stem?.slice(0, 20)
+      })))
+
       phase.value = 'result'
+
+      // 🌟 进入结果页时重新加载收藏状态（此时 resultDetails 已填充，能正确初始化知识库收藏映射）
+      fetchBookmarkedIds()
 
       if (oldLevel !== null) {
         try {
@@ -1106,44 +1141,237 @@ const confirmExit = () => {
   }
 }
 
-// ==================== 收藏相关 ====================
-const fetchBookmarkedIds = async () => {
+// ==================== 收藏相关（题目 + 知识库双按钮） ====================
+
+/** 上一次有效的 kbList 数据（用于保守策略，防止空响应覆盖正确状态） */
+let _lastValidKbList = []
+
+const fetchBookmarkedIds = async (forceRefresh = false) => {
   try {
     const res = await getBookmarkList()
-    if (res.data.success) {
+    if (res.data?.success) {
       const quizList = res.data.data?.quiz_question || []
-      bookmarkedQuestionIds.value = new Set(quizList.map(item => item.targetId))
+      bookmarkedQuestions.value = new Set(quizList.map(item => item.targetId))
+      // 同步到旧状态兼容
+      bookmarkedQuestionIds.value = new Set(bookmarkedQuestions.value)
+      // 知识库收藏
+      const kbList = res.data.data?.kb_document || []
+      
+      // 🔍 调试日志：打印后端返回的知识库收藏数据
+      console.log('📚 [fetchBookmarkedIds] 后端返回 kbList:', kbList.length > 0 ? kbList.map(kb => ({
+        targetId: kb.targetId,
+        speciesId: kb.speciesId,
+        species_id: kb.species_id,
+        title: kb.title
+      })) : '(空数组)')
+      
+      // 🌟 保守策略：如果后端返回空 kbList 但本地已有有效缓存，优先使用缓存数据
+      // （防止 onActivated 时序竞态导致空响应覆盖正确的收藏状态）
+      let effectiveKbList = kbList
+      if (!forceRefresh && kbList.length === 0 && _lastValidKbList.length > 0) {
+        console.warn('⚠️ [fetchBookmarkedIds] 后端返回空kbList，使用上次有效缓存（防止覆盖已收藏状态）')
+        effectiveKbList = _lastValidKbList
+      } else if (kbList.length > 0) {
+        _lastValidKbList = kbList  // 更新缓存
+      }
+      
+      const kbSet = new Set(effectiveKbList.map(item => item.targetId))
+      bookmarkedKbSet.value = kbSet
+      
+      // 🌟 初始化每题的知识库收藏状态（使用 Map 确保响应式）
+      // 支持两种匹配方式：通过 speciesId 匹配 或 通过 sourceDocumentId 匹配
+      if (resultDetails.value.length > 0) {
+        const newMap = new Map()
+        
+        // 预先构建已收藏知识库ID的Set（用于sourceDocumentId快速匹配）
+        const bookmarkedKbTargetIds = new Set(effectiveKbList.map(kb => kb.targetId))
+        
+        resultDetails.value.forEach(q => {
+          let hasKb = false
+          
+          if (q.speciesId || q.speciesId === 0) {
+            // 方式1：有 speciesId → 按物种匹配（兼容旧数据）
+            const qSpeciesStr = String(q.speciesId)
+            hasKb = effectiveKbList.some(kb => {
+              const kbSpeciesId = kb.speciesId ?? kb.species_id
+              if (kbSpeciesId == null || kbSpeciesId === '') return false
+              return String(kbSpeciesId) === qSpeciesStr || Number(kbSpeciesId) == Number(q.speciesId)
+            })
+          } else if (q.sourceDocumentId) {
+            // 方式2：无 speciesId 但有 sourceDocumentId → 直接匹配目标文档ID是否被收藏
+            hasKb = bookmarkedKbTargetIds.has(q.sourceDocumentId)
+          }
+          
+          newMap.set(q.id, hasKb)
+        })
+        questionKbBookmarkedMap.value = newMap
+      }
     }
-  } catch {
+  } catch (err) {
+    console.error('加载收藏状态失败:', err)
     // 静默失败
   }
 }
 
-const toggleBookmark = async (question) => {
-  if (!question || !question.id) return
-  const isBookmarked = bookmarkedQuestionIds.value.has(question.id)
+/** 题目收藏集合 */
+const bookmarkedQuestions = ref(new Set())
+
+/** 知识库收藏 ID 集合 */
+const bookmarkedKbSet = ref(new Set())
+
+/** 每道题目的知识库收藏状态映射 { questionId: boolean } */
+const questionKbBookmarkedMap = ref(new Map())
+
+/** 判断题目是否已收藏 */
+const isQuestionBookmarked = (qid) => bookmarkedQuestions.value.has(qid)
+
+/** 判断该题关联的知识库是否已被收藏 */
+const hasKbBookmarked = (q) => questionKbBookmarkedMap.value.get(q.id) === true
+
+/**
+ * 🌟 同步关联同一知识库的所有题目的收藏状态（即时响应）
+ * 支持两种匹配方式：speciesId 或 sourceDocumentId
+ */
+const syncKbStatusByKey = (syncKey, status) => {
+  if (!syncKey) return
+  const newMap = new Map(questionKbBookmarkedMap.value)
+  resultDetails.value.forEach(q => {
+    // 匹配条件：speciesId 相同 或 sourceDocumentId 相同
+    if (q.speciesId === syncKey || q.sourceDocumentId === syncKey) {
+      newMap.set(q.id, status)
+    }
+  })
+  questionKbBookmarkedMap.value = newMap
+}
+
+/**
+ * 处理收藏操作（从下拉菜单触发）
+ * @param {string} type - 'question' | 'knowledge'
+ * @param {object} questionData - 题目数据
+ * @param {number} idx - 题目索引
+ */
+const handleBookmark = async (type, questionData, idx) => {
+  if (!questionData?.id) return
+
+  const questionTitle = (questionData.stem || '').slice(0, 30)
+
   try {
-    if (isBookmarked) {
-      const res = await removeBookmark('quiz_question', question.id)
-      if (res.data.success) {
-        const next = new Set(bookmarkedQuestionIds.value)
-        next.delete(question.id)
-        bookmarkedQuestionIds.value = next
-        ElMessage.success('已取消收藏')
+    if (type === 'question') {
+      // 收藏/取消收藏题目
+      if (isQuestionBookmarked(questionData.id)) {
+        const res = await removeBookmarkApi('quiz_question', questionData.id)
+        if (res.data?.success) {
+          const s = new Set(bookmarkedQuestions.value); s.delete(questionData.id)
+          bookmarkedQuestions.value = s
+          // 🌟 同步星星按钮状态（bookmarkedQuestionIds）
+          const s2 = new Set(bookmarkedQuestionIds.value); s2.delete(questionData.id)
+          bookmarkedQuestionIds.value = s2
+          ElMessage.info(`已取消「${questionTitle}」的题目收藏`)
+        } else {
+          ElMessage.error(res.data?.message || '取消收藏失败')
+          return
+        }
+      } else {
+        const res = await addBookmarkApi('quiz_question', questionData.id)
+        if (res.data?.success) {
+          const s = new Set(bookmarkedQuestions.value); s.add(questionData.id)
+          bookmarkedQuestions.value = s
+          // 🌟 同步星星按钮状态（bookmarkedQuestionIds）
+          const s2 = new Set(bookmarkedQuestionIds.value); s2.add(questionData.id)
+          bookmarkedQuestionIds.value = s2
+          ElMessage.success(res.data?.message || `已收藏「${questionTitle}」为题目`)
+        } else {
+          ElMessage.error(res.data?.message || '收藏失败')
+          return
+        }
+      }
+    } else if (type === 'knowledge') {
+      // 🌟 调试日志：检查题目的 speciesId 和 sourceDocumentId
+      console.log('🔍 收藏知识库 - 题目数据:', {
+        id: questionData.id,
+        speciesId: questionData.speciesId,
+        sourceDocumentId: questionData.sourceDocumentId,
+        stem: questionData.stem?.slice(0, 30)
+      })
+      
+      // 获取关联的知识库文档列表（优先用speciesId，其次用sourceDocumentId）
+      let kbDocs = []
+      try {
+        if (questionData.speciesId) {
+          // 有物种ID → 通过物种查找所有关联知识库
+          const kbRes = await getKbBySpeciesId(questionData.speciesId)
+          kbDocs = kbRes.data?.data || []
+        } else if (questionData.sourceDocumentId) {
+          // 无物种ID但有来源文档ID → 直接获取该RAG知识库文档
+          const kbRes = await getKbByDocumentId(questionData.sourceDocumentId)
+          kbDocs = kbRes.data?.data || []
+        }
+      } catch (e) { console.error('获取关联知识库失败:', e); ElMessage.error('获取关联知识库失败'); return; }
+
+      if (kbDocs.length === 0) { 
+        ElMessage.warning(questionData.speciesId ? '该物种暂无关联知识库文档' : '该题目暂无关联知识库')
+        return 
+      }
+
+      // 查找是否已有同 ID 的知识库被收藏
+      const alreadyBookmarkedKb = Array.from(bookmarkedKbSet.value).find(kbId => {
+        return kbDocs.some(doc => doc.id === kbId)
+      })
+
+      if (alreadyBookmarkedKb) {
+        // 取消收藏已有的知识库
+        const res = await removeBookmarkApi('kb_document', alreadyBookmarkedKb)
+        if (res.data?.success) {
+          const s = new Set(bookmarkedKbSet.value); s.delete(alreadyBookmarkedKb)
+          bookmarkedKbSet.value = s
+          // 同步状态（使用 speciesId 或 sourceDocumentId 作为同步键）
+          const syncKey = questionData.speciesId || questionData.sourceDocumentId
+          syncKbStatusByKey(syncKey, false)
+          _lastValidKbList = _lastValidKbList.filter(kb => kb.targetId !== alreadyBookmarkedKb)
+          ElMessage.success('已取消该知识库收藏')
+        } else {
+          ElMessage.error(res.data?.message || '取消收藏失败')
+          return
+        }
+      } else {
+        // 收藏第一个关联的知识库文档
+        const kbToBookmark = kbDocs[0]
+        const res = await addBookmarkApi('kb_document', kbToBookmark.id)
+        if (res.data?.success) {
+          const s = new Set(bookmarkedKbSet.value); s.add(kbToBookmark.id)
+          bookmarkedKbSet.value = s
+          // 同步状态（使用 speciesId 或 sourceDocumentId 作为同步键）
+          const syncKey = questionData.speciesId || questionData.sourceDocumentId
+          syncKbStatusByKey(syncKey, true)
+          const newKbItem = { targetId: kbToBookmark.id, speciesId: questionData.speciesId || kbToBookmark.speciesId, title: kbToBookmark.title }
+          _lastValidKbList = [..._lastValidKbList.filter(kb => kb.targetId !== kbToBookmark.id), newKbItem]
+          ElMessage.success(res.data?.message || `已将「${kbToBookmark.title}」加入知识库收藏`)
+        } else {
+          ElMessage.error(res.data?.message || '收藏失败')
+          return
+        }
       }
     } else {
-      const res = await addBookmark('quiz_question', question.id)
-      if (res.data.success) {
-        const next = new Set(bookmarkedQuestionIds.value)
-        next.add(question.id)
-        bookmarkedQuestionIds.value = next
-        ElMessage.success('已收藏')
-      }
+      ElMessage.warning('未知的收藏类型')
     }
-  } catch {
-    ElMessage.error('操作失败')
+    // 🌟 注意：不触发 bookmark-changed 事件，避免 onBookmarkChanged 重新加载导致状态闪回
+    // 因为 syncKbStatusByKey() 已经即时同步了状态
+  } catch (err) {
+    console.error('收藏操作失败:', err)
+    ElMessage.error(err.response?.data?.message || '收藏操作失败')
   }
 }
+
+/** 兼容旧接口：简单收藏切换 */
+const toggleBookmark = async (question) => {
+  if (!question || !question.id) return
+  handleBookmark('question', question, -1)
+}
+
+/**
+ * 🌟 加载全部收藏状态（含知识库联动），供跨页面事件触发时调用
+ */
+const loadQuestionBookmarks = async () => { await fetchBookmarkedIds() }
 
 // ==================== 普通模式：历史 ====================
 const fetchHistory = async () => {
@@ -1570,15 +1798,36 @@ const updateLbDialogWidth = () => {
   lbDialogWidth.value = window.innerWidth < 768 ? '100%' : '680px'
 }
 
+/**
+ * 🌟 监听跨页面收藏变更事件（从"我的收藏"页面取消收藏时触发即时响应）
+ */
+const onBookmarkChanged = async () => {
+  if (phase.value === 'result') { await loadQuestionBookmarks() }
+}
+
 onMounted(() => {
   updateLbDialogWidth()
   window.addEventListener('resize', updateLbDialogWidth)
+  // 监听其他页面（如"我的收藏"）的收藏变更
+  window.addEventListener('bookmark-changed', onBookmarkChanged)
 })
 
-// 组件卸载时清理定时器
+// 🌟 keep-alive 激活时：从其他页面返回，重新从后端同步收藏状态（即时响应）
+onActivated(async () => {
+  console.log('🔄 [onActivated] 触发！phase:', phase.value, ', resultDetails数量:', resultDetails.value.length)
+  // 仅在结果页且有答题详情时才刷新，避免开始页不必要的请求
+  if (phase.value === 'result' && resultDetails.value.length > 0) {
+    console.log('🔄 [onActivated] 条件满足，开始刷新收藏状态...')
+    await fetchBookmarkedIds()
+    console.log('🔄 [onActivated] 收藏状态刷新完成')
+  }
+})
+
+// 组件卸载时清理定时器和事件监听
 onBeforeUnmount(() => {
   clearTimers()
   window.removeEventListener('resize', updateLbDialogWidth)
+  window.removeEventListener('bookmark-changed', onBookmarkChanged)
 })
 
 // ==================== 工具函数 ====================
@@ -2061,8 +2310,43 @@ loadCompHistory()
 .detail-card.wrong { background: rgba(245, 63, 63, 0.02); border-color: rgba(245, 63, 63, 0.1); }
 .detail-card.wrong:hover { background: rgba(245, 63, 63, 0.04); }
 
-.detail-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.detail-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
 .detail-num { font-size: 18px; font-weight: 800; color: #1d2129; }
+
+/* ═══ 收藏按钮样式（题目解析页） ═══ */
+.bookmark-btn-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.bookmark-detail-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border: 1.5px solid #e0e6ed;
+  border-radius: 20px;
+  background: #ffffff;
+  color: #86909c;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  white-space: nowrap;
+}
+.bookmark-detail-btn:hover { border-color: #ffb400; background: rgba(255, 180, 0, 0.04); color: #e6a23c; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(255, 180, 0, 0.15); }
+.bookmark-detail-btn.is-bookmarked { border-color: #ffb400; background: linear-gradient(135deg, rgba(255, 180, 0, 0.15), rgba(255, 143, 0, 0.1)); color: #e6a23c; box-shadow: 0 2px 8px rgba(255, 180, 0, 0.2); }
+.bookmark-kb-btn:hover:not(.kb-disabled) { border-color: #165dff; background: rgba(22, 93, 255, 0.04); color: #165dff; box-shadow: 0 4px 12px rgba(22, 93, 255, 0.12); }
+.bookmark-kb-btn.is-bookmarked { border-color: #165dff; background: linear-gradient(135deg, rgba(22, 93, 255, 0.15), rgba(0, 210, 255, 0.08)); color: #165dff; box-shadow: 0 2px 8px rgba(22, 93, 255, 0.2); }
+.bookmark-kb-btn.kb-disabled { opacity: 0.45; cursor: not-allowed; }
+@keyframes bookmark-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.15); }
+  70% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
 
 .detail-stem { font-size: 16px; color: #1d2129; margin-bottom: 16px; line-height: 1.6; font-weight: 600; }
 .detail-options { margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px; }

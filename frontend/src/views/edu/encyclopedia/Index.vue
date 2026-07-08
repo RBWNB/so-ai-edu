@@ -296,7 +296,8 @@
 </template>
 
 <script setup>
-import { onMounted, ref, reactive, watch } from 'vue';
+import { onMounted, ref, reactive, watch, onActivated } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import {
   Picture, Star, StarFilled, Sunny, Search,
@@ -305,6 +306,9 @@ import {
 import { getSpeciesPage, getSpeciesById } from '@/api/species';
 import { getEcosystemPage, getEcosystemById } from '@/api/ecosystem';
 import { addBookmark as addBookmarkApi, removeBookmark as removeBookmarkApi, getBookmarkList } from '@/api/bookmark';
+
+const router = useRouter();
+const route = useRoute();
 
 // ═══ 基础状态 ═══
 const loading = ref(false);
@@ -320,20 +324,25 @@ const detailLoading = ref(false);
 const detailData = ref(null);
 const detailType = ref('');
 
-// ═══ 收藏状态管理 ═══
-const bookmarkSet = new Set();
-let bookmarksLoaded = false;
+// ═══ 收藏状态管理 - 仿照 PostDetail 响应式方案 ═══
+const bookmarkState = reactive({
+  species: {},   // 格式: { [id]: true }
+  ecosystem: {},
+});
 
-/** 加载用户的收藏列表 */
+/** 加载用户的收藏列表（仿照 PostDetail 每次都重新加载） */
 const loadBookmarks = async () => {
   try {
     const res = await getBookmarkList();
     if (res.data.success && res.data.data) {
       const d = res.data.data;
-      (d.species || []).forEach(item => bookmarkSet.add(`species_${item.targetId}`));
-      (d.ecosystem || []).forEach(item => bookmarkSet.add(`ecosystem_${item.targetId}`));
+      // 清空旧状态
+      bookmarkState.species = {};
+      bookmarkState.ecosystem = {};
+      // 填充新状态（使用 reactive 对象的属性赋值，Vue 可追踪）
+      (d.species || []).forEach(item => { bookmarkState.species[item.targetId] = true; });
+      (d.ecosystem || []).forEach(item => { bookmarkState.ecosystem[item.targetId] = true; });
     }
-    bookmarksLoaded = true;
   } catch (err) {
     console.error('加载收藏失败', err);
   }
@@ -342,27 +351,37 @@ const loadBookmarks = async () => {
 /** 检查是否已收藏 */
 const isBookmarked = (type, id) => {
   if (!id) return false;
-  return bookmarkSet.has(`${type}_${id}`);
+  return !!bookmarkState[type]?.[id];
 };
 
 /** 收藏 / 取消收藏 */
 const toggleBookmark = async (type, item) => {
   if (!item?.id) return;
-  const key = `${type}_${item.id}`;
   const name = type === 'species' ? item.chineseName : item.name;
-  const currentlyBookmarked = bookmarkSet.has(key);
+  const currentlyBookmarked = !!bookmarkState[type]?.[item.id];
 
   try {
     if (currentlyBookmarked) {
-      await removeBookmarkApi(type, item.id);
-      bookmarkSet.delete(key);
-      ElMessage.info(`已取消「${name}」收藏`);
+      const res = await removeBookmarkApi(type, item.id);
+      if (res.data?.success) {
+        delete bookmarkState[type][item.id];        // ✅ 响应式删除，Vue 立即感知
+        ElMessage.info(`已取消「${name}」收藏`);
+      } else {
+        ElMessage.error(res.data?.message || '取消收藏失败');
+        return;
+      }
     } else {
-      await addBookmarkApi(type, item.id);
-      bookmarkSet.add(key);
-      ElMessage.success(`已收藏「${name}」`);
+      const res = await addBookmarkApi(type, item.id);
+      if (res.data?.success) {
+        bookmarkState[type][item.id] = true;         // ✅ 响应式添加，Vue 立即感知
+        ElMessage.success(res.data?.message || `已收藏「${name}」`);
+      } else {
+        ElMessage.error(res.data?.message || '收藏失败');
+        return;
+      }
     }
-    dataList.value = [...dataList.value];
+    // 🌟 通知其他页面（如个人中心）即时更新收藏列表
+    window.dispatchEvent(new CustomEvent('bookmark-changed', { detail: { targetType: type, targetId: item.id } }));
   } catch (err) {
     ElMessage.error(currentlyBookmarked ? '取消收藏失败' : '收藏失败');
   }
@@ -472,11 +491,23 @@ const openDetail = async (item) => {
 // ═══ 初始化 ═══
 onMounted(() => {
   fetchData();
-  loadBookmarks();
+  loadBookmarks();  // 首次进入时加载
+});
+
+/** keep-alive 缓存激活时重新加载数据（仿照 PostDetail） */
+onActivated(() => {
+  loadBookmarks();  // 每次从其他页面切换回来都刷新收藏状态
 });
 
 watch(() => [pagination.current, activeCategory.value], () => {
-  if (bookmarksLoaded) loadBookmarks();
+  loadBookmarks();  // 翻页或切换分类时也重新加载
+});
+
+/** 监听路由参数变化（防止从详情页返回时数据不刷新） */
+watch(() => route.path, (newPath) => {
+  if (newPath.includes('encyclopedia')) {
+    loadBookmarks();
+  }
 });
 </script>
 

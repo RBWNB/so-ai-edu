@@ -422,37 +422,112 @@
                   <el-tab-pane label="观察帖子" name="user_observation" />
                 </el-tabs>
 
-                <template v-if="currentFavList.length">
-                  <el-row :gutter="16" class="fav-grid">
-                    <el-col :xs="24" :sm="12" :md="8" v-for="item in currentFavList" :key="item.bookmarkId">
-                      <div
-                        class="fav-card"
-                        :class="{ 'fav-card-clickable': favSubTab === 'user_observation' || favSubTab === 'quiz_question' }"
-                        @click="handleFavCardClick(item)"
-                      >
+                <!-- ═══ 知识库筛选栏（仅在 kb_document tab 显示）═══ -->
+                <div v-if="favSubTab === 'kb_document'" class="quiz-filter-bar">
+                  <div class="filter-group">
+                    <span class="filter-label">来源：</span>
+                    <div class="filter-options">
+                      <span class="filter-tag" :class="{ active: selectedKbSource === '' }" @click="selectedKbSource = ''">全部知识库</span>
+                      <span class="filter-tag" :class="{ active: selectedKbSource === 'species' }" @click="selectedKbSource = 'species'">海洋百科物种</span>
+                      <span class="filter-tag" :class="{ active: selectedKbSource !== '' && selectedKbSource !== 'species' }" @click="selectedKbSource = 'rag'">RAG 知识库</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- ═══ 题目筛选栏（仅在 quiz_question tab 显示）═══ -->
+                <div v-if="favSubTab === 'quiz_question'" class="quiz-filter-bar">
+                  <div class="filter-group">
+                    <span class="filter-label">难度：</span>
+                    <div class="filter-options">
+                      <span class="filter-tag" :class="{ active: selectedQuizDifficulty === '' }" @click="selectedQuizDifficulty = ''">全部</span>
+                      <span class="filter-tag" :class="{ active: selectedQuizDifficulty === 'easy' }" @click="selectedQuizDifficulty = 'easy'">简单</span>
+                      <span class="filter-tag" :class="{ active: selectedQuizDifficulty === 'normal' }" @click="selectedQuizDifficulty = 'normal'">普通</span>
+                      <span class="filter-tag" :class="{ active: selectedQuizDifficulty === 'hard' }" @click="selectedQuizDifficulty = 'hard'">困难</span>
+                    </div>
+                  </div>
+                  <div class="filter-group">
+                    <span class="filter-label">题型：</span>
+                    <div class="filter-options">
+                      <span class="filter-tag" :class="{ active: selectedQuizType === '' }" @click="selectedQuizType = ''">全部</span>
+                      <span class="filter-tag" :class="{ active: selectedQuizType === 'single' }" @click="selectedQuizType = 'single'">单选</span>
+                      <span class="filter-tag" :class="{ active: selectedQuizType === 'multiple' }" @click="selectedQuizType = 'multiple'">多选</span>
+                      <span class="filter-tag" :class="{ active: selectedQuizType === 'judge' }" @click="selectedQuizType = 'judge'">判断</span>
+                    </div>
+                  </div>
+                </div>
+
+                <template v-if="filteredFavList.length">
+                  <!-- 🌟 知识库 tab：列表样式（显示完整内容） -->
+                  <div v-if="favSubTab === 'kb_document'" class="fav-kb-list">
+                    <div v-for="item in filteredFavList" :key="item.bookmarkId"
+                         class="fav-kb-list-item" @click="handleKbDetailClick(item)">
+                      <div class="fav-kb-icon" :class="item.sourceType === 'species' ? 'icon-species' : 'icon-rag'">
+                        <el-icon :size="22"><Reading /></el-icon>
+                      </div>
+                      <div class="fav-kb-main">
+                        <div class="fav-kb-top">
+                          <el-tag v-if="item.sourceType === 'species'" type="success" size="small" effect="plain" round>🐋 物种百科</el-tag>
+                          <el-tag v-else type="primary" size="small" effect="plain" round>📚 RAG知识库</el-tag>
+                          <span class="fav-time ml-2">{{ item.createdAt }}</span>
+                        </div>
+                        <div class="fav-kb-title">{{ item.title }}</div>
+                        <!-- RAG知识库显示完整内容 -->
+                        <div v-if="item.content" class="fav-kb-content">{{ item.content }}</div>
+                        <div v-else class="fav-kb-empty-hint">📝 暂无内容详情</div>
+                      </div>
+                      <el-button class="fav-kb-remove-btn" size="small" type="danger" text @click.stop="removeBookmark(item)">取消收藏</el-button>
+                    </div>
+                  </div>
+
+                  <!-- 📝 题目 tab：简洁卡片网格（标签 + 标题 + 时间） -->
+                  <div v-else-if="favSubTab === 'quiz_question'" class="fav-quiz-grid">
+                    <div v-for="item in filteredFavList" :key="item.bookmarkId"
+                         class="fav-quiz-card" @click="openQuestionDetail(item)">
+                      <!-- 标签行 -->
+                      <div class="quiz-card-tags">
+                        <el-tag
+                          :type="item.questionType === 'single' ? 'primary' : (item.questionType === 'multiple' ? 'success' : (item.questionType === 'judge' ? 'warning' : 'info'))"
+                          size="small"
+                          effect="dark"
+                          round
+                        >
+                          {{ item.questionType === 'single' ? '单选' : (item.questionType === 'multiple' ? '多选' : (item.questionType === 'judge' ? '判断' : item.questionType || '题目')) }}
+                        </el-tag>
+                        <el-tag
+                          :type="item.difficulty === 'easy' ? 'success' : (item.difficulty === 'hard' ? 'danger' : 'warning')"
+                          size="small"
+                          effect="light"
+                          round
+                        >
+                          {{ item.difficulty === 'easy' ? '简单' : (item.difficulty === 'normal' ? '普通' : (item.difficulty === 'hard' ? '困难' : item.difficulty || '普通')) }}
+                        </el-tag>
+                      </div>
+                      <!-- 题目标题（支持多行完整显示） -->
+                      <div class="quiz-card-title">{{ item.stem || item.title || '无题目标题' }}</div>
+                      <!-- 底部：收藏时间 + 取消收藏 -->
+                      <div class="quiz-card-footer">
+                        <span class="quiz-card-time"><el-icon><Clock /></el-icon> {{ item.createdAt }}</span>
+                        <el-button class="fav-remove-btn" size="small" type="danger" text @click.stop="removeBookmark(item)">取消收藏</el-button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 其他类型：物种/生态系统 - 可点击查看详情 -->
+                  <el-row v-else :gutter="16" class="fav-grid">
+                    <el-col :xs="24" :sm="12" :md="8" v-for="item in filteredFavList" :key="item.bookmarkId">
+                      <div class="fav-card fav-card-clickable" @click="handleFavCardClick(item)">
                         <div class="fav-thumb">
                           <img v-if="item.thumbnail" :src="getFavImageUrl(item.thumbnail)" :alt="item.title" @error="handleFavImgError" />
-                          <div v-else class="fav-thumb-placeholder">
-                            <span>📝</span>
-                          </div>
+                          <div v-else class="fav-thumb-placeholder"><span>{{ favSubTab === 'ecosystem' ? '🌊' : '🐋' }}</span></div>
                         </div>
                         <div class="fav-info">
-                          <div class="fav-title">{{ item.title }}</div>
-                          <!-- DB: user_bookmark.created_at -->
+                          <div class="fav-title">{{ item.title || item.name || item.chineseName || '无标题' }}</div>
                           <div class="fav-time">{{ item.createdAt }}</div>
                         </div>
-                        <el-button
-                          class="fav-remove-btn"
-                          size="small"
-                          type="danger"
-                          text
-                          @click.stop="removeBookmark(item)"
-                        >
-                          取消收藏
-                        </el-button>
+                        <el-button class="fav-remove-btn" size="small" type="danger" text @click.stop="removeBookmark(item)">取消收藏</el-button>
                       </div>
                     </el-col>
-                </el-row>
+                  </el-row>
                 </template>
                 <el-empty v-else description="暂无收藏内容" :image-size="120" />
               </div>
@@ -772,57 +847,247 @@
   <!-- 题目详情弹窗 -->
   <el-dialog
     v-model="questionDetailVisible"
-    title="题目详情"
-    width="560px"
+    title=""
+    width="640px"
     :close-on-click-modal="true"
     :close-on-press-escape="true"
     class="question-detail-dialog"
+    destroy-on-close
   >
+    <template #header>
+      <div class="qd-dialog-header">
+        <div class="qd-header-icon"><el-icon :size="20"><EditPen /></el-icon></div>
+        <span class="qd-header-title">题目详情</span>
+      </div>
+    </template>
     <div v-if="questionDetail" class="question-detail-body">
+      <!-- 标签栏 -->
       <div class="qd-tags">
-        <el-tag :type="qdTypeTag(questionDetail.questionType)" size="small" effect="dark">
+        <el-tag :type="qdTypeTag(questionDetail.questionType)" size="small" effect="dark" round>
           {{ qdTypeLabel(questionDetail.questionType) }}
         </el-tag>
         <el-tag
           :type="questionDetail.difficulty === 'easy' ? 'success' : questionDetail.difficulty === 'hard' ? 'danger' : 'warning'"
-          effect="plain"
+          effect="light"
           size="small"
+          round
         >
           {{ qdDiffLabel(questionDetail.difficulty) }}
         </el-tag>
+        <span class="qd-species-tag" v-if="questionDetail.speciesName">
+          <el-icon><Picture /></el-icon> {{ questionDetail.speciesName }}
+        </span>
       </div>
 
-      <div class="qd-stem">{{ questionDetail.title || questionDetail.stem || '暂无题目' }}</div>
+      <!-- 题目内容 -->
+      <div class="qd-section">
+        <div class="qd-section-label">
+          <el-icon><Document /></el-icon> 题目
+        </div>
+        <div class="qd-stem">{{ questionDetail.stem || questionDetail.title || '暂无题目' }}</div>
+      </div>
 
-      <div v-if="qdParsedOptions.length" class="qd-options">
-        <div v-for="opt in qdParsedOptions" :key="opt.label" class="qd-option-item">
-          <span class="qd-opt-label">{{ opt.label }}.</span>
-          <span class="qd-opt-text">{{ opt.text }}</span>
+      <!-- 选项 -->
+      <div v-if="qdParsedOptions.length" class="qd-section">
+        <div class="qd-section-label">
+          <el-icon><List /></el-icon> 选项
+        </div>
+        <div class="qd-options">
+          <div v-for="opt in qdParsedOptions" :key="opt.label"
+               class="qd-option-item"
+               :class="{ 'is-correct': isCorrectOption(opt.label) }">
+            <span class="qd-opt-label">{{ opt.label }}</span>
+            <span class="qd-opt-text">{{ opt.text }}</span>
+            <el-icon v-if="isCorrectOption(opt.label)" class="qd-opt-check"><CircleCheckFilled /></el-icon>
+          </div>
         </div>
       </div>
 
-      <div class="qd-answer">
-        <span class="qd-answer-label">正确答案：</span>
-        <el-tag type="success" size="small">{{ questionDetail.correctAnswer || '未知' }}</el-tag>
+      <!-- 正确答案 -->
+      <div class="qd-answer-section">
+        <div class="qd-answer-label">正确答案</div>
+        <div class="qd-answer-value">
+          <el-tag type="success" effect="dark" round size="large">{{ questionDetail.correctAnswer || '未知' }}</el-tag>
+        </div>
       </div>
 
-      <div v-if="questionDetail.explanation" class="qd-explanation">
-        <span class="qd-exp-label">解析：</span>
-        <span>{{ questionDetail.explanation }}</span>
+      <!-- 解析 -->
+      <div v-if="questionDetail.explanation" class="qd-explanation-section">
+        <div class="qd-exp-label">
+          <el-icon><ChatDotRound /></el-icon> 解析
+        </div>
+        <div class="qd-explanation-body">{{ questionDetail.explanation }}</div>
       </div>
     </div>
     <el-empty v-else description="加载失败" :image-size="80" />
   </el-dialog>
+
+  <!-- ═══ 物种详情弹窗（收藏的物种知识库点击查看）═══ -->
+  <el-dialog v-model="speciesDetailVisible" title="🐋 物种百科详情" width="720px" destroy-on-close append-to-body class="species-detail-dialog" :close-on-click-modal="true">
+    <div v-loading="speciesDetailLoading" class="detail-content">
+      <template v-if="speciesDetailData">
+        <div class="species-hero">
+          <div class="hero-image-wrap">
+            <el-image v-if="speciesDetailData.imageUrl" :src="getImageUrl(speciesDetailData.imageUrl)" fit="cover" class="hero-image">
+              <template #error><div class="hero-placeholder"><el-icon :size="60"><Picture /></el-icon></div></template>
+            </el-image>
+            <div v-else class="hero-placeholder hero-full"><el-icon :size="60"><Picture /></el-icon></div>
+            <div class="hero-gradient"></div>
+          </div>
+          <div class="hero-info">
+            <h2 class="hero-name">{{ speciesDetailData.chineseName || '未命名物种' }}</h2>
+            <p class="hero-latin">{{ speciesDetailData.scientificName || '' }}</p>
+            <p class="hero-alias" v-if="speciesDetailData.aliasNames">别名：{{ speciesDetailData.aliasNames }}</p>
+            <div class="hero-tags" v-if="speciesDetailData.conservationStatus">
+              <el-tag v-if="speciesDetailData.conservationStatus" type="danger" size="small" effect="dark" round>{{ speciesDetailData.conservationStatus }}</el-tag>
+            </div>
+            <div class="hero-classification" v-if="speciesDetailData.kingdom || speciesDetailData.phylum || speciesDetailData.className || speciesDetailData.orderName || speciesDetailData.familyName">
+              {{ [speciesDetailData.kingdom, speciesDetailData.phylum, speciesDetailData.className, speciesDetailData.orderName, speciesDetailData.familyName].filter(Boolean).join(' / ') }}
+            </div>
+          </div>
+        </div>
+        <div class="species-sections">
+          <div v-if="speciesDetailData.morphologyDesc" class="detail-section"><h4 class="section-title"><el-icon><Document /></el-icon>形态特征</h4><p class="section-body">{{ speciesDetailData.morphologyDesc }}</p></div>
+          <div v-if="speciesDetailData.habitDesc" class="detail-section"><h4 class="section-title"><el-icon><Coffee /></el-icon>生活习性</h4><p class="section-body">{{ speciesDetailData.habitDesc }}</p></div>
+          <div v-if="speciesDetailData.habitat" class="detail-section"><h4 class="section-title"><el-icon><Location /></el-icon>栖息环境</h4><p class="section-body">{{ speciesDetailData.habitat }}</p></div>
+          <div v-if="speciesDetailData.distributionArea" class="detail-section"><h4 class="section-title"><el-icon><Compass /></el-icon>分布区域</h4><p class="section-body">{{ speciesDetailData.distributionArea }}</p></div>
+          <div v-if="speciesDetailData.funFact" class="detail-section fun-fact-section"><h4 class="section-title"><el-icon><Star /></el-icon>趣味知识</h4><p class="section-body fun-fact-text">{{ speciesDetailData.funFact }}</p></div>
+        </div>
+      </template>
+    </div>
+    <template #footer><el-button @click="speciesDetailVisible = false">关闭</el-button></template>
+  </el-dialog>
+
+  <!-- ═══ RAG 知识库详情弹窗 ═══ -->
+  <el-dialog v-model="ragKbDetailVisible" title="" width="680px" destroy-on-close append-to-body class="rag-kb-detail-dialog" :close-on-click-modal="true">
+    <template #header>
+      <div class="qd-dialog-header rag-header">
+        <div class="qd-header-icon icon-rag"><el-icon :size="20"><Reading /></el-icon></div>
+        <span class="qd-header-title">RAG 知识库</span>
+      </div>
+    </template>
+    <div v-loading="ragKbDetailLoading" class="detail-content">
+      <template v-if="ragKbDetailData">
+        <div class="rag-kb-header">
+          <h2 class="rag-kb-title">{{ ragKbDetailData.title || '未命名文档' }}</h2>
+          <div class="rag-kb-meta">
+            <el-tag v-if="ragKbDetailData.sourceType === 'species'" type="success" size="small" effect="plain" round>海洋百科</el-tag>
+            <el-tag v-else-if="ragKbDetailData.sourceType" type="info" size="small" effect="plain" round>{{ ragKbDetailData.sourceType }}</el-tag>
+            <span v-if="ragKbDetailData.createdAt" class="rag-kb-time">更新时间：{{ ragKbDetailData.createdAt?.slice(0, 16) || '' }}</span>
+          </div>
+        </div>
+        <!-- 文档内容 -->
+        <div v-if="ragKbDetailData.content" class="rag-kb-content-section">
+          <h4 class="section-label"><el-icon><Document /></el-icon>文档内容</h4>
+          <div class="rag-kb-content">{{ ragKbDetailData.content }}</div>
+        </div>
+        <el-empty v-else description="暂无详细内容" :image-size="100" />
+      </template>
+    </div>
+    <template #footer><el-button @click="ragKbDetailVisible = false">关闭</el-button></template>
+  </el-dialog>
+
+  <!-- ═══ 生态系统详情弹窗 ═══ -->
+  <el-dialog v-model="ecoDetailVisible" title="" width="640px" destroy-on-close append-to-body class="eco-detail-dialog" :close-on-click-modal="true">
+    <template #header>
+      <div class="qd-dialog-header eco-header">
+        <div class="qd-header-icon icon-eco"><el-icon :size="20"><Sunny /></el-icon></div>
+        <span class="qd-header-title">生态系统详情</span>
+      </div>
+    </template>
+    <div v-loading="ecoDetailLoading" class="detail-content">
+      <template v-if="ecoDetailData">
+        <div class="eco-hero">
+          <h2 class="eco-name">{{ ecoDetailData.name || ecoDetailData.title || '未命名生态区' }}</h2>
+          <div class="eco-tags-row" v-if="ecoDetailData.status != null">
+            <el-tag v-if="ecoDetailData.status === 1" type="success" size="small" effect="light" round>已发布</el-tag>
+            <el-tag v-else type="info" size="small" effect="light" round>草稿</el-tag>
+          </div>
+        </div>
+        <div class="eco-sections">
+          <div v-if="ecoDetailData.description" class="detail-section">
+            <h4 class="section-label"><el-icon><Document /></el-icon>基本介绍</h4>
+            <p class="section-body-text">{{ ecoDetailData.description }}</p>
+          </div>
+          <div v-if="ecoDetailData.typicalSpecies || ecoDetailData.typical_species" class="detail-section">
+            <h4 class="section-label"><el-icon><Picture /></el-icon>代表物种</h4>
+            <div class="eco-species-list">
+              <template v-for="(sp, i) in parseEcoSpecies(ecoDetailData.typicalSpecies || ecoDetailData.typical_species)" :key="i">
+                <el-tag size="small" effect="plain" round>{{ sp }}</el-tag>
+              </template>
+            </div>
+          </div>
+          <div v-if="ecoDetailData.threats" class="detail-section">
+            <h4 class="section-label"><el-icon><WarningFilled /></el-icon>主要威胁</h4>
+            <p class="section-body-text">{{ ecoDetailData.threats }}</p>
+          </div>
+          <div v-if="ecoDetailData.protectionAdvice || ecoDetailData.protection_advice" class="detail-section">
+            <h4 class="section-label"><el-icon><InfoFilled /></el-icon>保护建议</h4>
+            <p class="section-body-text">{{ ecoDetailData.protectionAdvice || ecoDetailData.protection_advice }}</p>
+          </div>
+        </div>
+        <el-empty v-if="!ecoDetailData.description && !ecoDetailData.threats && !ecoDetailData.typicalSpecies && !ecoDetailData.typical_species && !ecoDetailData.protectionAdvice && !ecoDetailData.protection_advice"
+                  description="暂无详细内容" :image-size="100" />
+      </template>
+      <el-empty v-else description="加载失败" :image-size="100" />
+    </div>
+    <template #footer><el-button @click="ecoDetailVisible = false">关闭</el-button></template>
+  </el-dialog>
+
+  <!-- ═══ 物种收藏详情弹窗（从 species tab 直接点击）═══ -->
+  <el-dialog v-model="speciesFavDetailVisible" title="" width="720px" destroy-on-close append-to-body class="species-detail-dialog" :close-on-click-modal="true">
+    <template #header>
+      <div class="qd-dialog-header species-header">
+        <div class="qd-header-icon icon-species"><el-icon :size="20"><Picture /></el-icon></div>
+        <span class="qd-header-title">物种百科</span>
+      </div>
+    </template>
+    <div v-loading="speciesFavDetailLoading" class="detail-content">
+      <template v-if="speciesFavDetailData">
+        <div class="species-hero">
+          <div class="hero-image-wrap">
+            <el-image v-if="speciesFavDetailData.imageUrl" :src="getImageUrl(speciesFavDetailData.imageUrl)" fit="cover" class="hero-image">
+              <template #error><div class="hero-placeholder"><el-icon :size="60"><Picture /></el-icon></div></template>
+            </el-image>
+            <div v-else class="hero-placeholder hero-full"><el-icon :size="60"><Picture /></el-icon></div>
+            <div class="hero-gradient"></div>
+          </div>
+          <div class="hero-info">
+            <h2 class="hero-name">{{ speciesFavDetailData.chineseName || speciesFavDetailData.name || '未命名物种' }}</h2>
+            <p class="hero-latin">{{ speciesFavDetailData.scientificName || speciesFavDetailData.latinName || '' }}</p>
+            <p class="hero-alias" v-if="speciesFavDetailData.aliasNames">别名：{{ speciesFavDetailData.aliasNames }}</p>
+            <div class="hero-tags" v-if="speciesFavDetailData.conservationStatus">
+              <el-tag type="danger" size="small" effect="dark" round>{{ speciesFavDetailData.conservationStatus }}</el-tag>
+            </div>
+            <div class="hero-classification" v-if="speciesFavDetailData.kingdom || speciesFavDetailData.phylum || speciesFavDetailData.className || speciesFavDetailData.orderName || speciesFavDetailData.familyName">
+              {{ [speciesFavDetailData.kingdom, speciesFavDetailData.phylum, speciesFavDetailData.className, speciesFavDetailData.orderName, speciesFavDetailData.familyName].filter(Boolean).join(' / ') }}
+            </div>
+          </div>
+        </div>
+        <div class="species-sections">
+          <div v-if="speciesFavDetailData.morphologyDesc" class="detail-section"><h4 class="section-label"><el-icon><Document /></el-icon>形态特征</h4><p class="section-body-text">{{ speciesFavDetailData.morphologyDesc }}</p></div>
+          <div v-if="speciesFavDetailData.habitDesc" class="detail-section"><h4 class="section-label"><el-icon><Coffee /></el-icon>生活习性</h4><p class="section-body-text">{{ speciesFavDetailData.habitDesc }}</p></div>
+          <div v-if="speciesFavDetailData.habitat" class="detail-section"><h4 class="section-label"><el-icon><Location /></el-icon>栖息环境</h4><p class="section-body-text">{{ speciesFavDetailData.habitat }}</p></div>
+          <div v-if="speciesFavDetailData.distributionArea" class="detail-section"><h4 class="section-label"><el-icon><Compass /></el-icon>分布区域</h4><p class="section-body-text">{{ speciesFavDetailData.distributionArea }}</p></div>
+          <div v-if="speciesFavDetailData.funFact" class="detail-section fun-fact-section"><h4 class="section-label"><el-icon><Star /></el-icon>趣味知识</h4><p class="section-body-text fun-fact-text">{{ speciesFavDetailData.funFact }}</p></div>
+        </div>
+      </template>
+    </div>
+    <template #footer><el-button @click="speciesFavDetailVisible = false">关闭</el-button></template>
+  </el-dialog>
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onActivated, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import {
   Camera, Picture, Check, Reading, ChatDotRound, Lock,
   Medal, TrophyBase, StarFilled, Present,
-  Location, Clock, Plus, View, Edit, Delete, WarningFilled
+  Location, Clock, Plus, View, Edit, Delete, WarningFilled,
+  Document, Compass,
+  EditPen, List, Sunny, CircleCheckFilled, InfoFilled, PriceTag,
+  Coffee, Star
 } from "@element-plus/icons-vue";
 import { getUserProfile, updatePasswordApi, updateUserProfile, uploadAvatarApi, updateAvatarFrameApi, updateUserTitleApi } from "@/api/sysUser";
 import { getLearningProfile, getAnswerHistory, getAiSessionCount } from "@/api/learning";
@@ -831,6 +1096,9 @@ import { getOwnedTitle } from "@/api/points";
 import { getPointsAccount, getPointsTransactions, getExchangeOrders, getOwnedFrames } from "@/api/points";
 import { getBadges, getDailyTasks, claimTaskReward, dailyCheckin } from "@/api/achievement";
 import { removeBookmark as removeBookmarkApi, getBookmarkList } from "@/api/bookmark";
+import { getSpeciesById } from '@/api/species';
+import { getKbDocumentById } from '@/api/quiz';
+import { getEcosystemById } from '@/api/ecosystem';
 import { getObservationList, getObservationDetail, updateObservation, deleteObservation } from "@/api/observation";
 import { getMyCompetitionStats } from "@/api/competition";
 import { useAuthStore } from "@/store/auth";
@@ -1622,6 +1890,80 @@ const handleFavImgError = (e) => {
   e.target.style.display = 'none';
 };
 
+// ═══ 题目详情辅助函数 ═══
+/** 判断选项是否为正确答案 */
+const isCorrectOption = (label) => {
+  if (!questionDetail.value?.correctAnswer) return false;
+  const answer = String(questionDetail.value.correctAnswer).toUpperCase();
+  return answer.includes(String(label).toUpperCase());
+};
+
+/** 解析关键词（支持逗号/分号/数组） */
+const parseKeywords = (raw) => {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.map(s => typeof s === 'string' ? s : s.name || '');
+  const str = String(raw);
+  return str.split(/[,;，；]/).map(s => s.trim()).filter(Boolean);
+};
+
+// ═══ 物种收藏详情弹窗 ═══
+const speciesFavDetailVisible = ref(false);
+const speciesFavDetailData = ref(null);
+const speciesFavDetailLoading = ref(false);
+
+/** 打开物种收藏详情弹窗 */
+const openSpeciesFavDetail = async (item) => {
+  speciesFavDetailVisible.value = true;
+  speciesFavDetailLoading.value = true;
+  speciesFavDetailData.value = null;
+  try {
+    // 如果收藏数据中已有完整信息，直接使用
+    if (item.chineseName || item.description || item.scientificName || item.imageUrl) {
+      speciesFavDetailData.value = { ...item };
+    } else {
+      // 否则通过 API 获取详情
+      const res = await getSpeciesById(item.targetId || item.speciesId);
+      speciesFavDetailData.value = res.data;
+    }
+  } catch (err) {
+    console.error('获取物种详情失败:', err);
+    ElMessage.error('获取物种详情失败');
+    speciesFavDetailVisible.value = false;
+  } finally {
+    speciesFavDetailLoading.value = false;
+  }
+};
+
+// ═══ 生态系统详情弹窗 ═══
+const ecoDetailVisible = ref(false);
+const ecoDetailData = ref(null);
+const ecoDetailLoading = ref(false);
+
+/** 打开生态系统收藏详情弹窗 */
+const openEcoDetail = async (item) => {
+  if (!item.targetId) return;
+  ecoDetailVisible.value = true;
+  ecoDetailLoading.value = true;
+  ecoDetailData.value = null;
+  try {
+    const res = await getEcosystemById(item.targetId);
+    ecoDetailData.value = res.data || res.data?.data || null;
+  } catch (err) {
+    console.error('加载生态信息失败:', err);
+    ElMessage.error('获取生态系统详情失败');
+    ecoDetailVisible.value = false;
+  } finally {
+    ecoDetailLoading.value = false;
+  }
+};
+
+/** 解析代表物种（逗号或顿号分隔的字符串） */
+const parseEcoSpecies = (species) => {
+  if (!species) return [];
+  if (Array.isArray(species)) return species;
+  return String(species).split(/[,，、;；]/).map(s => s.trim()).filter(Boolean);
+};
+
 const fetchBookmarks = async () => {
   favLoading.value = true;
   try {
@@ -1645,6 +1987,31 @@ const currentFavList = computed(() => {
   return favDataMap[favSubTab.value] || [];
 });
 
+// ═══ 知识库筛选（来源：物种百科 / RAG知识库） ═══
+const selectedKbSource = ref('');
+
+// ═══ 题目筛选（难度 + 题型） ═══
+const selectedQuizDifficulty = ref('');
+const selectedQuizType = ref('');
+
+/** 筛选后的收藏列表 */
+const filteredFavList = computed(() => {
+  let list = currentFavList.value;
+  // 知识库筛选
+  if (favSubTab.value === 'kb_document' && selectedKbSource.value) {
+    if (selectedKbSource.value === 'species') list = list.filter(item => item.sourceType === 'species');
+    else list = list.filter(item => item.sourceType !== 'species');
+    return list;
+  }
+  // 题目筛选（难度 + 题型可叠加）
+  if (favSubTab.value === 'quiz_question') {
+    if (selectedQuizDifficulty.value) list = list.filter(item => item.difficulty === selectedQuizDifficulty.value);
+    if (selectedQuizType.value) list = list.filter(item => item.questionType === selectedQuizType.value);
+    return list;
+  }
+  return list;
+});
+
 /** 点击收藏的观察帖子 → 跳到独立详情页，保存滚动位置 */
 const goToObservation = (item) => {
   sessionStorage.setItem('profile_scroll_top', window.scrollY);
@@ -1658,6 +2025,10 @@ const handleFavCardClick = (item) => {
     goToObservation(item)
   } else if (favSubTab.value === 'quiz_question') {
     openQuestionDetail(item)
+  } else if (favSubTab.value === 'species') {
+    openSpeciesFavDetail(item)
+  } else if (favSubTab.value === 'ecosystem') {
+    openEcoDetail(item)
   }
 }
 
@@ -1667,7 +2038,6 @@ const openQuestionDetail = (item) => {
 }
 
 const removeBookmark = async (item) => {
-  // DELETE /bookmark/{targetType}/{targetId} ✅
   ElMessageBox.confirm(`确定取消收藏「${item.title}」？`, "提示", {
     confirmButtonText: "确定",
     cancelButtonText: "取消",
@@ -1676,13 +2046,14 @@ const removeBookmark = async (item) => {
     try {
       const res = await removeBookmarkApi(item.targetType, item.targetId);
       if (res.data.success) {
-        ElMessage.success("已取消收藏");
-        // 从本地列表移除
+        ElMessage.info(`已取消收藏「${item.title}」`);
         const list = favDataMap[favSubTab.value];
         if (list) {
           const idx = list.findIndex(f => f.targetType === item.targetType && f.targetId === item.targetId);
           if (idx !== -1) list.splice(idx, 1);
         }
+        // 🌟 通知其他页面（如答题结果页）即时更新收藏状态
+        window.dispatchEvent(new CustomEvent('bookmark-changed', { detail: { targetType: item.targetType, targetId: item.targetId } }));
       } else {
         ElMessage.warning(res.data.message || "取消收藏失败");
       }
@@ -1690,6 +2061,44 @@ const removeBookmark = async (item) => {
       ElMessage.error("取消收藏失败");
     }
   }).catch(() => {});
+};
+
+// ═══ 知识库详情弹窗（物种百科 + RAG知识库） ═══
+const speciesDetailVisible = ref(false);
+const speciesDetailData = ref(null);
+const speciesDetailLoading = ref(false);
+
+const ragKbDetailVisible = ref(false);
+const ragKbDetailData = ref(null);
+const ragKbDetailLoading = ref(false);
+
+/**
+ * 🌟 知识库列表项点击 → 根据来源类型打开不同详情弹窗
+ * - sourceType === 'species' → getSpeciesById → 物种详情弹窗
+ * - 其他 → getKbDocumentById → RAG 知识库详情弹窗
+ */
+const handleKbDetailClick = async (item) => {
+  if (!item.targetId) return;
+  if (item.sourceType === 'species' && item.speciesId) {
+    speciesDetailVisible.value = true; speciesDetailLoading.value = true; speciesDetailData.value = null;
+    try { const res = await getSpeciesById(item.speciesId); speciesDetailData.value = res.data; }
+    catch (err) { console.error('获取物种详情失败:', err); ElMessage.error('获取物种详情失败'); speciesDetailVisible.value = false; }
+    finally { speciesDetailLoading.value = false; }
+  } else {
+    ragKbDetailVisible.value = true; ragKbDetailLoading.value = true; ragKbDetailData.value = null;
+    try { const res = await getKbDocumentById(item.targetId); ragKbDetailData.value = res.data; }
+    catch (err) { console.error('获取知识库详情失败:', err); ElMessage.error('获取知识库详情失败'); ragKbDetailVisible.value = false; }
+    finally { ragKbDetailLoading.value = false; }
+  }
+};
+
+/** 图片 URL 处理（兼容七牛云和本地路径） */
+const getImageUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  if (url.startsWith('/uploads/')) return `/api${url}`;
+  if (url.startsWith('/')) return `/api/uploads${url}`;
+  return `/api/uploads/${url}`;
 };
 
 // ═══ Tab 7：我的观察 ═══
@@ -1948,6 +2357,26 @@ const publishObservation = () => {
   // POST /observation body: { title, description, species_id, latitude, longitude, location_name, observed_at, photo_media_id }
   router.push("/observation/publish");
 };
+
+// ═══ keep-alive 激活时刷新收藏数据（从海洋百科等页面返回时即时响应） ═══
+onActivated(() => {
+  if (activeTab.value === "favorites") {
+    fetchBookmarks();
+  }
+});
+
+// 🌟 监听全局 bookmark-changed 事件 — 任何页面收藏/取消收藏时即时更新
+const onBookmarkChanged = () => {
+  if (activeTab.value === "favorites") {
+    fetchBookmarks();
+  }
+};
+onMounted(() => {
+  window.addEventListener('bookmark-changed', onBookmarkChanged);
+});
+onUnmounted(() => {
+  window.removeEventListener('bookmark-changed', onBookmarkChanged);
+});
 
 // ═══ 初始化 ═══
 onMounted(() => {
@@ -2638,6 +3067,67 @@ watch(activeTab, (tab) => {
 .fav-sub-tabs { margin-bottom: 8px; }
 :deep(.fav-sub-tabs .el-tabs__header) { margin-bottom: 20px; }
 .fav-grid { row-gap: 16px; }
+
+/* 题目收藏：简洁卡片网格（仿截图2风格） */
+.fav-quiz-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.fav-quiz-card {
+  position: relative;
+  padding: 18px 20px;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.28s ease;
+  display: flex;
+  flex-direction: column;
+  min-height: 130px;
+}
+.fav-quiz-card:hover {
+  border-color: #409eff;
+  box-shadow: 0 6px 24px rgba(64,158,255,0.12);
+  transform: translateY(-2px);
+}
+.fav-quiz-card:hover .fav-remove-btn { opacity: 1; }
+.quiz-card-tags {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.quiz-card-tags .el-tag { font-size: 11px; padding: 0 10px; height: 22px; line-height: 22px; }
+.quiz-card-title {
+  font-size: 14.5px;
+  font-weight: 500;
+  color: #303133;
+  line-height: 1.6;
+  flex: 1;
+  word-break: break-word;
+  /* 允许最多显示4行，超出省略 */
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.quiz-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #f2f3f5;
+}
+.quiz-card-time {
+  font-size: 12px;
+  color: #909399;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 原有通用收藏卡片（物种/生态系统等） */
 .fav-card {
   position: relative;
   overflow: hidden;
@@ -2662,66 +3152,249 @@ watch(activeTab, (tab) => {
 .fav-card:hover .fav-remove-btn { opacity: 1; }
 .fav-card-clickable { cursor: pointer; }
 .fav-card-clickable:hover { border-color: #409eff; }
+.fav-tags-row { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
 
-/* 题目详情弹窗 */
+/* ═══ 筛选栏（题目/知识库） ═══ */
+.quiz-filter-bar { display: flex; align-items: center; gap: 24px; padding: 12px 16px; margin-bottom: 16px; background: rgba(255,255,255,0.6); border-radius: 10px; backdrop-filter: blur(8px); }
+.filter-group { display: flex; align-items: center; gap: 8px; }
+.filter-group + .filter-group::before {
+  content: ''; display: inline-block; width: 1px; height: 20px;
+  background: #e4e7ed; margin-right: 0;
+}
+.filter-label { font-size: 13px; color: #86909c; font-weight: 500; white-space: nowrap; }
+.filter-options { display: flex; gap: 4px; }
+.filter-tag { padding: 5px 14px; font-size: 13px; color: #606266; background: #fff; border: 1px solid #e4e7ed; border-radius: 20px; cursor: pointer; transition: all 0.25s ease; user-select: none; white-space: nowrap; }
+.filter-tag:hover { color: #409eff; border-color: #a0cfff; background: rgba(64,158,255,0.05); }
+.filter-tag.active { color: #fff; background: linear-gradient(135deg, #409eff, #66b1ff); border-color: transparent; box-shadow: 0 2px 8px rgba(64,158,255,0.35); }
+.ml-2 { margin-left: 8px; }
+
+/* ═══ 知识库收藏列表样式（替代卡片网格）═══ */
+.fav-kb-list { display: flex; flex-direction: column; gap: 8px; }
+.fav-kb-list-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 16px;
+  background: rgba(255,255,255,0.5); border: 1px solid rgba(255,255,255,0.8);
+  border-radius: 12px; cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.25,1,0.5,1); backdrop-filter: blur(10px);
+}
+.fav-kb-list-item:hover { background: rgba(255,255,255,0.85); border-color: rgba(22,93,255,0.25); box-shadow: 0 4px 16px rgba(22,93,255,0.1); transform: translateY(-1px); }
+.fav-kb-icon { flex-shrink: 0; width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; }
+.fav-kb-icon.icon-species { background: linear-gradient(135deg, #00b42a, #009a29); }
+.fav-kb-icon.icon-rag { background: linear-gradient(135deg, #165dff, #0e42d2); }
+.fav-kb-main { flex: 1; min-width: 0; }
+.fav-kb-top { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.fav-kb-title { font-size: 15px; font-weight: 600; color: #1d2129; line-height: 1.45; word-break: break-word; }
+/* RAG知识库完整内容展示 */
+.fav-kb-content {
+  font-size: 13.5px;
+  color: #4e5969;
+  line-height: 1.75;
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: rgba(22,93,255,0.03);
+  border-radius: 8px;
+  border-left: 3px solid rgba(22,93,255,0.25);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.fav-kb-remove-btn { flex-shrink: 0; opacity: 0; transition: opacity 0.25s; font-size: 12px; padding: 4px 10px; border-radius: 8px; position: static; }
+.fav-kb-list-item:hover .fav-kb-remove-btn { opacity: 1; }
+.fav-kb-empty-hint { font-size: 13px; color: #c9cdd4; margin-top: 8px; padding: 8px 12px; background: #f7f8fa; border-radius: 6px; text-align: center; }
+
+/* ═══ 物种详情弹窗样式 ═══ */
+.species-detail-dialog .species-hero { display: flex; gap: 20px; margin-bottom: 24px; }
+.species-detail-dialog .hero-image-wrap { flex-shrink: 0; width: 220px; height: 160px; border-radius: 14px; overflow: hidden; position: relative; }
+.species-detail-dialog .hero-image { width: 100%; height: 100%; }
+.species-detail-dialog .hero-placeholder { width: 100%; height: 100%; background: linear-gradient(135deg,#e8f3ff,#d4edda); display: flex; align-items: center; justify-content: center; color: #86909c; }
+.species-detail-dialog .hero-gradient { position: absolute; bottom: 0; left: 0; right: 0; height: 40%; background: linear-gradient(transparent,rgba(0,0,0,0.25)); pointer-events: none; border-radius: 0 0 14px 14px; }
+.species-detail-dialog .hero-full { border-radius: 14px; }
+.species-detail-dialog .hero-info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+.species-detail-dialog .hero-name { font-size: 22px; font-weight: 700; color: #1d2129; margin: 0 0 4px 0; }
+.species-detail-dialog .hero-latin { font-size: 13px; color: #86909c; font-style: italic; margin: 0 0 4px 0; }
+.species-detail-dialog .hero-alias { font-size: 12px; color: #86909c; margin: 0 0 8px 0; }
+.species-detail-dialog .hero-classification { font-size: 12px; color: #6693ff; background: #f0f5ff; padding: 6px 12px; border-radius: 6px; margin-top: 6px; line-height: 1.5; }
+.species-detail-dialog .hero-tags { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.species-detail-dialog .detail-section { margin-bottom: 18px; padding-left: 16px; border-left: 3px solid #e5f0ff; }
+.species-detail-dialog .section-title { font-size: 14px; font-weight: 600; color: #3370ff; margin: 0 0 8px 0; display: flex; align-items: center; gap: 6px; }
+.species-detail-dialog .section-body { font-size: 14px; color: #4e5969; line-height: 1.75; margin: 0; white-space: pre-wrap; word-break: break-word; }
+.species-detail-dialog .fun-fact-section { border-left-color: #fff7e6 !important; background: linear-gradient(90deg, rgba(255,247,230,0.4), transparent); padding: 12px 16px; border-radius: 0 8px 8px 0; margin-bottom: 18px; }
+.species-detail-dialog .fun-fact-text { color: #d48806 !important; font-weight: 500; }
+.species-detail-dialog .species-sections { max-height: 400px; overflow-y: auto; padding-right: 8px; }
+
+/* ═══ 弹窗统一头部样式 ═══ */
+.qd-dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+.qd-header-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+  background: linear-gradient(135deg, #409eff, #66b1ff);
+}
+.qd-dialog-header .icon-rag { background: linear-gradient(135deg, #165dff, #0e42d2); }
+.qd-dialog-header .icon-eco { background: linear-gradient(135deg, #00b42a, #009a29); }
+.qd-dialog-header .icon-species { background: linear-gradient(135deg, #ff7d00, #ff5500); }
+.qd-header-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1d2129;
+}
+
+/* 题目详情弹窗 - 全新设计 */
 .question-detail-body {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
+.question-detail-dialog :deep(.el-dialog__header) { padding: 20px 24px 16px; margin: 0 !important; border-bottom: 1px solid #f2f3f5; }
+.question-detail-dialog :deep(.el-dialog__body) { padding: 24px; }
 .qd-tags {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.qd-species-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px;
+  font-size: 12px; color: #86909c;
+  background: #f2f3f5; border-radius: 14px;
+}
+
+/* 题目内容区 */
+.qd-section {
+  background: linear-gradient(135deg, #f0f7ff, #fafcff);
+  border-radius: 12px;
+  padding: 18px 20px;
+  border: 1px solid rgba(64,158,255,0.08);
+}
+.qd-section-label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 600;
+  color: #409eff; margin-bottom: 10px;
 }
 .qd-stem {
-  font-size: 17px;
-  font-weight: 700;
-  line-height: 1.7;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.75;
   color: #1d2129;
 }
+
+/* 选项区域 */
 .qd-options {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  background: #f7f8fa;
-  border-radius: 10px;
+  gap: 8px;
 }
 .qd-option-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: #1d2129;
+  gap: 12px;
+  padding: 11px 16px;
+  font-size: 15px;
+  color: #4e5969;
+  background: #fff;
+  border: 1.5px solid #e4e7ed;
+  border-radius: 10px;
+  transition: all 0.25s ease;
+}
+.qd-option-item:hover { border-color: #a0cfff; background: #f7fbff; }
+.qd-option-item.is-correct {
+  border-color: #67c23a;
+  background: linear-gradient(135deg, #f0f9eb, #ecf5db);
 }
 .qd-opt-label {
   font-weight: 700;
   color: #165dff;
-  min-width: 24px;
+  min-width: 22px;
+  font-size: 15px;
 }
-.qd-answer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
+.qd-option-item.is-correct .qd-opt-label { color: #67c23a; }
+.qd-opt-text { flex: 1; line-height: 1.5; }
+.qd-opt-check { color: #67c23a; font-size: 18px; }
+
+/* 正确答案区域 */
+.qd-answer-section {
+  text-align: center;
+  padding: 18px;
+  background: linear-gradient(135deg, #ecf5ff, #e6f0ff);
+  border-radius: 12px;
+  border: 1.5px solid rgba(103,194,58,0.15);
 }
 .qd-answer-label {
-  font-weight: 600;
-  color: #4e5969;
+  font-size: 13px;
+  color: #86909c;
+  margin-bottom: 8px;
+  font-weight: 500;
 }
-.qd-explanation {
-  padding: 12px;
-  background: #f0f9eb;
-  border-left: 3px solid #67c23a;
-  border-radius: 6px;
-  font-size: 14px;
-  color: #4e5969;
-  line-height: 1.6;
+.qd-answer-value { display: flex; justify-content: center; }
+
+/* 解析区域 */
+.qd-explanation-section {
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(103,194,58,0.12);
 }
 .qd-exp-label {
-  font-weight: 700;
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 700;
   color: #67c23a;
+  padding: 12px 18px;
+  background: linear-gradient(135deg, #f0f9eb, #ecf5df);
+  border-bottom: 1px solid rgba(103,194,58,0.08);
 }
+.qd-explanation-body {
+  padding: 16px 18px;
+  font-size: 14px;
+  color: #4e5969;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ═══ RAG知识库详情弹窗 - 升级样式 ═══ */
+.rag-kb-detail-dialog :deep(.el-dialog__header) { padding: 20px 24px 16px; margin: 0 !important; border-bottom: 1px solid #f2f3f5; }
+.rag-kb-detail-dialog :deep(.el-dialog__body) { padding: 24px; }
+.rag-kb-detail-dialog .rag-kb-header { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #f2f3f5; }
+.rag-kb-detail-dialog .rag-kb-title { font-size: 20px; font-weight: 700; color: #1d2129; margin: 0 0 10px 0; }
+.rag-kb-detail-dialog .rag-kb-meta { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.rag-kb-detail-dialog .rag-kb-source { font-size: 13px; color: #86909c; }
+.rag-kb-detail-dialog .rag-kb-time { font-size: 13px; color: #c9cdd4; }
+.rag-kb-detail-dialog .rag-kb-content-section { margin-top: 4px; }
+.section-label {
+  font-size: 14px; font-weight: 600; color: #3370ff;
+  margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px;
+}
+.rag-kb-detail-dialog .rag-kb-content {
+  font-size: 14px; color: #4e5969; line-height: 1.85;
+  padding: 18px 20px; background: #f7f8fa; border-radius: 12px;
+  white-space: pre-wrap; word-break: break-word; max-height: 400px; overflow-y: auto;
+}
+.rag-kb-summary-section { margin-top: 16px; }
+.rag-kb-summary { font-size: 14px; color: #4e5969; line-height: 1.7; margin: 8px 0; }
+.rag-kb-keywords-section { margin-top: 16px; }
+.rag-kb-keywords { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ═══ 生态系统详情弹窗 ═══ */
+.eco-detail-dialog :deep(.el-dialog__header) { padding: 20px 24px 16px; margin: 0 !important; border-bottom: 1px solid #f2f3f5; }
+.eco-detail-dialog :deep(.el-dialog__body) { padding: 24px; }
+.eco-hero { margin-bottom: 20px; }
+.eco-name { font-size: 22px; font-weight: 700; color: #1d2129; margin: 0 0 10px 0; }
+.eco-tags-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.eco-sections { max-height: 400px; overflow-y: auto; }
+.eco-species-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+
+/* ═══ 物种收藏详情弹窗（升级）═══ */
+.species-detail-dialog :deep(.el-dialog__header) { padding: 20px 24px 16px; margin: 0 !important; border-bottom: 1px solid #f2f3f5; }
+.species-detail-dialog :deep(.el-dialog__body) { padding: 24px; }
+.species-detail-dialog .detail-section { margin-bottom: 18px; padding-left: 16px; border-left: 3px solid #e5f0ff; }
+.species-detail-dialog .section-body-text { font-size: 14px; color: #4e5969; line-height: 1.75; margin: 4px 0 0; white-space: pre-wrap; word-break: break-word; }
 
 /* ── Tab 7：我的观察 ── */
 .obs-header { display: flex; justify-content: flex-end; margin-bottom: 20px; }
@@ -2882,6 +3555,7 @@ watch(activeTab, (tab) => {
   .obs-item { flex-direction: column; }
   .obs-image { width: 100%; height: 180px; }
   .fav-thumb { height: 120px; }
+  .fav-quiz-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* ═══ 头像框样式 ═══ */

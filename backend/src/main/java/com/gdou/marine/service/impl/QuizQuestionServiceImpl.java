@@ -44,6 +44,7 @@ public class QuizQuestionServiceImpl extends ServiceImpl<QuizQuestionMapper, Qui
         String contentTitle;
         String content;
 
+        KbDocument doc = null;
         if ("species".equals(sourceType)) {
             // 1a. 获取海洋百科物种内容
             Species species = speciesMapper.selectById(dto.getSpeciesId());
@@ -55,7 +56,7 @@ public class QuizQuestionServiceImpl extends ServiceImpl<QuizQuestionMapper, Qui
             content = buildSpeciesContent(species);
         } else {
             // 1b. 获取知识库文档内容
-            KbDocument doc = kbDocumentMapper.selectById(dto.getDocumentId());
+            doc = kbDocumentMapper.selectById(dto.getDocumentId());
             if (doc == null) {
                 throw new RuntimeException("知识库文档不存在，ID=" + dto.getDocumentId());
             }
@@ -137,7 +138,31 @@ public class QuizQuestionServiceImpl extends ServiceImpl<QuizQuestionMapper, Qui
         // 4. 解析 AI 响应
         KbDocument dummyDoc = new KbDocument();
         dummyDoc.setTitle(contentTitle);
-        return parseQuestions(aiResponse, dummyDoc, userId);
+        // 计算关联物种ID和来源文档ID：
+        // - 海洋百科物种出题：直接使用请求中的 speciesId，同时尝试查找关联的KB文档作为sourceDocumentId
+        // - 知识库文档出题：始终记录 sourceDocumentId（原始知识库文档ID）
+        Long resolvedSpeciesId = dto.getSpeciesId();  // 前端传的物种ID
+        if (resolvedSpeciesId == null && doc != null) {
+            resolvedSpeciesId = doc.getSpeciesId();  // 文档自身的关联
+        }
+        
+        Long sourceDocId;
+        if (doc != null) {
+            // 知识库模式：直接用选中的文档
+            sourceDocId = doc.getId();
+        } else if (resolvedSpeciesId != null) {
+            // 物种模式：尝试查找该物种关联的第一个已发布的KB文档（用于收藏知识库功能）
+            com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<KbDocument> wrapper =
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<KbDocument>()
+                    .eq(KbDocument::getSpeciesId, resolvedSpeciesId)
+                    .eq(KbDocument::getStatus, 1)
+                    .last("LIMIT 1");
+            KbDocument linkedDoc = kbDocumentMapper.selectOne(wrapper);
+            sourceDocId = (linkedDoc != null) ? linkedDoc.getId() : null;
+        } else {
+            sourceDocId = null;
+        }
+        return parseQuestions(aiResponse, dummyDoc, userId, resolvedSpeciesId, sourceDocId);
     }
 
     /**
@@ -171,7 +196,7 @@ public class QuizQuestionServiceImpl extends ServiceImpl<QuizQuestionMapper, Qui
     /**
      * 解析AI返回的JSON字符串为题目列表
      */
-    private List<QuizQuestion> parseQuestions(String aiResponse, KbDocument doc, Long userId) {
+    private List<QuizQuestion> parseQuestions(String aiResponse, KbDocument doc, Long userId, Long speciesId, Long sourceDocumentId) {
         // 尝试提取JSON数组（去掉可能的markdown代码标记）
         String jsonStr = aiResponse.trim();
         if (jsonStr.startsWith("```")) {
@@ -193,7 +218,7 @@ public class QuizQuestionServiceImpl extends ServiceImpl<QuizQuestionMapper, Qui
             // 按题目对象分割
             List<String> objects = splitJsonObjects(jsonStr);
             for (String obj : objects) {
-                QuizQuestion q = parseSingleQuestion(obj, doc, userId);
+                QuizQuestion q = parseSingleQuestion(obj, doc, userId, speciesId, sourceDocumentId);
                 if (q != null) {
                     questions.add(q);
                 }
@@ -201,7 +226,7 @@ public class QuizQuestionServiceImpl extends ServiceImpl<QuizQuestionMapper, Qui
         } catch (Exception e) {
             log.error("解析AI生成的题目JSON失败，尝试使用正则二次提取", e);
             // 尝试使用正则逐题提取
-            questions.addAll(extractByRegex(aiResponse, doc, userId));
+            questions.addAll(extractByRegex(aiResponse, doc, userId, speciesId, sourceDocumentId));
         }
 
         return questions;
@@ -210,12 +235,14 @@ public class QuizQuestionServiceImpl extends ServiceImpl<QuizQuestionMapper, Qui
     /**
      * 解析单个题目JSON对象
      */
-    private QuizQuestion parseSingleQuestion(String jsonChunk, KbDocument doc, Long userId) {
+    private QuizQuestion parseSingleQuestion(String jsonChunk, KbDocument doc, Long userId, Long speciesId, Long sourceDocumentId) {
         try {
             QuizQuestion q = new QuizQuestion();
             q.setCreatedBy(userId);
             q.setCreatedByAi((byte) 1);
             q.setStatus((byte) 1);
+            q.setSpeciesId(speciesId);
+            q.setSourceDocumentId(sourceDocumentId);  // 🌟 记录来源文档ID
 
             // 提取 questionType
             q.setQuestionType(extractJsonString(jsonChunk, "questionType"));
@@ -274,7 +301,7 @@ public class QuizQuestionServiceImpl extends ServiceImpl<QuizQuestionMapper, Qui
     /**
      * 用正则表达式逐题提取（当JSON解析失败时的备用方案）
      */
-    private List<QuizQuestion> extractByRegex(String text, KbDocument doc, Long userId) {
+    private List<QuizQuestion> extractByRegex(String text, KbDocument doc, Long userId, Long speciesId, Long sourceDocumentId) {
         List<QuizQuestion> list = new ArrayList<>();
 
         // 按题号或"stem"分割
@@ -288,6 +315,8 @@ public class QuizQuestionServiceImpl extends ServiceImpl<QuizQuestionMapper, Qui
                 q.setCreatedBy(userId);
                 q.setCreatedByAi((byte) 1);
                 q.setStatus((byte) 1);
+                q.setSpeciesId(speciesId);
+                q.setSourceDocumentId(sourceDocumentId);  // 🌟 记录来源文档ID
                 q.setKnowledgePoints("[\"" + doc.getTitle() + "\"]");
 
                 // stem

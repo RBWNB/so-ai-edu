@@ -30,7 +30,6 @@ public class KbDocumentController {
      * 分页查询知识库文档列表
      */
     @GetMapping("/document/page")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public Page<KbDocument> getDocumentPage(
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) String title,

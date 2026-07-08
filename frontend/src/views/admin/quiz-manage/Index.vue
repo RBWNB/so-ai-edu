@@ -695,29 +695,52 @@ const loading = ref(false)
 const tableData = ref([])
 const total = ref(0)
 
-// ==================== 获取列表 ====================
+// ==================== 获取列表（仿照 species 页面的健壮分页模式） ====================
+
+/**
+ * 健壮的分页数据解析器 —— 兼容多种后端返回格式
+ * 与 species/Index.vue 的 parsePageData 完全一致
+ */
+const parsePageData = (payload) => {
+  const candidates = [payload, payload?.data, payload?.result, payload?.page]
+  for (const c of candidates) {
+    if (!c) continue
+    if (Array.isArray(c)) return { records: c, total: c.length }
+    if (Array.isArray(c.records)) return { records: c.records, total: Number(c.total ?? c.records.length) }
+    if (Array.isArray(c.list)) return { records: c.list, total: Number(c.total ?? c.list.length) }
+    if (Array.isArray(c.rows)) return { records: c.rows, total: Number(c.total ?? c.rows.length) }
+  }
+  return { records: [], total: 0 }
+}
+
 const fetchList = async () => {
   loading.value = true
   try {
+    // 同时传两套参数（与 species 页面一致，兼容后端不同接收方式）
     const params = {
+      pageNum: pagination.current,
+      pageSize: pagination.size,
       current: pagination.current,
       size: pagination.size,
     }
-    if (queryForm.stem) params.stem = queryForm.stem
-    if (queryForm.questionType) params.questionType = queryForm.questionType
+    if (queryForm.stem) params.stem = queryForm.stem.trim()
+    if (queryForm.questionType) params.questionType = questionType.value
     if (queryForm.difficulty) params.difficulty = queryForm.difficulty
     if (queryForm.createdByAi !== null && queryForm.createdByAi !== '') params.createdByAi = queryForm.createdByAi
     if (queryForm.status !== null && queryForm.status !== '') params.status = queryForm.status
 
     const res = await getQuestionPage(params)
-    tableData.value = (res.data.records || []).map(r => ({
+    // 使用 parsePageData 做健壮解析（与 species 页面一致）
+    const { records, total: count } = parsePageData(res.data)
+    tableData.value = records.map(r => ({
       ...r,
       _ttsLoading: false,
       _ttsPlaying: false,
     }))
-    total.value = res.data.total || 0
+    total.value = count
   } catch (err) {
     console.error('获取题库列表失败', err)
+    ElMessage.error('获取题库列表失败')
   } finally {
     loading.value = false
   }
@@ -962,7 +985,7 @@ const handleSubmit = async () => {
   }
 }
 
-// ==================== 删除 ====================
+// ==================== 删除（仿照 species：删完最后一页最后一条时自动回退） ====================
 const handleDelete = (row) => {
   ElMessageBox.confirm(`确定删除题目「${(row.stem || '').slice(0, 30)}」？`, '确认删除', {
     confirmButtonText: '确定删除',
@@ -972,9 +995,14 @@ const handleDelete = (row) => {
     try {
       await deleteQuestion(row.id)
       ElMessage.success('删除成功')
+      // 如果当前页只有一条数据且不是第1页，自动回退到上一页（与 species 页面一致）
+      if (tableData.value.length === 1 && pagination.current > 1) {
+        pagination.current -= 1
+      }
       fetchList()
     } catch (err) {
       console.error('删除失败', err)
+      ElMessage.error('删除失败')
     }
   }).catch(() => {})
 }
@@ -1400,6 +1428,8 @@ const handleBatchSave = async () => {
     explanation: q.explanation || '',
     difficulty: q.difficulty || 'normal',
     knowledgePoints: q.knowledgePoints || '',
+    speciesId: q.speciesId || null,   // 🌟 关键修复：传递物种ID
+    sourceDocumentId: q.sourceDocumentId || null,  // 🌟 传递来源文档ID（RAG出题时）
     createdByAi: 1,
     status: 1,
   }))
@@ -1497,6 +1527,8 @@ onMounted(() => {
 
 .table-card {
   min-height: 400px;
+  /* 确保分页条不会被裁剪 */
+  overflow: visible;
 }
 
 .toolbar {
@@ -1519,6 +1551,9 @@ onMounted(() => {
   margin-top: 16px;
   display: flex;
   justify-content: center;
+  /* 确保分页条始终可见，不被父容器裁剪 */
+  position: relative;
+  z-index: 1;
 }
 
 .option-row {

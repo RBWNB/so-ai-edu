@@ -39,8 +39,8 @@ INSERT INTO species_distribution_point (species_id, latitude, longitude, locatio
 INSERT INTO kb_category (id, name, description) VALUES
     (1, '海洋哺乳动物', '关于海豚、鲸鱼等海洋哺乳动物的科普知识');
 
-INSERT INTO kb_document (id, category_id, title, content, source_type) VALUES
-    (1, 1, '中华白海豚的生活习性', '中华白海豚主要分布于西太平洋和印度洋的沿岸水域。它们主要以河口水域的小型鱼类为食...', 'manual');
+INSERT INTO kb_document (id, category_id, title, content, source_type, species_id) VALUES
+    (1, 1, '中华白海豚的生活习性', '中华白海豚主要分布于西太平洋和印度洋的沿岸水域。它们主要以河口水域的小型鱼类为食...', 'manual', 1);
 
 INSERT INTO kb_document_chunk (document_id, chunk_index, content, embedding_key, token_count) VALUES
                                                                                                   (1, 0, '中华白海豚主要分布于西太平洋和印度洋的沿岸水域。', 'doc:chunk:1_0', 25),
@@ -144,3 +144,130 @@ INSERT INTO app_role (id, role_code, role_name, description) VALUES
                                                                  (3, 'VISITOR', '普通用户', '使用C端学习与互动功能');
 
 SET FOREIGN_KEY_CHECKS = 1;
+
+ALTER TABLE marine_ecosystem ADD COLUMN image_url VARCHAR(500) DEFAULT NULL COMMENT '生态系统图片URL' AFTER cover_media_id;
+
+-- 修复生态系统数据的 status 字段
+-- 将所有 status 为 NULL 的生态系统数据设置为 1（正常状态）
+UPDATE marine_ecosystem SET status = 1 WHERE status IS NULL;
+
+-- 验证更新结果
+SELECT id, name, status FROM marine_ecosystem;
+
+-- 给 kb_document 表添加 species_id 字段
+-- 用于关联物种，支持题目收藏知识库功能
+-- =============================================
+
+ALTER TABLE kb_document
+    ADD COLUMN species_id BIGINT UNSIGNED NULL COMMENT '关联物种ID（当source_type=species时使用）'
+        AFTER source_type;
+
+-- 添加索引以加速查询
+ALTER TABLE kb_document ADD INDEX idx_kb_species (species_id);
+
+-- 更新现有数据（示例）：将中华白海豚相关的知识库文档关联到物种ID=1
+UPDATE kb_document SET species_id = 1 WHERE title LIKE '%白海豚%' OR title LIKE '%海豚%';
+
+INSERT INTO kb_document (id, category_id, title, content, source_type, species_id) VALUES
+    (6, 1, '中华白海豚的生活习性', '中华白海豚主要分布于西太平洋和印度洋的沿岸水域。它们主要以河口水域的小型鱼类为食...', 'manual', 1);
+
+-- 给 kb_document 表添加 species_id 字段
+-- 用于关联物种，支持题目收藏知识库功能
+-- =============================================
+
+ALTER TABLE kb_document
+    ADD COLUMN species_id BIGINT UNSIGNED NULL COMMENT '关联物种ID（当source_type=species时使用）'
+        AFTER source_type;
+
+-- 添加索引以加速查询
+ALTER TABLE kb_document ADD INDEX idx_kb_species (species_id);
+
+-- 更新现有数据（示例）：将中华白海豚相关的知识库文档关联到物种ID=1
+UPDATE kb_document SET species_id = 1 WHERE title LIKE '%白海豚%' OR title LIKE '%海豚%';
+
+INSERT INTO kb_document (id, category_id, title, content, source_type, species_id) VALUES
+    (6, 1, '中华白海豚的生活习性', '中华白海豚主要分布于西太平洋和印度洋的沿岸水域。它们主要以河口水域的小型鱼类为食...', 'manual', 1);
+
+-- 给 kb_document 表添加 species_id 字段
+-- 用于关联物种，支持题目收藏知识库功能
+-- =============================================
+
+ALTER TABLE kb_document
+    ADD COLUMN species_id BIGINT UNSIGNED NULL COMMENT '关联物种ID（当source_type=species时使用）'
+        AFTER source_type;
+
+-- 添加索引以加速查询
+ALTER TABLE kb_document ADD INDEX idx_kb_species (species_id);
+
+-- 更新现有数据（示例）：将中华白海豚相关的知识库文档关联到物种ID=1
+UPDATE kb_document SET species_id = 1 WHERE title LIKE '%白海豚%' OR title LIKE '%海豚%';
+
+INSERT INTO kb_document (id, category_id, title, content, source_type, species_id) VALUES
+    (6, 1, '中华白海豚的生活习性', '中华白海豚主要分布于西太平洋和印度洋的沿岸水域。它们主要以河口水域的小型鱼类为食...', 'manual', 1);
+
+-- 给 kb_document 表添加 species_id 字段
+-- 用于关联物种，支持题目收藏知识库功能
+-- =============================================
+
+ALTER TABLE kb_document
+    ADD COLUMN species_id BIGINT UNSIGNED NULL COMMENT '关联物种ID（当source_type=species时使用）'
+        AFTER source_type;
+
+-- 添加索引以加速查询
+ALTER TABLE kb_document ADD INDEX idx_kb_species (species_id);
+
+-- 更新现有数据（示例）：将中华白海豚相关的知识库文档关联到物种ID=1
+UPDATE kb_document SET species_id = 1 WHERE title LIKE '%白海豚%' OR title LIKE '%海豚%';
+
+INSERT INTO kb_document (id, category_id, title, content, source_type, species_id) VALUES
+    (6, 1, '中华白海豚的生活习性', '中华白海豚主要分布于西太平洋和印度洋的沿岸水域。它们主要以河口水域的小型鱼类为食...', 'manual', 1);
+-- ============================================================
+-- 补充题库 species_id + 新增缺失的物种数据
+-- 解决"收藏关联知识库显示未关联"的问题
+-- ============================================================
+
+-- ═══ 1. 先补全物种表（Seed_Data 中只有中华白海豚）═══
+INSERT IGNORE INTO marine_species (id, chinese_name, scientific_name, kingdom, phylum, class_name, order_name, family_name, conservation_status, fun_fact) VALUES
+                                                                                                                                                               (2, '绿海龟', 'Chelonia mydas', '动物界', '脊索动物门', '爬行纲', '龟鳖目', '海龟科', 'EN', '绿海龟是唯一植食性海龟，成年后体色变为绿色是因为吃多了藻类！'),
+                                                                                                                                                               (3, '玳瑁', 'Eretmochelys imbricata', '动物界', '脊索动物门', '爬行纲', '龟鳖目', '海龟科', 'CR', '玳瑁的背甲像重叠的瓦片，俗称"十三鳞"，是珍贵的工艺品原料'),
+                                                                                                                                                               (4, '棱皮龟', 'Dermochelys coriacea', '动物界', '脊索动物门', '爬行纲', '龟鳖目', '棱皮龟科', 'CR', '棱皮龟是最大的海龟，体重可超900公斤，背甲革质而非硬壳'),
+                                                                                                                                                               (5, '儒艮', 'Dugong dugon', '动物界', '脊索动物门', '哺乳纲', '海牛目', '儒艮科', 'CR', '儒艮就是传说中的"美人鱼"！它们以海草为主食，在中国已功能性灭绝');
+
+-- ═══ 2. 补全知识库文档（每个物种至少一条关联知识库）═══
+INSERT IGNORE INTO kb_document (id, category_id, title, content, source_type, species_id) VALUES
+                                                                                              (2, 1, '绿海龟的栖息地与习性', '绿海龟主要分布在热带和亚热带海域，喜欢在珊瑚礁和海草床附近活动。它们是洄游性动物，繁殖时会回到出生地产卵。', 'species', 2),
+                                                                                              (3, 1, '玳瑁的特征与保护现状', '玳瑁以其美丽的背甲闻名，主要生活在珊瑚礁区域，以海绵为食。因过度捕捞濒临灭绝。', 'species', 3),
+                                                                                              (4, 1, '棱皮龟——海洋巨兽', '棱皮龟是现存最大的爬行动物，能潜水至1200米深，主要以水母为食。', 'species', 4),
+                                                                                              (5, 1, '儒艮——传说中的美人鱼', '儒艮是中国国家一级保护动物，主要分布于南海海域，以多种海草为食。', 'species', 5);
+
+-- ═══ 3. 核心修复：给所有题目补全 species_id ═══
+-- 通过题目内容中的关键词匹配对应物种
+
+UPDATE quiz_question SET species_id = 1 WHERE species_id IS NULL AND (stem LIKE '%白海豚%' OR stem LIKE '%中华%');
+UPDATE quiz_question SET species_id = 2 WHERE species_id IS NULL AND (stem LIKE '%海龟%' OR stem LIKE '%绿海龟%' OR stem LIKE '%绿蠵龟%' OR stem LIKE '%栖息地%' AND id > 1);
+UPDATE quiz_question SET species_id = 3 WHERE species_id IS NULL AND (stem LIKE '%玳瑁%' OR stem LIKE '%十三鳞%');
+UPDATE quiz_question SET species_id = 4 WHERE species_id IS NULL AND (stem LIKE '%棱皮龟%' OR stem LIKE '%革质%');
+UPDATE quiz_question SET species_id = 5 WHERE species_id IS NULL AND (stem LIKE '%儒艮%' OR stem LIKE '%美人鱼%' OR stem LIKE '%海牛%');
+
+-- ═══ 4. 兜底：如果还有没匹配上的题目，全部关联到默认物种(白海豚) ═══
+-- 这样确保每道题都能收藏关联知识库
+UPDATE quiz_question SET species_id = 1 WHERE species_id IS NULL;
+
+-- 验证结果
+SELECT q.id, LEFT(q.stem, 40) AS question_preview, q.species_id, s.chinese_name AS species_name
+FROM quiz_question q
+         LEFT JOIN marine_species s ON q.species_id = s.id
+ORDER BY q.id;
+-- ============================================
+-- 一次性执行SQL：为 quiz_question 表添加 source_document_id 字段
+-- 用于记录AI题目来源于哪个RAG知识库文档
+--
+-- 执行方式: 在MySQL中直接运行此文件
+-- ============================================
+
+ALTER TABLE quiz_question ADD COLUMN source_document_id BIGINT NULL COMMENT '来源知识库文档ID（AI从RAG生成时记录）' AFTER species_id;
+-- V1.4: 为 quiz_question 表添加 source_document_id 字段
+-- 用于记录AI题目来源于哪个RAG知识库文档（即使没有speciesId也能收藏关联知识库）
+-- 日期: 2026-07-08
+
+ALTER TABLE quiz_question ADD COLUMN source_document_id BIGINT NULL COMMENT '来源知识库文档ID（AI从RAG生成时记录）' AFTER species_id;

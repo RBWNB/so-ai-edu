@@ -384,6 +384,8 @@ const toggleDetailBookmark = async () => {
         ElMessage.success("收藏成功");
       }
     }
+    // 🌟 通知其他页面（如个人中心）即时更新收藏列表
+    window.dispatchEvent(new CustomEvent('bookmark-changed', { detail: { targetType: 'user_observation', targetId: data.value.id } }));
   } catch (err) { console.error(err); }
 };
 

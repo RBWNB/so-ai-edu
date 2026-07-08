@@ -70,6 +70,12 @@ public class QuizQuestion implements Serializable {
     private Long speciesId;
 
     /**
+     * 来源知识库文档ID（AI从RAG知识库生成时记录原始文档，用于收藏知识库功能）
+     */
+    @TableField("source_document_id")
+    private Long sourceDocumentId;
+
+    /**
      * 是否AI生成：0人工/1AI
      */
     @TableField("created_by_ai")
