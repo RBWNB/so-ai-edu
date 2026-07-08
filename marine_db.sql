@@ -583,7 +583,7 @@ SET @table_exists = (SELECT COUNT(*) FROM information_schema.tables
                      WHERE table_schema = DATABASE() AND table_name = 'species_distribution_point');
 
 SET @sql = IF(@table_exists > 0,
-    'ALTER TABLE species_distribution_point DROP FOREIGN KEY IF EXISTS fk_distribution_species, ADD CONSTRAINT fk_distribution_species FOREIGN KEY (species_id) REFERENCES marine_species(id) ON DELETE CASCADE ON UPDATE CASCADE',
+    'ALTER TABLE species_distribution_point DROP FOREIGN KEY fk_distribution_species, ADD CONSTRAINT fk_distribution_species FOREIGN KEY (species_id) REFERENCES marine_species(id) ON DELETE CASCADE ON UPDATE CASCADE',
     'SELECT "⏭️ species_distribution_point 表不存在，跳过" AS result'
 );
 
@@ -597,7 +597,7 @@ SET @table_exists = (SELECT COUNT(*) FROM information_schema.tables
                      WHERE table_schema = DATABASE() AND table_name = 'species_media');
 
 SET @sql = IF(@table_exists > 0,
-    'ALTER TABLE species_media DROP FOREIGN KEY IF EXISTS fk_species_media_species, ADD CONSTRAINT fk_species_media_species FOREIGN KEY (species_id) REFERENCES marine_species(id) ON DELETE CASCADE ON UPDATE CASCADE',
+    'ALTER TABLE species_media DROP FOREIGN KEY fk_species_media_species, ADD CONSTRAINT fk_species_media_species FOREIGN KEY (species_id) REFERENCES marine_species(id) ON DELETE CASCADE ON UPDATE CASCADE',
     'SELECT "⏭️ species_media 表不存在，跳过" AS result'
 );
 
@@ -640,16 +640,16 @@ SELECT '\n=== 结构优化完成，验证结果 ===' AS info;
 -- 验证外键是否已改为CASCADE
 SELECT
     TABLE_NAME,
+    CONSTRAINT_NAME,
     CASE DELETE_RULE
         WHEN 'CASCADE' THEN '✅ 级联删除'
         WHEN 'RESTRICT' THEN '❌ 阻止删除'
         WHEN 'NO ACTION' THEN '⚠️ 无操作'
         ELSE DELETE_RULE
     END AS delete_status
-FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
-WHERE TABLE_SCHEMA = DATABASE()
-AND CONSTRAINT_TYPE = 'FOREIGN KEY'
-AND REFERENCED_TABLE_NAME = 'marine_species'
+FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
+WHERE CONSTRAINT_SCHEMA = DATABASE()
+  AND REFERENCED_TABLE_NAME = 'marine_species'
 ORDER BY TABLE_NAME;
 
 -- 验证字段是否已删除
@@ -784,19 +784,17 @@ SELECT '\n--- 题目来源分析 ---' AS section;
 
 SELECT
     CASE
-        WHEN species_id IS NOT NULL AND source_document_id IS NOT NULL THEN '🔄 双重来源（异常）'
         WHEN species_id IS NOT NULL THEN '🐋 物种出题'
-        WHEN source_document_id IS NOT NULL THEN '📚 RAG出题'
-        ELSE '❓ 未指定来源'
+        WHEN created_by_ai = 1    THEN '🤖 AI出题'
+        ELSE '👤 手动出题'
     END AS source_type,
     COUNT(*) AS question_count,
     ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM quiz_question), 2) AS percentage
 FROM quiz_question
 GROUP BY
     CASE
-        WHEN species_id IS NOT NULL AND source_document_id IS NOT NULL THEN '🔄 双重来源（异常）'
         WHEN species_id IS NOT NULL THEN '🐋 物种出题'
-        WHEN source_document_id IS NOT NULL THEN '📚 RAG出题'
-        ELSE '❓ 未指定来源'
+        WHEN created_by_ai = 1    THEN '🤖 AI出题'
+        ELSE '👤 手动出题'
     END
 ORDER BY question_count DESC;
