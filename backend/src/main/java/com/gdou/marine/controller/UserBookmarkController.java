@@ -167,7 +167,7 @@ public class UserBookmarkController {
             // 用 JdbcTemplate 做 JOIN 查询获取标题和缩略图
             Map<String, List<Map<String, Object>>> data = new LinkedHashMap<>();
 
-            // species 类型 → JOIN marine_species
+            // species 类型 → JOIN marine_species（返回 speciesId 用于前端匹配）
             List<Map<String, Object>> speciesList = new ArrayList<>();
             if (grouped.containsKey("species")) {
                 List<Long> ids = grouped.get("species").stream()
@@ -182,6 +182,10 @@ public class UserBookmarkController {
                     }
                     for (UserBookmark bm : grouped.get("species")) {
                         Map<String, Object> item = buildItem(bm, rowMap.get(bm.getTargetId()));
+                        // 🌟 关键：返回物种ID，前端用于匹配题目关联的物种是否已收藏
+                        item.put("speciesId", bm.getTargetId());
+                        item.put("targetType", "species");
+                        log.info("📚 [收藏列表] 物种收藏: targetId={}, speciesId={}", bm.getTargetId(), bm.getTargetId());
                         speciesList.add(item);
                     }
                 }

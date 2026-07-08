@@ -213,17 +213,57 @@ public class QuizQuestionController {
     @PostMapping("/question/batch-save")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public Map<String, Object> batchSave(@RequestBody List<QuizQuestion> questions) {
+        int savedCount = 0;
+        int speciesCount = 0;
+        int docCount = 0;
+
         for (QuizQuestion q : questions) {
-            q.setId(null);
+            // 记录原始数据（用于调试）
+            log.info("📥 接收题目数据: id={}, stem={}, speciesId={}, sourceDocumentId={}",
+                    q.getId(),
+                    q.getStem() != null ? q.getStem().substring(0, Math.min(q.getStem().length(), 30)) : null,
+                    q.getSpeciesId(),
+                    q.getSourceDocumentId());
+
+            q.setId(null);  // 清除ID让数据库自动生成
+
             if (q.getStatus() == null) {
                 q.setStatus((byte) 1);
             }
             if (q.getCreatedByAi() == null) {
                 q.setCreatedByAi((byte) 1);
             }
+
+            // 🌟 关键：统计并验证来源信息
+            if (q.getSpeciesId() != null) {
+                speciesCount++;
+                log.info("✅ 题目将关联物种: speciesId={}", q.getSpeciesId());
+            }
+            if (q.getSourceDocumentId() != null) {
+                docCount++;
+                log.info("✅ 题目将关联文档: sourceDocumentId={}", q.getSourceDocumentId());
+            }
+
+            if (q.getSpeciesId() == null && q.getSourceDocumentId() == null && q.getCreatedByAi() == 1) {
+                log.warn("⚠️ AI生成的题目缺少来源信息! stem={}",
+                        q.getStem() != null ? q.getStem().substring(0, Math.min(q.getStem().length(), 50)) : null);
+            }
+
+            savedCount++;
         }
+
         quizQuestionService.saveBatch(questions);
-        return Map.of("success", true, "message", "成功保存" + questions.size() + "道题目", "count", questions.size());
+
+        log.info("📊 批量保存完成: 总数={}, 物种出题={}, RAG出题={}, 无来源={}",
+                savedCount, speciesCount, docCount, (savedCount - speciesCount - docCount));
+
+        return Map.of(
+                "success", true,
+                "message", "成功保存" + savedCount + "道题目（物种出题:" + speciesCount + ", RAG出题:" + docCount + "）",
+                "count", savedCount,
+                "speciesCount", speciesCount,
+                "documentCount", docCount
+        );
     }
 
     /**

@@ -307,14 +307,16 @@
                 </button>
                 <button
                   class="bookmark-detail-btn bookmark-kb-btn"
-                  :class="{ 'is-bookmarked': hasKbBookmarked(d), 'kb-disabled': !d.speciesId && !d.sourceDocumentId }"
+                  :class="{ 
+                    'is-bookmarked': hasKbBookmarked(d), 
+                    'kb-disabled': !d.speciesId && !d.sourceDocumentId 
+                  }"
                   @click.stop="handleBookmark('knowledge', d, idx)"
                 >
                   <el-icon :size="14"><Reading /></el-icon>
+                  <!-- 固定显示文字：根据来源类型显示，不随状态变化 -->
                   <span v-if="!d.speciesId && !d.sourceDocumentId">不可收藏</span>
-                  <span v-else-if="d.speciesId && hasKbBookmarked(d)">已收藏物种</span>
                   <span v-else-if="d.speciesId">收藏物种</span>
-                  <span v-else-if="hasKbBookmarked(d)">已收藏知识库</span>
                   <span v-else>收藏知识库</span>
                 </button>
               </div>
@@ -1156,25 +1158,36 @@ const fetchBookmarkedIds = async (forceRefresh = false) => {
       bookmarkedQuestions.value = new Set(quizList.map(item => item.targetId))
       // 同步到旧状态兼容
       bookmarkedQuestionIds.value = new Set(bookmarkedQuestions.value)
-      // 知识库收藏
-      const kbList = res.data.data?.kb_document || []
-      
-      // 🔍 调试日志：打印后端返回的知识库收藏数据
-      console.log('📚 [fetchBookmarkedIds] 后端返回 kbList:', kbList.length > 0 ? kbList.map(kb => ({
+
+      // 🌟 关键修复：合并两种类型的收藏数据用于匹配
+      // 1. kb_document 类型 → RAG知识库文档收藏（有 sourceDocumentId 的题目）
+      const kbDocList = res.data.data?.kb_document || []
+      // 2. species 类型 → 物种收藏（有 speciesId 的题目）
+      const speciesBookmarkList = res.data.data?.species || []
+
+      // 🔍 调试日志
+      console.log('📚 [fetchBookmarkedIds] RAG知识库收藏:', kbDocList.map(kb => ({
         targetId: kb.targetId,
-        speciesId: kb.speciesId,
-        species_id: kb.species_id,
-        title: kb.title
-      })) : '(空数组)')
-      
-      // 🌟 保守策略：如果后端返回空 kbList 但本地已有有效缓存，优先使用缓存数据
-      // （防止 onActivated 时序竞态导致空响应覆盖正确的收藏状态）
-      let effectiveKbList = kbList
-      if (!forceRefresh && kbList.length === 0 && _lastValidKbList.length > 0) {
-        console.warn('⚠️ [fetchBookmarkedIds] 后端返回空kbList，使用上次有效缓存（防止覆盖已收藏状态）')
+        title: kb.title,
+        targetType: kb.targetType
+      })))
+      console.log('🐋 [fetchBookmarkedIds] 物种收藏:', speciesBookmarkList.map(sp => ({
+        targetId: sp.targetId,
+        speciesId: sp.speciesId,
+        title: sp.title,
+        targetType: sp.targetType
+      })))
+
+      // 合并两种收藏类型为统一的 effectiveKbList（供后续匹配使用）
+      // species 类型的收藏会自动包含 speciesId 字段（后端已添加）
+      let effectiveKbList = [...kbDocList, ...speciesBookmarkList]
+
+      // 🌟 保守策略：如果后端返回空列表但本地已有有效缓存，优先使用缓存数据
+      if (!forceRefresh && effectiveKbList.length === 0 && _lastValidKbList.length > 0) {
+        console.warn('⚠️ [fetchBookmarkedIds] 后端返回空列表，使用上次有效缓存')
         effectiveKbList = _lastValidKbList
-      } else if (kbList.length > 0) {
-        _lastValidKbList = kbList  // 更新缓存
+      } else if (effectiveKbList.length > 0) {
+        _lastValidKbList = effectiveKbList  // 更新缓存
       }
       
       const kbSet = new Set(effectiveKbList.map(item => item.targetId))
@@ -1331,11 +1344,11 @@ const handleBookmark = async (type, questionData, idx) => {
           const syncKey = questionData.speciesId || questionData.sourceDocumentId
           syncKbStatusByKey(syncKey, false)
           _lastValidKbList = _lastValidKbList.filter(kb => kb.targetId !== alreadyBookmarkedKb)
-          // 根据类型显示不同的提示消息
+          // 根据来源类型显示不同的取消提示
           if (questionData.speciesId) {
             ElMessage.success('已取消收藏该物种')
           } else {
-            ElMessage.success('已取消该知识库收藏')
+            ElMessage.success('已取消知识库收藏')
           }
         } else {
           ElMessage.error(res.data?.message || '取消收藏失败')
@@ -1345,21 +1358,21 @@ const handleBookmark = async (type, questionData, idx) => {
         // 收藏知识库（根据来源类型选择正确的收藏方式）
         const kbToBookmark = kbDocs[0]
 
-        // ✅ 关键修复：根据题目来源决定收藏类型
+        // ✅ 根据题目来源决定收藏目标
         let targetType, targetId, successMessage
 
         if (questionData.speciesId) {
-          // 🐋 物种出题 → 收藏物种本身（targetType='species'）
+          // 🐋 物种出题 → 收藏物种本身
           targetType = 'species'
-          targetId = questionData.speciesId  // 使用物种ID，不是文档ID
-          successMessage = `已收藏「${kbToBookmark.title}」到我的物种`
+          targetId = questionData.speciesId
+          successMessage = `已收藏「${kbToBookmark.title}」（物种）`
         } else if (questionData.sourceDocumentId) {
-          // 📚 RAG知识库出题 → 收藏RAG文档（targetType='kb_document'）
+          // 📚 RAG知识库出题 → 收藏RAG文档
           targetType = 'kb_document'
-          targetId = kbToBookmark.id  // 使用文档ID
-          successMessage = `已将「${kbToBookmark.title}」（RAG知识库）加入知识库收藏`
+          targetId = kbToBookmark.id
+          successMessage = `已收藏「${kbToBookmark.title}」到知识库`
         } else {
-          ElMessage.warning('无法确定知识库类型')
+          ElMessage.warning('无法确定知识库来源')
           return
         }
 
@@ -1380,9 +1393,8 @@ const handleBookmark = async (type, questionData, idx) => {
             knowledgeBaseType: questionData.speciesId ? 'species' : 'document'
           }
           _lastValidKbList = [..._lastValidKbList.filter(kb => kb.targetId !== targetId), newKbItem]
-          ElMessage.success(res.data?.message || successMessage)
+          ElMessage.success(successMessage)
 
-          // 🌟 调试日志：确认收藏类型正确
           console.log('✅ 收藏知识库成功:', {
             type: targetType,
             id: targetId,
@@ -2380,9 +2392,20 @@ loadCompHistory()
   white-space: nowrap;
 }
 .bookmark-detail-btn:hover { border-color: #ffb400; background: rgba(255, 180, 0, 0.04); color: #e6a23c; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(255, 180, 0, 0.15); }
-.bookmark-detail-btn.is-bookmarked { border-color: #ffb400; background: linear-gradient(135deg, rgba(255, 180, 0, 0.15), rgba(255, 143, 0, 0.1)); color: #e6a23c; box-shadow: 0 2px 8px rgba(255, 180, 0, 0.2); }
-.bookmark-kb-btn:hover:not(.kb-disabled) { border-color: #165dff; background: rgba(22, 93, 255, 0.04); color: #165dff; box-shadow: 0 4px 12px rgba(22, 93, 255, 0.12); }
-.bookmark-kb-btn.is-bookmarked { border-color: #165dff; background: linear-gradient(135deg, rgba(22, 93, 255, 0.15), rgba(0, 210, 255, 0.08)); color: #165dff; box-shadow: 0 2px 8px rgba(22, 93, 255, 0.2); }
+.bookmark-detail-btn.is-bookmarked { border-color: #ffb400; background: linear-gradient(135deg, rgba(255, 180, 0, 0.15), rgba(255, 143, 0, 0.1)); color: #e6a23c; box-shadow: 0 2px 8px rgba(255, 180, 0, 0.2); animation: bookmark-pop 0.3s ease-out; }
+
+/* 知识库/物种收藏按钮 - 统一样式 */
+.bookmark-kb-btn:hover:not(.kb-disabled) { border-color: #165dff; background: rgba(22, 93, 255, 0.04); color: #165dff; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(22, 93, 255, 0.12); }
+
+/* 收藏后高亮状态（蓝色渐变 + 发光效果） */
+.bookmark-kb-btn.is-bookmarked {
+  border-color: #165dff;
+  background: linear-gradient(135deg, rgba(22, 93, 255, 0.15), rgba(0, 210, 255, 0.08));
+  color: #165dff;
+  font-weight: 700;
+  box-shadow: 0 2px 12px rgba(22, 93, 255, 0.25);
+  animation: bookmark-pop 0.3s ease-out;
+}
 .bookmark-kb-btn.kb-disabled { opacity: 0.45; cursor: not-allowed; }
 @keyframes bookmark-pop {
   0% { transform: scale(1); }
